@@ -1,0 +1,7 @@
+GO_TERM = 'GO_term'
+GO = 'GO ID'
+GO_SYNONYM = 'DB Object Synonym (|Synonym)'
+GO_SYMBOL = 'DB Object Symbol'
+GO_TERM_COUNTS = 'GO_term_counts'
+SEARCH_KEYWORD = 'keyword'
+GO_SYNONYM = 'DB Object Synonym (|Synonym)'
