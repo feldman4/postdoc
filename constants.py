@@ -12,6 +12,7 @@ GENE_SYMBOL = 'gene_symbol'
 HGNC = 'HGNC'
 UNIPROTKB = 'UniProtKB'
 ENSG = 'ENSG'
+GENE_ALIAS = 'gene_alias'
 
 biomart_columns = {'Gene stable ID': ENSG,
                    'HGNC ID': HGNC,

@@ -136,3 +136,61 @@ def load_pthr(df_biomart, drop_hgnc_ensg=True, clean_symbols=True):
 
 
 
+def load_hgnc_aliases():
+    df_hgnc = pd.read_csv('tables/hgnc_20200129.txt', sep='\t')
+
+    cols = ['HGNC ID', 'Approved symbol', 'Previous symbols', 'Alias symbols']
+    arr = []
+    for hgnc, gene, old1, old2 in df_hgnc[cols].values:
+        arr += [(hgnc, gene)]
+        for old in str(old1).split(',') + str(old2).split(','):
+            if old == 'nan':
+                continue
+            arr += [(hgnc, old.strip())]
+    aliases = pd.DataFrame(arr, columns=(HGNC, GENE_ALIAS))
+
+    columns = {'HGNC ID': HGNC, 
+               'Approved symbol': GENE_SYMBOL, 
+              }
+
+    return (df_hgnc
+            .rename(columns=columns)[[HGNC, GENE_SYMBOL]]
+            .merge(aliases)
+           )
+    
+
+def load_tags():
+    """Table from JSB
+    """
+    fix_sept = {'2001-09-01 00:00:00': 'SEPT1',
+     '2002-09-01 00:00:00': 'SEPT2',
+     '2003-09-01 00:00:00': 'SEPT3',
+     '2004-09-01 00:00:00': 'SEPT4',
+     '2005-09-01 00:00:00': 'SEPT5',
+     '2006-09-01 00:00:00': 'SEPT6',
+     '2007-09-01 00:00:00': 'SEPT7',
+     '2008-09-01 00:00:00': 'SEPT9',
+     '2009-09-01 00:00:00': 'SEPT10',
+     '2010-09-01 00:00:00': 'SEPT11',
+     '2011-09-01 00:00:00': 'SEPT12',
+     '2012-09-01 00:00:00': 'SEPT13',
+     '2014-09-01 00:00:00': 'SEPT14',
+    }
+    fix_gene = lambda x: fix_sept.get(x, x)
+    f = 'lib D searchable.xlsx'
+    df_tags = (pd.read_excel(f)
+     .assign(gene=lambda x: x['gene'].astype(str).apply(fix_gene))
+    )
+
+    df_aliases = load_hgnc_aliases()
+    aliases = (df_aliases
+           .set_index('gene_alias')['gene_symbol']
+           .to_dict())
+    
+    missing = ~df_tags['gene'].isin(df_aliases['gene_alias'])
+    msg = '{} / {} unidentified genes dropped'
+    print(msg.format(missing.sum(), len(df_tags)))
+    return (df_tags
+            .assign(**{GENE_SYMBOL: lambda x: x['gene'].map(aliases)})
+            .dropna(subset=[GENE_SYMBOL])
+           )
