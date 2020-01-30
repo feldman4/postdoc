@@ -89,6 +89,7 @@ def load_go_terms():
      .pipe(add_term_counts)
     )
 
+
 def load_pthr(df_biomart, drop_hgnc_ensg=True, clean_symbols=True):
     
     df_pthr = pd.read_csv('PTHR14.1_human_', sep='\t', header=None)
@@ -133,9 +134,6 @@ def load_pthr(df_biomart, drop_hgnc_ensg=True, clean_symbols=True):
     return df_pthr
 
 
-
-
-
 def load_hgnc_aliases():
     df_hgnc = pd.read_csv('tables/hgnc_20200129.txt', sep='\t')
 
@@ -177,7 +175,7 @@ def load_tags():
      '2014-09-01 00:00:00': 'SEPT14',
     }
     fix_gene = lambda x: fix_sept.get(x, x)
-    f = 'lib D searchable.xlsx'
+    f = 'patterns/lib D searchable.xlsx'
     df_tags = (pd.read_excel(f)
      .assign(gene=lambda x: x['gene'].astype(str).apply(fix_gene))
     )
