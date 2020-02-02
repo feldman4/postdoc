@@ -135,17 +135,22 @@ def load_pthr(df_biomart, drop_hgnc_ensg=True, clean_symbols=True):
 
 
 def load_hgnc_aliases():
+    HGNC_STATUS = 'hgnc_status'
     df_hgnc = pd.read_csv('tables/hgnc_20200129.txt', sep='\t')
 
     cols = ['HGNC ID', 'Approved symbol', 'Previous symbols', 'Alias symbols']
     arr = []
-    for hgnc, gene, old1, old2 in df_hgnc[cols].values:
-        arr += [(hgnc, gene)]
-        for old in str(old1).split(',') + str(old2).split(','):
+    for hgnc, approved, previous, alias in df_hgnc[cols].values:
+        arr += [(hgnc, approved, '0_approved')]
+        for old in str(previous).split(','):
             if old == 'nan':
                 continue
-            arr += [(hgnc, old.strip())]
-    aliases = pd.DataFrame(arr, columns=(HGNC, GENE_ALIAS))
+            arr += [(hgnc, old.strip(), '1_previous')]
+        for old in str(alias).split(','):
+            if old == 'nan':
+                continue
+            arr += [(hgnc, old.strip(), '2_alias')]
+    aliases = pd.DataFrame(arr, columns=(HGNC, GENE_ALIAS, HGNC_STATUS))
 
     columns = {'HGNC ID': HGNC, 
                'Approved symbol': GENE_SYMBOL, 
@@ -154,6 +159,7 @@ def load_hgnc_aliases():
     return (df_hgnc
             .rename(columns=columns)[[HGNC, GENE_SYMBOL]]
             .merge(aliases)
+            .sort_values([HGNC, GENE_SYMBOL, HGNC_STATUS, GENE_ALIAS])
            )
     
 
@@ -175,8 +181,10 @@ def load_tags():
      '2014-09-01 00:00:00': 'SEPT14',
     }
     fix_gene = lambda x: fix_sept.get(x, x)
-    f = 'patterns/lib D searchable.xlsx'
-    df_tags = (pd.read_excel(f)
+    f1 = 'patterns/lib D searchable.xlsx'
+    f2 = 'patterns/top96.xlsx'
+
+    df_tags = (pd.concat([pd.read_excel(f1), pd.read_excel(f2)])
      .assign(gene=lambda x: x['gene'].astype(str).apply(fix_gene))
     )
 
