@@ -4,7 +4,10 @@ from postdoc import reporters
 from postdoc import flycodes as fly
 
 import os
+import numpy as np
 import pandas as pd
 import re
 
-resources = os.path.join(os.path.dirname(pos.__file__), 'resources')
+import IPython
+IPython.get_ipython().run_line_magic('load_ext', 'autoreload')
+IPython.get_ipython().run_line_magic('autoreload', '2')
