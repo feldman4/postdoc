@@ -128,3 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 digs
+*.DS_Store
+resources/._codon_usage
