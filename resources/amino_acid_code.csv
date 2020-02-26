@@ -1,0 +1,86 @@
+Name,aa,aa_code_3
+Alanine,A,ALA
+Arginine,R,ARG
+Asparagine,N,ASN
+Aspartic Acid,D,ASP
+Cysteine,C,CYS
+Glutamic Acid,E,GLU
+Glutamine,Q,GLN
+Glycine,G,GLY
+Homocysteine,,HCY
+Histidine,H,HIS
+Homoserine,,HSE
+Isoleucine,I,ILE
+Leucine,L,LEU
+Lysine,K,LYS
+Methionine,M,MET
+Norleucine,,NLE
+Norvaline,,NVA
+Ornithine,,ORN
+Penicillamine,,PEN
+Phenylalanine,F,PHE
+Proline,P,PRO
+Serine,S,SER
+Threonine,T,THR
+Tryptophan,W,TRP
+Tyrosine,Y,TYR
+Valine,V,VAL
+Pyroglutamate,,pGLU
+Dinitrobenzylation (LYS),,Lys(Dnp)
+Phosphorylation (THR),,pTHR
+Phosphorylation (SER),,pSER
+Phosphorylation (TYR),,pTYR
+Gamma-GLU,,gamma-GLU
+Citrulline,,CIT
+N-methylated ALA,,nme-ALA
+N-methylated Isoleucine,,nme-ILE
+N-methylated Leucine,,nme-LEU
+N-methylated Phenylalanine,,nme-PHE
+N-methylated Valine,,nme-VAL
+N-methylated Serine,,nme-SER
+N-methylated Threonine,,nme-THR
+N-methylated Tyrosine,,nme-TYR
+Alpha Amino-Butyric Acid,,alpha-ABA
+Iso Aspartic Acid,,iso-ASP
+Acetylation at alpha amine group,,Ac-LYS
+2-Methyl Alanine,,2-Me-ALA
+Oxamic Acid,,OXA
+Acetylation at the side chain,,Lys-Ac
+Methionine sulfoxid,,Met(O)
+Methionine sulfone,,Met(O)2
+Cyclopentylglycine,,Cpg
+Propargylglycine,,Pra
+"1,2,3,4-Tetrahydroisoquinoline-3-carboxylic acid",,Tic
+Selenocysteine,,Sec
+Selenomethionine,,Se-Met
+Azido-Lysine,,Lys(N3)
+Beta-HomoLeucine,,Beta-HomoLeu
+Carboxyamidomethylated Cysteine,,Cys(Cam)
+Methylation at the side chain of Arginine,,Arg(Me)
+Arg(Me)2 asymmetrical,,ADMA
+Arg(Me)2 symmetrical,,SDMA
+Beta-Alanine,,Beta-Ala
+4-Aminobutyric acid,,GABA
+6-amino-hexanoic acid,,Ahx
+NH2-(PEG)2-CH2COOH,,PEG2
+NH2-(PEG)6-CH2CH2COOH,,PEG6
+NH2-(PEG)11-CH2COOH,,PEG11
+NH2-(PEG)12-CH2CH2COOH,,PEG12
+"2,4-Diaminobutyric Acid",,Dab
+"2,3-Diaminopropionic Acid",,Dap
+alpha-aminoisobutyric acid (alpha-methyl-alanine),,AIB
+L-alpha-aminobutyric acid,,ABU
+Hydroxy Proline,,HYP
+beta-cyclohexyl-L-alanine,,Cha
+Phenylglycine,,Phg
+Biotin Lysine,,Lys(biotin)
+(L) 1-NAL,,L-1-NAL
+(L) 2-PAL,,L-2-PAL
+(L) 4-CL-PHE,,L-4-CL-PHE
+{Chg},,Chg
+{L-2-Nal},,L-2-Nal
+{L-3-Pal},,L-3-Pal
+{L-4-F-Phe},,L-4-F-Phe
+{L-4-I-Phe},,L-4-I-Phe
+{L-4-NO2-Phe},,L-4-NO2-Phe
+{L-4-Pal},,L-4-Pal

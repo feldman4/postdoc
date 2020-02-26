@@ -60,6 +60,21 @@ def calculate_kmer_overlaps(seqs, k):
     df = df + df.T
     return df.astype(int).values
 
+def download_amino_acid_table():
+    f = os.path.join(resources, 'amino_acid_code.csv')
+    
+    url = 'https://www.genscript.com/Amino_Acid_Code.html'
+    df_aa = (pd.read_html(url)[0]
+     .assign(aa_code_3=lambda x: x['Multiple Letter Code'].str[1:-1]) 
+     .assign(aa=lambda x: x['Single Letter Code'])
+     [['Name', 'aa', 'aa_code_3']]
+    )
+    df_aa.to_csv(f, index=None)
+
+def load_amino_acid_table():
+    f = os.path.join(resources, 'amino_acid_code.csv')
+    return pd.read_csv(f)
+
 def load_idt_order(f):
     """
     f = ('/Users/dfeldman/Downloads/BBB_CD98_Binders/'
@@ -70,17 +85,25 @@ def load_idt_order(f):
     with open(f, 'r') as fh:
         txt = fh.read()
 
-    pat_name = '^Gene name:\s+(.*)$'
+    pat_gene_name = '^Gene name:\s+(.*)$'
+    pat_plasmid_name = 'GenPlus cloning:(.*?)\s'
     pat_seq = '^Sequence:\s+([ACTG\s]+)'
 
     arr = []
-    txt.split('Item')
-    for entry in txt.split('Item'):
+    entries = txt.split('Item')
+    genes, plasmids = entries[::2], entries[1::2]
+    for entries in zip(genes, plasmids):
+        entry = ''.join(entries)
         try:
-            name = re.findall(pat_name, entry, re.MULTILINE)[0]
+            gene_name = re.findall(pat_gene_name, entry, re.MULTILINE)[0]
+            plasmid_name = re.findall(pat_plasmid_name, entry, re.MULTILINE)[0]
             seq = re.findall(pat_seq, entry, re.MULTILINE)[0]
             seq = seq.replace('\n', '')
-            arr += [{'IDT_name': name, 'IDT_seq': seq}]
+            arr += [{
+            'IDT_gene_name': gene_name,
+            'IDT_plasmid_name': plasmid_name, 
+            'IDT_seq': seq,
+            }]
         except IndexError:
             continue
 
@@ -88,4 +111,25 @@ def load_idt_order(f):
      .assign(IDT_seq_aa=lambda x: x['IDT_seq'].apply(translate_dna))
     )
 
+def load_clean_pdb(filename, **kwargs):
+    # http://www.wwpdb.org/documentation/file-format-content/
+    # format33/sect9.html
+    pdb_model_header = ('record_name', 'atom_serial', 'atom_name',
+    'res_name', 'chain',
+    'res_seq', 'x', 'y', 'z', 'occ', 'b', 'element', 'charge')
+    return (pd.read_csv(filename, header=None, sep='\s+', **kwargs)
+            .rename(columns={i: x for i, x in enumerate(pdb_model_header)})
+            .query('record_name == "ATOM"')
+            .assign(res_seq=lambda x: x['res_seq'].astype(int))
+    )
 
+
+def load_aa_from_pdb(f, header_rows):
+
+    code_to_aa = load_amino_acid_table().set_index('aa_code_3')['aa']
+
+    return (load_clean_pdb(f, skiprows=header_rows)
+     .drop_duplicates(['res_seq'])
+     .sort_values('res_seq')
+     ['res_name'].map(code_to_aa).pipe(''.join))
+    
