@@ -27,7 +27,7 @@ def dihedrals_w(df, validate=True):
     
     planes = []
     for c_0, n, ca in zip(c_0_all, n_all[1:], ca_all[1:]):
-        planes += [plane_from_points(v(a), v(b), v(c))]
+        planes += [plane_from_points(v(c_0), v(n), v(ca))]
         
     return planes
     
