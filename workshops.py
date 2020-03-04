@@ -13,9 +13,9 @@ def atom_dist(a, b):
 def dihedrals_w(df, validate=True):
     """
     """
-    c_0_all = df.query('atom_name == "C"')
-    n_all = df.query('atom_name == "N"')
-    ca_all = df.query('atom_name == "CA"')
+    c_0_all = df.query('atom_name == "C"')[['x', 'y', 'z']].values
+    n_all = df.query('atom_name == "N"')[['x', 'y', 'z']].values
+    ca_all = df.query('atom_name == "CA"')[['x', 'y', 'z']].valuess
 
     if validate:
         df = df.sort_values('res_seq')
@@ -27,7 +27,7 @@ def dihedrals_w(df, validate=True):
     
     planes = []
     for c_0, n, ca in zip(c_0_all, n_all[1:], ca_all[1:]):
-        planes += [plane_from_points(v(c_0), v(n), v(ca))]
+        planes += [plane_from_points(c_0, n, ca)]
         
     return planes
     
