@@ -13,3 +13,17 @@ import re
 import IPython
 IPython.get_ipython().run_line_magic('load_ext', 'autoreload')
 IPython.get_ipython().run_line_magic('autoreload', '2')
+
+mute_classes = ['core.pack.pack_rotamers',
+                'core.pack.task',
+                'core.scoring.ScoreFunctionFactory',
+                'core.pack.interaction_graph.interaction_graph_factory',
+                'basic.io.database', 
+                'core.scoring.etable',
+                'core.conformation.Conformation',
+                'basic.random.init_random_generator',
+                'core.chemical.GlobalResidueTypeSet',
+                'basic.thread_manager.RosettaThread',
+                ]
+
+mute = '-mute {}'.format(' '.join(mute_classes))
