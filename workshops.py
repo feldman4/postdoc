@@ -1,6 +1,10 @@
-import numpy as np
-
 from postdoc.flycodes import load_clean_pdb
+
+import numpy as np
+import pandas as pd
+
+
+radians_to_degrees = 180 / np.pi
 
 def v(row): 
     """Coordinate vector from pdb dataframe row.
@@ -37,17 +41,24 @@ def calculate_backbone_dihedrals(df, validate=True):
     points[0::3] = n_all
     points[1::3] = ca_all
     points[2::3] = c0_all
-    return points
+    displacements = np.diff(points, axis=0)
     planes = []
-    for i in range(points.shape[0] - 3):
+    for i in range(points.shape[0] - 2):
         planes += [plane_from_points(points[i], 
                                     points[i+1],
                                     points[i+2])]
-    dihedrals = [0] # convention for first omega
+    dihedrals = [] 
     for i in range(len(planes) - 1):
-        dihedrals += [np.arccos(dot(planes[i], planes[i+1]))]
-    w, phi, psi = dihedrals[::3], dihedrals[1::3], dihedrals[2::3]
-    return w, phi, psi
+        a, b = planes[i],  planes[i+1]
+        theta = angle_between(a, b)
+        sign = np.sign(dot(cross_product(a, b), displacements[i]))
+        dihedrals += [theta * sign]
+    # first phi and last psi, omega are undefined (zero in rosetta)
+    dihedrals = [np.nan] + dihedrals + [np.nan, np.nan]
+    dihedrals = np.array(dihedrals) 
+    dihedrals *= radians_to_degrees # rosetta convention
+    phi, psi, omega = dihedrals[::3], dihedrals[1::3], dihedrals[2::3]
+    return phi, psi, omega
     
 def plane_from_points(a, b, c):
     v = cross_product((a - b), (c - b))
@@ -65,3 +76,14 @@ def cross_product(a, b):
 
 def dot(a, b):
     return (a*b).sum()
+
+def load_aa_legend(filename='amino_acid_legend.csv'):
+    df_aa = (pd.read_csv(filename)
+     .sort_values(['color', 'marker']))
+
+    markers = df_aa.set_index('res_name')['marker'].to_dict()
+    palette = df_aa.set_index('res_name')['color'].to_dict()
+    hue_order = df_aa['res_name'].pipe(list)
+    
+    return {'markers': markers, 'palette': palette, 
+            'hue_order': hue_order}

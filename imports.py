@@ -5,14 +5,20 @@ from postdoc import flycodes as fly
 
 from glob import glob
 import os
+import re
+
 from natsort import natsorted
 import numpy as np
 import pandas as pd
-import re
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 import IPython
 IPython.get_ipython().run_line_magic('load_ext', 'autoreload')
 IPython.get_ipython().run_line_magic('autoreload', '2')
+
+mpl.rcParams['figure.dpi'] = 200
 
 mute_classes = ['core.pack.pack_rotamers',
                 'core.pack.task',
