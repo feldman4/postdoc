@@ -12,6 +12,7 @@ def read_fasta(f):
         txt = fh.read()
     return parse_fasta(txt)
 
+
 def parse_fasta(txt):
     entries = []
     for raw in txt.split('>'):
@@ -21,12 +22,15 @@ def parse_fasta(txt):
             entries += [(name, seq)]
     return entries
 
+
 def load_e_coli_codons():
     f = os.path.join(resources, 'codon_usage', 'e_coli_316407.csv')
     return (pd.read_csv(f)
      .assign(codon_dna=lambda x: x['codon'].str.replace('U', 'T')))
 
+
 codon_dict = load_e_coli_codons().set_index('codon_dna')['amino_acid']
+
 
 def translate_dna(s):
     assert len(s) % 3 == 0
@@ -35,14 +39,17 @@ def translate_dna(s):
         aa += codon_dict[s[i*3:(i+1)*3]]
     return aa
 
+
 def get_kmers(s, k):
     n = len(s)
     return [s[i:i+k] for i in range(n-k+1)]
+
 
 def kmer_overlap(a, b, k):
     A = get_kmers(a, k)
     B = get_kmers(b, k)
     return len(set(A) & set(B))
+
 
 def calculate_kmer_overlaps(seqs, k):
     """Zero values on the diagonal.
@@ -62,6 +69,7 @@ def calculate_kmer_overlaps(seqs, k):
     df = df + df.T
     return df.astype(int).values
 
+
 def download_amino_acid_table():
     f = os.path.join(resources, 'amino_acid_code.csv')
     
@@ -73,9 +81,11 @@ def download_amino_acid_table():
     )
     df_aa.to_csv(f, index=None)
 
+
 def load_amino_acid_table():
     f = os.path.join(resources, 'amino_acid_code.csv')
     return pd.read_csv(f)
+
 
 def load_idt_order(f):
     """
@@ -112,6 +122,7 @@ def load_idt_order(f):
     return (pd.DataFrame(arr)
      .assign(IDT_seq_aa=lambda x: x['IDT_seq'].apply(translate_dna))
     )
+
 
 def load_clean_pdb(filename, **kwargs):
     # http://www.wwpdb.org/documentation/file-format-content/
@@ -177,6 +188,7 @@ def enumerate_ions(df_precursors, first_ion=2, last_ion=1):
                    'ion_mz_shared_precursors'])
     )
 
+
 def filter_distinct_ions(df_ions, num_fragments):
     """For each barcode, keep only the b/y ion with the 
     fewest shared (mz, ion_mz)
@@ -187,12 +199,17 @@ def filter_distinct_ions(df_ions, num_fragments):
      .sort_values(['mz', 'orig_seq'])
     )
 
+
 amino_acids = 'RHKDESTNQCGPAVILMFYW'
-masses = {x: pyteomics.mass.calculate_mass(x) for x in amino_acids}
+masses_c1 = {x: pyteomics.mass.calculate_mass(x) for x in amino_acids}
 @functools.lru_cache(maxsize=None)
-def calc_mass(s):
+def calc_mass(s, charge=1):
     edges = 18.01056468370001
-    return sum([masses[x] for x in s]) - (len(s) - 1) * edges
+    if charge == 1:
+        return sum([masses_c1[x] for x in s]) - (len(s) - 1) * edges
+    else:
+        return pyteomics.mass.calculate_mass(s, charge=charge)
+
 
 def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
     import time
@@ -256,6 +273,7 @@ def select_barcodes(X, min_y_ions, seed):
             break
             
     return np.where(barcodes)[0]
+
 
 def check_barcodes(X, barcodes, min_y_ions):
     good_ions = X[:, barcodes].sum(axis=1) == 1
