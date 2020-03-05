@@ -3,6 +3,7 @@ from postdoc.constants import *
 from postdoc.utils import timestamp
 from postdoc import reporters
 from postdoc import flycodes as fly
+from postdoc import workshops as ws
 
 from glob import glob
 import os

@@ -129,4 +129,4 @@ dmypy.json
 .pyre/
 digs
 *.DS_Store
-resources/._codon_usage
+resources/._*

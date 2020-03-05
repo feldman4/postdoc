@@ -1,5 +1,6 @@
 from postdoc.flycodes import load_clean_pdb
 
+import os
 import numpy as np
 import pandas as pd
 from itertools import product
@@ -77,18 +78,6 @@ def cross_product(a, b):
 
 def dot(a, b):
     return (a*b).sum()
-
-def load_aa_legend(filename='amino_acid_legend.csv'):
-    df_aa = (pd.read_csv(filename)
-     .sort_values(['color', 'marker']))
-
-    markers = df_aa.set_index('res_name')['marker'].to_dict()
-    palette = df_aa.set_index('res_name')['color'].to_dict()
-    hue_order = df_aa['res_name'].pipe(list)
-    
-    return df_aa, {'markers': markers, 'palette': palette, 
-            'hue_order': hue_order}
-
 
 def parse_secondary_struct(string):
     """Parse a string in "HHHEEELLL" format.
@@ -203,7 +192,20 @@ def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     return pd.concat(results).query('score > 0')
 
 
+def load_aa_legend():
+    import postdoc
+    filename = os.path.join(
+        os.path.dirname(postdoc.__file__), 
+        'resources/amino_acid_legend.csv')
+    df_aa = (pd.read_csv(filename)
+     .sort_values(['color', 'marker']))
 
+    markers = df_aa.set_index('res_name')['marker'].to_dict()
+    palette = df_aa.set_index('res_name')['color'].to_dict()
+    hue_order = df_aa['res_name'].pipe(list)
+    
+    return df_aa, {'markers': markers, 'palette': palette, 
+            'hue_order': hue_order}
 
 
 
