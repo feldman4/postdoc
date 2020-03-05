@@ -5,6 +5,8 @@ import re
 import functools
 import pyteomics.mass
 
+import matplotlib.pyplot as plt
+
 resources = os.path.join(os.path.dirname(globals()['__file__']), 'resources')
 
 def read_fasta(f):
@@ -300,3 +302,73 @@ def get_permutations(seq, num_permutations):
         rs.shuffle(s)
         sequences += [''.join(s) + seq[-1]]
     return sequences
+
+
+def permute_precursors(precursors, num_permutations):
+    arr = []
+    for precursor in precursors:
+        mz = fly.calc_mass(precursor, charge=2)
+        sequences = fly.get_permutations(precursor, num_permutations)
+        (pd.DataFrame({'mz': mz, 'orig_seq': precursor, 
+                  'sequence': sequences})).pipe(arr.append)
+
+    return pd.concat(arr)
+
+
+def plot_mz_locations(mz_list):
+    mz_list = pd.Series(mz_list)
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    for mz, count in mz_list.value_counts().iteritems():
+        ax.plot([mz, mz], [0, count])
+
+    ax.set_xlabel('mz')
+    ax.set_ylabel('barcodes per precursor')
+    return ax
+
+def plot_mz_separation(mz_list, ax=None):
+    mz_list = pd.Series(mz_list)
+    spacing = (mz_list.sort_values()
+               .diff().sort_values().reset_index(drop=True))
+    ax = spacing.plot(ax=ax)
+    ax.set_yscale('log')
+
+    ax.plot([0, len(mz_list)], [0.05, 0.05], ls='--', color='gray')
+    ax.set_ylim([0.01, spacing.max()*2])
+    ax.set_xlabel('sorted precursor')
+    ax.set_ylabel('mz spacing')
+    return ax
+
+
+def filter_by_spacing(values, min_spacing):
+    values = sorted(values)
+    
+    while values:
+        spacing = np.diff(values)
+        closest = np.argmin(spacing)
+        if spacing[closest] >= min_spacing:
+            break
+        values.pop(closest)
+        
+    return values
+
+
+def generate_peptides(length, num_peptides, rule_set='RJ', seed=0):
+
+    canonical = set('ACDEFGHIKLMNPQRSTVWY')
+    
+    if rule_set == 'RJ':
+        c_term = set('K')
+        middle = canonical - set('RKMCI')
+        n_term = middle - set('QP')
+
+        options = ((n_term,) + (middle,)*(length - 2) + 
+                   (c_term,))
+
+    rs = np.random.RandomState(seed)
+
+    arr = []
+    for opt in options:
+        arr += [rs.choice(list(opt), size=num_peptides)]
+
+    return [''.join(x) for x in np.array(arr).T]
