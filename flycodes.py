@@ -2,6 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 import re
+import functools
+import pyteomics.mass
 
 resources = os.path.join(os.path.dirname(globals()['__file__']), 'resources')
 
@@ -133,3 +135,150 @@ def load_aa_from_pdb(f, header_rows):
      .sort_values('res_seq')
      ['res_name'].map(code_to_aa).pipe(''.join))
     
+# MASS SPEC
+
+
+def enumerate_ions(df_precursors, first_ion=2, last_ion=1):
+    """Enumerate b and y ions from an input with columns 
+    mz, orig_seq, sequence.
+    """
+    b_ions, y_ions = [], []
+    for seq in df_precursors['sequence']:
+        for ix in range(first_ion, len(seq) - last_ion):
+            b_ions += [[seq, seq[:ix]]]
+            y_ions += [[seq, seq[-ix:]]]
+
+    df_b_ions = (pd.DataFrame(b_ions, columns=('sequence', 'ion'))
+                .assign(ion_type='b'))
+    df_y_ions = (pd.DataFrame(y_ions, columns=('sequence', 'ion'))
+                .assign(ion_type='y'))
+
+    df_ions = (pd.concat([df_b_ions, df_y_ions])
+    # is this the right way to calculate b/y ion mz?
+#             .assign(ion_mz=lambda x: 
+#                     x['ion'].apply(mass.calculate_mass, charge=1))
+            .assign(ion_mz=lambda x: 
+                    x['ion'].apply(calc_mass))
+              
+              )
+
+    # count the number of fragments with the same (mz, ion_mz)
+    ion_counts = (df_precursors
+     .merge(df_ions)
+     .groupby(['mz', 'ion_mz', 'ion_type']).size()
+     .rename('ion_mz_shared_precursors')
+     .reset_index()
+    )
+
+    return (df_precursors
+     .merge(ion_counts)
+     .merge(df_ions)
+     .sort_values(['mz', 'orig_seq', 'sequence', 
+                   'ion_mz_shared_precursors'])
+    )
+
+def filter_distinct_ions(df_ions, num_fragments):
+    """For each barcode, keep only the b/y ion with the 
+    fewest shared (mz, ion_mz)
+    """
+    return (df_ions
+     .sort_values('ion_mz_shared_precursors')
+     .groupby(['mz', 'orig_seq', 'sequence']).head(num_fragments)
+     .sort_values(['mz', 'orig_seq'])
+    )
+
+amino_acids = 'RHKDESTNQCGPAVILMFYW'
+masses = {x: pyteomics.mass.calculate_mass(x) for x in amino_acids}
+@functools.lru_cache(maxsize=None)
+def calc_mass(s):
+    edges = 18.01056468370001
+    return sum([masses[x] for x in s]) - (len(s) - 1) * edges
+
+def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
+    import time
+    import re
+    stamp = time.strftime(fmt)
+    pat= r'(.*)\.(.*)'
+    match = re.findall(pat, filename)
+    if match:
+        return sep.join([match[0][0], stamp, match[0][1]])
+    elif filename:
+        return sep.join([filename, stamp])
+    else:
+        return stamp
+
+
+def select_barcodes(X, min_y_ions, seed):
+
+    rs = np.random.RandomState(seed=seed)
+    num_barcodes = X.shape[1]
+    barcodes = np.zeros(num_barcodes, dtype='bool')
+    start = rs.choice(np.arange(num_barcodes))
+    barcodes[start] = True
+
+    while True:
+        # usage of y-ions among selected barcodes
+        y_ion_usage = X[:, barcodes].sum(axis=1)
+        in_use = y_ion_usage == 1
+        # identify the y ions that cannot be touched
+        # - match a barcode at the minimum
+        # - currently unique
+        critical_barcodes = X[in_use].sum(axis=0) == min_y_ions
+        critical_barcodes[~barcodes] = False
+        critical_y_ions = X[:, critical_barcodes].sum(axis=1) == 1
+
+        # potential new unique y-ions
+        include = y_ion_usage == 0
+        # usage among all barcodes
+        newly_used = X[include].sum(axis=0)
+        # must be a new barcode that uses at least min untouched y-ions
+        mask = ~barcodes & (newly_used >= min_y_ions)
+        # can't take away any critical y-ions
+        # note that this is not a sufficient criterion!!
+        # a sub-critical barcode that overlaps at multiple y-ions with
+        # a new barcode can break the barcode set, hence the while loop
+        uses_critical = X[critical_y_ions].any(axis=0)
+        mask = mask & ~uses_critical
+
+        while mask.sum() > 0:
+            # select a candidate
+            candidates = np.arange(num_barcodes)
+            select = rs.choice(candidates, p=mask/mask.sum())
+            # this could fail if a subcritical barcode is lost
+            barcodes[select] = True
+            if check_barcodes(X, barcodes, min_y_ions):
+                # accepted
+                break
+            barcodes[select] = False
+            mask[select] = False
+
+        if mask.sum() == 0:
+            break
+            
+    return np.where(barcodes)[0]
+
+def check_barcodes(X, barcodes, min_y_ions):
+    good_ions = X[:, barcodes].sum(axis=1) == 1
+    good_ions_per_barcode = X[:, barcodes][good_ions].sum(axis=0)
+    return (good_ions_per_barcode >= min_y_ions).all()
+
+
+def search_for_barcodes(X, min_y_ions, attempts=1000):
+    
+    arr = []
+    for seed in tqdn(range(attempts), desc='attempts', leave=False):
+        arr += [select_barcodes(X, min_y_ions, seed)]
+    
+    arr = sorted(arr, key=len)[::-1]
+    return arr[0]
+
+
+def get_permutations(seq, num_permutations):
+    rs = np.random.RandomState(seed=0)
+
+    sequences = []
+    for _ in range(num_permutations):
+        s = np.array(list(seq[:-1]))
+        rs.shuffle(s)
+        sequences += [''.join(s) + seq[-1]]
+    return sequences

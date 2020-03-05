@@ -1,5 +1,6 @@
 import postdoc as pos
 from postdoc.constants import *
+from postdoc.utils import timestamp
 from postdoc import reporters
 from postdoc import flycodes as fly
 
@@ -30,6 +31,8 @@ mute_classes = ['core.pack.pack_rotamers',
                 'basic.random.init_random_generator',
                 'core.chemical.GlobalResidueTypeSet',
                 'basic.thread_manager.RosettaThread',
+                'core.pack.pack_missing_sidechains',
+                'core.pack.rotamer_set.RotamerSets',
                 ]
 
 mute = '-mute {}'.format(' '.join(mute_classes))
