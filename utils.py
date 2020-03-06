@@ -1,5 +1,11 @@
 import time
 import re
+from glob import glob
+
+import pandas as pd
+from natsort import natsorted
+import tqdm.notebook
+tqdn = tqdm.notebook.tqdm
 
 def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
     stamp = time.strftime(fmt)
@@ -11,3 +17,26 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return sep.join([filename, stamp])
     else:
         return stamp
+
+
+def csv_frame(files_or_search, tqdn=False, **kwargs):
+    """Convenience function, pass either a list of files or a 
+    glob wildcard search term.
+    """
+    
+    def read_csv(f):
+        try:
+            return pd.read_csv(f, **kwargs)
+        except pd.errors.EmptyDataError:
+            return None
+    
+    if isinstance(files_or_search, str):
+        files = natsorted(glob(files_or_search))
+    else:
+        files = files_or_search
+
+    if tqdn:
+        from tqdm import tqdm_notebook as tqdn
+        return pd.concat([read_csv(f) for f in tqdn(files)], sort=True)
+    else:
+        return pd.concat([read_csv(f) for f in files], sort=True)

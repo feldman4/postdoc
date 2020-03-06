@@ -6,6 +6,7 @@ import functools
 import pyteomics.mass
 
 import matplotlib.pyplot as plt
+from postdoc.utils import tqdn
 
 resources = os.path.join(os.path.dirname(globals()['__file__']), 'resources')
 
@@ -167,12 +168,8 @@ def enumerate_ions(df_precursors, first_ion=2, last_ion=1):
                 .assign(ion_type='y'))
 
     df_ions = (pd.concat([df_b_ions, df_y_ions])
-    # is this the right way to calculate b/y ion mz?
-#             .assign(ion_mz=lambda x: 
-#                     x['ion'].apply(mass.calculate_mass, charge=1))
             .assign(ion_mz=lambda x: 
                     x['ion'].apply(calc_mass))
-              
               )
 
     # count the number of fragments with the same (mz, ion_mz)
@@ -262,6 +259,7 @@ def select_barcodes(X, min_y_ions, seed):
         while mask.sum() > 0:
             # select a candidate
             candidates = np.arange(num_barcodes)
+            # could weight by number of unique y-ions remaining for each candidate
             select = rs.choice(candidates, p=mask/mask.sum())
             # this could fail if a subcritical barcode is lost
             barcodes[select] = True
@@ -284,7 +282,6 @@ def check_barcodes(X, barcodes, min_y_ions):
 
 
 def search_for_barcodes(X, min_y_ions, attempts=1000):
-    
     arr = []
     for seed in tqdn(range(attempts), desc='attempts', leave=False):
         arr += [select_barcodes(X, min_y_ions, seed)]
@@ -307,8 +304,8 @@ def get_permutations(seq, num_permutations):
 def permute_precursors(precursors, num_permutations):
     arr = []
     for precursor in precursors:
-        mz = fly.calc_mass(precursor, charge=2)
-        sequences = fly.get_permutations(precursor, num_permutations)
+        mz = calc_mass(precursor, charge=2)
+        sequences = get_permutations(precursor, num_permutations)
         (pd.DataFrame({'mz': mz, 'orig_seq': precursor, 
                   'sequence': sequences})).pipe(arr.append)
 
@@ -326,14 +323,15 @@ def plot_mz_locations(mz_list):
     ax.set_ylabel('barcodes per precursor')
     return ax
 
-def plot_mz_separation(mz_list, ax=None):
+
+def plot_mz_separation(mz_list, threshold=0.05, ax=None):
     mz_list = pd.Series(mz_list)
     spacing = (mz_list.sort_values()
                .diff().sort_values().reset_index(drop=True))
     ax = spacing.plot(ax=ax)
     ax.set_yscale('log')
 
-    ax.plot([0, len(mz_list)], [0.05, 0.05], ls='--', color='gray')
+    ax.plot([0, len(mz_list)], [threshold, threshold], ls='--', color='gray')
     ax.set_ylim([0.01, spacing.max()*2])
     ax.set_xlabel('sorted precursor')
     ax.set_ylabel('mz spacing')
@@ -341,7 +339,8 @@ def plot_mz_separation(mz_list, ax=None):
 
 
 def filter_by_spacing(values, min_spacing):
-    values = sorted(values)
+    starting_values = np.array(values)
+    values = sorted(starting_values)
     
     while values:
         spacing = np.diff(values)
@@ -350,14 +349,29 @@ def filter_by_spacing(values, min_spacing):
             break
         values.pop(closest)
         
-    return values
+    return np.in1d(starting_values, values)
 
 
-def generate_peptides(length, num_peptides, rule_set='RJ', seed=0):
+def generate_peptides(length, num_peptides, rule_set='RJ_no_H', seed=0):
 
     canonical = set('ACDEFGHIKLMNPQRSTVWY')
     
-    if rule_set == 'RJ':
+    if rule_set == 'RJ_no_H':
+        # these are not allowed in the middle of the peptide
+        pos = 'KRH'
+        ox = 'MC'
+        same_as_L = 'I'
+        # these are not allowed as the N-terminal residue
+        exclude_from_n_term = set('QP')
+
+        c_term = set('K')
+        middle = canonical - set(pos + ox + same_as_L)
+        n_term = middle - exclude_from_n_term
+
+        options = ((n_term,) + (middle,)*(length - 2) + 
+                   (c_term,))
+
+    if rule_set == 'RJ_filter':
         c_term = set('K')
         middle = canonical - set('RKMCI')
         n_term = middle - set('QP')
@@ -372,3 +386,135 @@ def generate_peptides(length, num_peptides, rule_set='RJ', seed=0):
         arr += [rs.choice(list(opt), size=num_peptides)]
 
     return [''.join(x) for x in np.array(arr).T]
+
+
+def rolling_window_sizes(values, window_size):
+    sizes = []
+    for i in range(len(values)):
+        right_edge = i
+        while values[right_edge] < (values[i] + window_size):
+            right_edge += 1
+            if right_edge >= len(values):
+                break
+        sizes += [right_edge - i]
+    return sizes
+
+
+def generate_precursors(num_to_generate, min_length, max_length):
+    peptides = []
+    for length in range(min_length, max_length + 1):
+        num_peptides = int(num_to_generate / (max_length - min_length))
+        peptides += generate_peptides(length, num_peptides)
+    peptides = set(peptides)
+    mz_dict = {x: calc_mass(x, charge=2) for x in peptides}
+    peptides = np.array(sorted(peptides, key=mz_dict.get))
+    mz_list = np.array([mz_dict[x] for x in peptides])
+
+    return pd.DataFrame({'orig_seq': peptides, 'mz': mz_list})
+    
+
+def bin_by_value(values, bin_centers, bin_width):
+    """Returns np.nan for values outside of bins.
+    """
+    bin_centers = np.array(bin_centers)
+    edges = np.sort(list(bin_centers - bin_width/2) + 
+                    list(bin_centers + bin_width/2))
+    bin_index = np.digitize(values, edges)
+
+    # removes empty bins between real ones, including -/+ infinity
+    mask = bin_index % 2 == 0
+    bin_index[mask] = -1
+    bin_index[bin_index == 2 * len(bin_centers)] = -1
+    
+    value_centers = np.array([bin_centers[int((i)/2)] if i != -1 
+        else np.nan for i in bin_index])
+
+    return value_centers
+                        
+
+def filter_ion_spacing(df_ions, ion_spacing):
+    return (df_ions
+     .assign(ion_mz_bin=lambda x: 
+             (x['ion_mz']/ ion_spacing).astype(int) * ion_spacing)
+     .assign(ion_mz_bin_counts=lambda x: 
+            x.groupby('ion_mz_bin')['ion_mz'].transform(len))
+     .sort_values('ion_mz_bin_counts')
+     .drop_duplicates('ion_mz_bin')
+    )
+
+
+def format_for_prosit(peptides, collision_energy=30, precursor_charge=2):
+    return (pd.DataFrame({'modified_sequence': peptides})
+           .assign(
+            collision_energy=collision_energy, 
+            precursor_charge=precursor_charge)
+           )
+
+
+def load_prosit_models(irt_dir, spectra_dir):
+    """Must run in properly versioned python environment.
+    pip install tensorflow-gpu==1.10.1 keras==2.2.1 h5py \
+        tables flask pyteomics lxml pandas
+
+    Trained model from https://figshare.com/projects/Prosit/35582
+    """
+    import prosit
+    from prosit import tensorize, prediction, model, constants
+    import tensorflow as tf
+
+    d_spectra = {}
+    d_irt = {}
+
+    d_spectra["graph"] = tf.Graph()
+    with d_spectra["graph"].as_default():
+        d_spectra["session"] = tf.Session()
+        with d_spectra["session"].as_default():
+            d_spectra["model"], d_spectra["config"] = model.load(
+                spectra_dir,
+                trained=True
+            )
+            d_spectra["model"].compile(optimizer="adam", loss="mse")
+    d_irt["graph"] = tf.Graph()
+    with d_irt["graph"].as_default():
+        d_irt["session"] = tf.Session()
+        with d_irt["session"].as_default():
+            d_irt["model"], d_irt["config"] = model.load(irt_dir,
+                    trained=True)
+            d_irt["model"].compile(optimizer="adam", loss="mse")
+            
+    return d_spectra, d_irt
+
+
+def predict_prosit(peptides, d_spectra, d_irt):
+    """Not sure if the spectra and intensities are meaningful.
+    """
+    import prosit
+    from prosit import tensorize, prediction
+    df = format_for_prosit(peptides)
+    data = tensorize.csv(df)
+    prediction.predict(data, d_irt)
+    prediction.predict(data, d_spectra)
+    return data
+
+
+
+class DESIGN_0():
+    min_length = 10
+    max_length = 13
+    num_to_generate = int(1e6)
+    num_permutations = 300
+    min_spacing = 0.15
+
+    precursor_bins = np.linspace(550, 850, 100)
+    precursor_bin_width = 1
+    precursor_bin_min_spacing = 2.5
+    precursors_per_bin = 200
+
+    iRT_bins = np.linspace(-10, 110, 11)
+    iRT_bin_width = 6
+    iRT_bin_min_spacing = 6
+
+    if np.diff(precursor_bins).min() < precursor_bin_min_spacing:
+        raise ValueError
+
+
