@@ -1,3 +1,5 @@
+from postdoc.utils import tqdn
+
 import os
 import numpy as np
 import pandas as pd
@@ -6,7 +8,8 @@ import functools
 import pyteomics.mass
 
 import matplotlib.pyplot as plt
-from postdoc.utils import tqdn
+import seaborn as sns
+
 
 resources = os.path.join(os.path.dirname(globals()['__file__']), 'resources')
 
@@ -324,6 +327,22 @@ def plot_mz_locations(mz_list):
     return ax
 
 
+def scatter_mz_locations(mz_list, alpha=0.1):
+    rs = np.random.RandomState(0)
+    mz_list = pd.Series(mz_list, name='mz')
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    mz_list = (pd.DataFrame(mz_list)
+        .assign(gaussian_jitter=np.abs(rs.randn(len(mz_list)))))
+
+    ax.scatter(x=mz_list['mz'], y=mz_list['gaussian_jitter'], s=4, 
+        alpha=alpha, color='black')
+
+    ax.set_xlabel('mz')
+    ax.set_ylabel('gaussian_jitter')
+    return ax
+
+
 def plot_mz_separation(mz_list, threshold=0.05, ax=None):
     mz_list = pd.Series(mz_list)
     spacing = (mz_list.sort_values()
@@ -443,7 +462,7 @@ def filter_ion_spacing(df_ions, ion_spacing):
     )
 
 
-def format_for_prosit(peptides, collision_energy=30, precursor_charge=2):
+def format_for_prosit(peptides, collision_energy, precursor_charge=2):
     return (pd.DataFrame({'modified_sequence': peptides})
            .assign(
             collision_energy=collision_energy, 
@@ -485,36 +504,96 @@ def load_prosit_models(irt_dir, spectra_dir):
     return d_spectra, d_irt
 
 
-def predict_prosit(peptides, d_spectra, d_irt):
+def predict_prosit(peptides, d_spectra, d_irt, collision_energy=27):
     """Not sure if the spectra and intensities are meaningful.
     """
     import prosit
     from prosit import tensorize, prediction
-    df = format_for_prosit(peptides)
+    df = format_for_prosit(peptides, collision_energy)
     data = tensorize.csv(df)
     prediction.predict(data, d_irt)
     prediction.predict(data, d_spectra)
     return data
 
 
+def generate_bin_set(df_bins, mask_indices):
+    mask = np.zeros_like(df_bins.values)
+    for s in mask_indices:
+        mask[s] = 1
+        
+    return (pd.DataFrame(mask, index=df_bins.index, 
+                         columns=df_bins.columns)
+     .stack().loc[lambda x: x == 1]
+     .reset_index().drop(0, axis=1)
+    )
 
-class DESIGN_0():
-    min_length = 10
-    max_length = 13
-    num_to_generate = int(1e6)
-    num_permutations = 300
-    min_spacing = 0.15
+def generate_bin_sets(bin_sets):
+    arr = []
+    for bin_set, indices in bin_sets.items():
+        (generate_bin_set(df_bins, indices).assign(bin_set=bin_set)
+         .pipe(arr.append)
+        )
+    return pd.concat(arr)
 
-    precursor_bins = np.linspace(550, 850, 100)
-    precursor_bin_width = 1
-    precursor_bin_min_spacing = 2.5
-    precursors_per_bin = 200
 
-    iRT_bins = np.linspace(-10, 110, 11)
-    iRT_bin_width = 6
-    iRT_bin_min_spacing = 6
+def combine_ions_barcodes(df_ions, barcodes):
+    """Restrict ion table to selected barcodes and clean up.
+    """
+    cols = ['sequence', 'iRT', 'iRT_bin', 'mz', 'mz_bin', 
+            'ion_mz', 'ion_mz_bin', 'ion_type', 'ion']
 
-    if np.diff(precursor_bins).min() < precursor_bin_min_spacing:
-        raise ValueError
+    return (df_ions
+     .query('sequence == @barcodes')
+     .drop_duplicates(['iRT_bin', 'mz_bin', 'ion_mz_bin'], keep=False)
+     [cols]
+     .sort_values(['iRT', 'mz', 'sequence', 'ion_mz'])
+    )
 
+
+def summary_plots(df_bins, df_ions):
+
+    fig, ax_heatmap = plt.subplots(figsize=(10, 4))
+    cbar_ax = fig.add_axes([.905, .311, .03, .38])
+
+    (df_bins
+     .pipe(sns.heatmap, square=True, ax=ax_heatmap, cbar_ax=cbar_ax)
+    )
+
+    ax_mz = (df_ions
+     .drop_duplicates('sequence')
+     ['mz'].pipe(scatter_mz_locations)
+    )
+
+    ax_iRT = (df_ions
+     .drop_duplicates('sequence')
+     ['iRT'].pipe(scatter_mz_locations)
+    )
+
+    ax_iRT.set_xlabel('iRT (Prosit retention time)');
+    
+    # for ax in ax_heatmap, ax_iRT, ax_mz:
+    #     ax.figure.tight_layout()
+
+    return ax_heatmap, ax_mz, ax_iRT
+
+
+def barcode_stats(df_ions, DESIGN):
+    stats = {}
+    stats['name'] = DESIGN.name
+    stats['# of barcodes'] = df_ions['sequence'].drop_duplicates().shape[0]
+
+    stats['iRT_min'] = df_ions['iRT'].min()
+    stats['iRT_max'] = df_ions['iRT'].max()
+    stats['iRT_bin_width'] = DESIGN.iRT_bin_width
+    stats['iRT_bin_count'] = len(DESIGN.iRT_bins)
+
+    stats['precursor_mz_min'] = df_ions['mz'].min()
+    stats['precursor_mz_max'] = df_ions['mz'].max()
+    stats['precursor_mz_bin_width'] = DESIGN.precursor_bin_width
+    stats['precursor_mz_bin_count'] = len(DESIGN.precursor_bins)
+
+    stats['average unique y-ions per barcode in (mz_bin, iRT_bin)'] = (
+        df_ions.groupby(['sequence']).size().mean())
+
+    return stats
 
