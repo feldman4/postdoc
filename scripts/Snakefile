@@ -1,5 +1,8 @@
 # snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile --config design=DESIGN_0
 
+# from postdoc.imports import *
+sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
+
 # IMPORTS
 
 import postdoc.flycodes as fly
@@ -82,25 +85,5 @@ rule predict_prosit:
                 .head(METADATA.input_barcodes_per_paired_bin)
                 .to_csv(f, index=None)
                 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

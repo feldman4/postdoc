@@ -624,25 +624,33 @@ def prosit_ion_names():
     
 
 def add_prosit(df, d_spectra, d_irt, collision_energy, col='sequence',
-              intensity_threshold=0.01):
+              intensity_threshold=0.01, chunk_size=10000):
     """Add columns for retention time and fragmentation efficiency
     predictions. Columns where all fragmentation efficiencies are below
     `intensity_threshold` are discarded. Prosit should predict either -1 
     or 0 for inapplicable ions (impossible length/charge).
+
+    Chunk size is important to limit GPU memory consumption.
     """
     df = df.copy()
-    data = predict_prosit(df[col], d_spectra, d_irt, 
-                              collision_energy=collision_energy)
-    
-    
-    df['iRT'] = data['iRT'][:, 0]
+    num_chunks = int(len(df) / chunk_size)
+    arr = []
+    for chunk in range(num_chunks):
+        df_ = df.iloc[chunk*chunk_size:(chunk + 1)*chunk_size].copy()
 
-    names = prosit_ion_names()
-    for name, values in zip(names, data['intensities_pred'].T):
-        if (values > intensity_threshold).any():
-            df[name] = values
+        data = predict_prosit(df_[col], d_spectra, d_irt, 
+                              collision_energy=collision_energy)    
     
-    return df
+        df_['iRT'] = data['iRT'][:, 0]
+
+        names = prosit_ion_names()
+        for name, values in zip(names, data['intensities_pred'].T):
+            if (values > intensity_threshold).any():
+                df_[name] = values
+
+        arr.append(df_)
+    
+    return pd.concat(arr)
 
 
 def sort_by_spectral_efficiency(df, threshold=0.05):
