@@ -415,7 +415,7 @@ def generate_precursors(num_to_generate, min_length, max_length):
     peptides = np.array(sorted(peptides, key=mz_dict.get))
     mz_list = np.array([mz_dict[x] for x in peptides])
 
-    return pd.DataFrame({'orig_seq': peptides, 'mz': mz_list})
+    return pd.DataFrame({'sequence': peptides, 'mz': mz_list})
     
 
 def bin_by_value(values, bin_centers, bin_width):
@@ -456,7 +456,7 @@ def format_for_prosit(peptides, collision_energy, precursor_charge=2):
            )
 
 
-def load_prosit_models(irt_dir, spectra_dir):
+def load_prosit_models(irt_dir, spectra_dir, gpu_mem_fraction=1):
     """Must run in properly versioned python environment.
     pip install tensorflow-gpu==1.10.1 keras==2.2.1 h5py \
         tables flask pyteomics lxml pandas
@@ -470,9 +470,11 @@ def load_prosit_models(irt_dir, spectra_dir):
     d_spectra = {}
     d_irt = {}
 
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_fraction)
+    session_kwargs = dict(config=tf.ConfigProto(gpu_options=gpu_options))
     d_spectra["graph"] = tf.Graph()
     with d_spectra["graph"].as_default():
-        d_spectra["session"] = tf.Session()
+        d_spectra["session"] = tf.Session(**session_kwargs)
         with d_spectra["session"].as_default():
             d_spectra["model"], d_spectra["config"] = model.load(
                 spectra_dir,
@@ -481,7 +483,7 @@ def load_prosit_models(irt_dir, spectra_dir):
             d_spectra["model"].compile(optimizer="adam", loss="mse")
     d_irt["graph"] = tf.Graph()
     with d_irt["graph"].as_default():
-        d_irt["session"] = tf.Session()
+        d_irt["session"] = tf.Session(**session_kwargs)
         with d_irt["session"].as_default():
             d_irt["model"], d_irt["config"] = model.load(irt_dir,
                     trained=True)
@@ -624,7 +626,7 @@ def prosit_ion_names():
     
 
 def add_prosit(df, d_spectra, d_irt, collision_energy, col='sequence',
-              intensity_threshold=0.01, chunk_size=10000):
+              intensity_threshold=0.01, chunk_size=int(1e7)):
     """Add columns for retention time and fragmentation efficiency
     predictions. Columns where all fragmentation efficiencies are below
     `intensity_threshold` are discarded. Prosit should predict either -1 
@@ -633,7 +635,7 @@ def add_prosit(df, d_spectra, d_irt, collision_energy, col='sequence',
     Chunk size is important to limit GPU memory consumption.
     """
     df = df.copy()
-    num_chunks = int(len(df) / chunk_size)
+    num_chunks = int(np.ceil(len(df) / chunk_size))
     arr = []
     for chunk in range(num_chunks):
         df_ = df.iloc[chunk*chunk_size:(chunk + 1)*chunk_size].copy()

@@ -3,12 +3,15 @@
 # from postdoc.imports import *
 sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
 
+GPU_MEM_FRACTION = 0.1
+
 # IMPORTS
 
 import postdoc.flycodes as fly
 import postdoc.flycode_designs
 from postdoc.utils import timestamp
 
+import pandas as pd
 import inspect
 METADATA = dict(inspect.getmembers(
     postdoc.flycode_designs, inspect.isclass))[config['design']]
@@ -68,8 +71,11 @@ rule predict_prosit:
         expand('process/{{design}}_iRT-{bin_iRT}_mz-{{bin_mz}}.peptides.csv', 
             bin_iRT=METADATA.iRT_bin_names.values())
     run:
-        d_spectra, d_irt = fly.load_prosit_models(MODEL_IRT, MODEL_SPECTRA)
-        df_precursors = pd.concat([pd.read_csv(f) for f in input])
+        d_spectra, d_irt = fly.load_prosit_models(
+            MODEL_IRT, MODEL_SPECTRA, gpu_mem_fraction=GPU_MEM_FRACTION)
+        df_precursors = (pd.concat([pd.read_csv(f) for f in input])
+            .rename(columns={'orig_seq': 'sequence'})
+            )
 
         df_predicted = (df_precursors
          .pipe(fly.add_prosit, d_spectra, d_irt, METADATA.normalized_collision_energy)
