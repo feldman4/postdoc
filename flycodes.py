@@ -213,20 +213,6 @@ def calc_mass(s, charge=1):
         return pyteomics.mass.calculate_mass(s, charge=charge)
 
 
-def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
-    import time
-    import re
-    stamp = time.strftime(fmt)
-    pat= r'(.*)\.(.*)'
-    match = re.findall(pat, filename)
-    if match:
-        return sep.join([match[0][0], stamp, match[0][1]])
-    elif filename:
-        return sep.join([filename, stamp])
-    else:
-        return stamp
-
-
 def select_barcodes(X, min_y_ions, seed):
 
     rs = np.random.RandomState(seed=seed)
@@ -327,7 +313,7 @@ def plot_mz_locations(mz_list):
     return ax
 
 
-def scatter_mz_locations(mz_list, alpha=0.1):
+def scatter_mz_locations(mz_list, alpha=0.1, s=4):
     rs = np.random.RandomState(0)
     mz_list = pd.Series(mz_list, name='mz')
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -335,7 +321,7 @@ def scatter_mz_locations(mz_list, alpha=0.1):
     mz_list = (pd.DataFrame(mz_list)
         .assign(gaussian_jitter=np.abs(rs.randn(len(mz_list)))))
 
-    ax.scatter(x=mz_list['mz'], y=mz_list['gaussian_jitter'], s=4, 
+    ax.scatter(x=mz_list['mz'], y=mz_list['gaussian_jitter'], s=s, 
         alpha=alpha, color='black')
 
     ax.set_xlabel('mz')
@@ -596,4 +582,76 @@ def barcode_stats(df_ions, DESIGN):
         df_ions.groupby(['sequence']).size().mean())
 
     return stats
+
+
+def create_mz_bins(start, maximum, spacing, skip_interval):
+    bins = np.arange(start, maximum, spacing)
+    width = spacing * (skip_interval - 1)
+
+    num_bins = int(len(bins) / skip_interval)
+
+    centers = []
+    for i in range(num_bins):
+        values = bins[i*skip_interval:((i+1) * skip_interval) - 1]
+        centers += [values.mean()]
+
+    return centers, width
+
+
+def get_bins(values, threshold):
+    """Create bins based on gaps in sorted data larger than threshold.
+    """
+    values_sorted = np.array(sorted(values) + [max(values) + threshold])
+    edge_ix = np.where(np.diff(values_sorted) > threshold)[0]
+    edges = values_sorted[edge_ix]
+    print(len(values), len(edges))
+    return edges[np.digitize(values, edges[:-1])]
+
+
+def prosit_ion_names():
+    """Ion naming scheme for Prosit fragmentation prediction.
+    """
+    from itertools import product
+    charges = 1, 2, 3
+    ion_types = 'y', 'b'
+    lengths = range(29)
+    template = '{ion_type}{length}_{charge}p'
+    names = []
+    for length, ion_type, charge in product(lengths, ion_types, charges):
+        names += [template.format(charge=charge, ion_type=ion_type, 
+                                  length=length)]
+    return names
+    
+
+def add_prosit(df, d_spectra, d_irt, collision_energy, col='sequence',
+              intensity_threshold=0.01):
+    """Add columns for retention time and fragmentation efficiency
+    predictions. Columns where all fragmentation efficiencies are below
+    `intensity_threshold` are discarded. Prosit should predict either -1 
+    or 0 for inapplicable ions (impossible length/charge).
+    """
+    df = df.copy()
+    data = predict_prosit(df[col], d_spectra, d_irt, 
+                              collision_energy=collision_energy)
+    
+    
+    df['iRT'] = data['iRT'][:, 0]
+
+    names = prosit_ion_names()
+    for name, values in zip(names, data['intensities_pred'].T):
+        if (values > intensity_threshold).any():
+            df[name] = values
+    
+    return df
+
+
+def sort_by_spectral_efficiency(df, threshold=0.05):
+    """Sort by fraction of singly-charged y-ions above threshold. Note that
+    Prosit fragmentation intensity predictions are normalized base-to-peak 
+    across all ions.
+    """
+    X = df.filter(regex='y\d+_1p').values
+    ix = np.argsort((X > threshold).sum(axis=1))    
+    return df.iloc[ix[::-1]]
+
 
