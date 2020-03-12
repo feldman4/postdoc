@@ -1,0 +1,106 @@
+# snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile --config design=DESIGN_0
+
+# IMPORTS
+
+import postdoc.flycodes as fly
+import postdoc.flycode_designs
+from postdoc.utils import timestamp
+
+import inspect
+METADATA = dict(inspect.getmembers(
+    postdoc.flycode_designs, inspect.isclass))[config['design']]
+
+RUN_NAME = timestamp(METADATA.name)
+
+MODEL_IRT = ('/home/dfeldman/flycodes/prosit_models/'
+         'model_irt_prediction/')
+MODEL_SPECTRA = ('/home/dfeldman/flycodes/prosit_models/'
+                 'model_fragmentation_prediction/')
+
+# RULES
+
+RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_runs)]
+
+
+rule all:
+    input: 
+        # expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
+        #     design=METADATA.name,
+        #     run=RUNS,
+        #     bin_mz=METADATA.precursor_bin_names.values()),
+        expand('process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.peptides.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values())
+
+
+rule generate_peptides:
+    output:
+        expand('process/{{design}}_{{run}}_{bin_mz}.peptides.csv', 
+            bin_mz=METADATA.precursor_bin_names.values())
+
+    run:
+        df_precursors_all = (fly.generate_precursors(
+            METADATA.num_to_generate, METADATA.min_length, METADATA.max_length)
+            .assign(mz_bin=lambda x: 
+                x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
+                    METADATA.precursor_bin_width))
+             .query('mz_bin == mz_bin')
+             .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
+             .assign(run=RUN_NAME)
+        )
+
+        # need to write empty csv files for empty bins
+        for f, mz_bin in zip(output, METADATA.precursor_bin_names.values()):
+            (df_precursors_all.query('mz_bin == @mz_bin')
+                .to_csv(f, index=None)
+            )
+
+
+rule predict_prosit:
+    input:
+        expand('process/{{design}}_{run}_{{bin_mz}}.peptides.csv', 
+            run=RUNS)
+    output:
+        expand('process/{{design}}_iRT-{bin_iRT}_mz-{{bin_mz}}.peptides.csv', 
+            bin_iRT=METADATA.iRT_bin_names.values())
+    run:
+        d_spectra, d_irt = fly.load_prosit_models(MODEL_IRT, MODEL_SPECTRA)
+        df_precursors = pd.concat([pd.read_csv(f) for f in input])
+
+        df_predicted = (df_precursors
+         .pipe(fly.add_prosit, d_spectra, d_irt, METADATA.normalized_collision_energy)
+         .assign(iRT_bin=lambda x: 
+                 x['iRT'].pipe(fly.bin_by_value, 
+                               METADATA.iRT_bins, METADATA.iRT_bin_width))
+         .query('iRT_bin == iRT_bin')
+         .pipe(fly.sort_by_spectral_efficiency)
+        )
+
+        for f, iRT_bin in zip(output, METADATA.iRT_bin_names.values()):
+            (df_predicted.query('iRT_bin == @iRT_bin')
+                .head(METADATA.input_barcodes_per_paired_bin)
+                .to_csv(f, index=None)
+                )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
