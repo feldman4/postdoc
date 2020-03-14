@@ -4,46 +4,44 @@ from . import flycodes
 
 
 class DESIGN_0():
-    name = 'random_peptides'
+    name = 'random-termK'
     min_length = 10
     max_length = 13
     num_to_generate = int(4e6)
-    num_permutations = 300
-    # min_spacing = 0.15
-
-    num_runs = 30
+    num_to_generate = int(1e5)
+    num_generation_runs = 30
 
     precursors_per_bin = 200
     precursor_mz_start = 500.2667
     precursor_mz_max = 850
-    # precursor_mz_skip_interval = 4
-    # precursor_bins, precursor_bin_width = flycodes.create_mz_bins(
-    #     precursor_mz_start, 
-    #     precursor_mz_max, 
-    #     MZ_DOUBLE_SPACING,
-    #     precursor_mz_skip_interval, 
-    #     )
     precursor_bins = np.arange(precursor_mz_start, precursor_mz_max, MZ_DOUBLE_SPACING)
     precursor_bin_width = MZ_DOUBLE_SPACING
     precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
-    iRT_bins = np.linspace(-10, 110, 11)
+    iRT_bins = np.arange(-10, 110, 5)
     iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
-    iRT_bin_width = 6
-    iRT_bin_min_spacing = 6
+    iRT_bin_width = 5
 
     normalized_collision_energy = 27
 
-    # number of barcodes into ion selection
-    input_barcodes_per_paired_bin = 1000
+    # number of peptides retained for barcode selection
+    # tested empirically to saturate barcode selection
+    input_barcodes_per_iRT_mz_bin = 10000
 
-    ion_mz_min = 200
+    ion_mz_start = 200.1517
     ion_mz_max = 1300
-    usable_ion_intensity = 0.05
-    ignore_ion_intensity = 0.02
+    usable_ion_intensity = 0.1
+    ignore_ion_intensity = 0.01
     usable_ion_gate = ('ion_type == "y" & {} < ion_mz < {} & ion_charge == 1'
         '& 2 < ion_length < (length - 1) & {} < intensity_prosit'
-        .format(ion_mz_min, ion_mz_max, usable_ion_intensity))
+        .format(ion_mz_start, ion_mz_max, usable_ion_intensity))
+
+    ion_bins = np.arange(ion_mz_start, ion_mz_max, MZ_DOUBLE_SPACING)
+    ion_bin_width = MZ_DOUBLE_SPACING
+
+    selection_seeds = np.arange(15)
+    min_unique_ions = 2
+
 
 
 class DESIGN_1():

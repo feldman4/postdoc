@@ -1,4 +1,5 @@
-# snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile --config design=DESIGN_0
+# snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile \
+# --config design=DESIGN_0 --resources gpu_mem_tenths=6
 
 # from postdoc.imports import *
 sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
@@ -25,20 +26,20 @@ MODEL_SPECTRA = ('/home/dfeldman/flycodes/prosit_models/'
 
 # RULES
 
-RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_runs)]
+RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_generation_runs)]
 
 
 rule all:
     input: 
-        # expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
-        #     design=METADATA.name,
-        #     run=RUNS,
-        #     bin_mz=METADATA.precursor_bin_names.values()),
-        # expand('process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.peptides.csv',
+        expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
+            design=METADATA.name,
+            run=RUNS,
+            bin_mz=METADATA.precursor_bin_names.values()),
+        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.barcode_ions.csv',
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
             design=METADATA.name,
             bin_iRT=METADATA.iRT_bin_names.values(),
             bin_mz=METADATA.precursor_bin_names.values())
@@ -70,8 +71,10 @@ rule predict_prosit:
         expand('process/{{design}}_{run}_{{bin_mz}}.peptides.csv', 
             run=RUNS)
     output:
-        expand('process/{{design}}_iRT-{bin_iRT}_mz-{{bin_mz}}.peptides.csv', 
+        expand('process/{{design}}_iRT_{bin_iRT}_mz_{{bin_mz}}.precursors.csv', 
             bin_iRT=METADATA.iRT_bin_names.values())
+    resources:
+        gpu_mem_tenths=1
     run:
         d_spectra, d_irt = fly.load_prosit_models(
             MODEL_IRT, MODEL_SPECTRA, gpu_mem_fraction=GPU_MEM_FRACTION)
@@ -90,25 +93,55 @@ rule predict_prosit:
 
         for f, iRT_bin in zip(output, METADATA.iRT_bin_names.values()):
             (df_predicted.query('iRT_bin == @iRT_bin')
-                .head(METADATA.input_barcodes_per_paired_bin)
+                .head(METADATA.input_barcodes_per_iRT_mz_bin)
                 .to_csv(f, index=None)
                 )
 
 
 rule filter_barcodes:
     input:
-        'process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.peptides.csv'
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv'
     output:
-        'process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.barcode_ions.csv'        
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv'        
     run:
         df_peptides = pd.read_csv(input[0])
 
-        # generate all y-ions
-        # mask b2 only?
-        
+        df_ions = fly.peptides_to_ions(df_peptides, 
+                 METADATA.usable_ion_gate,
+                 METADATA.ignore_ion_intensity,
+                 METADATA.ion_bins,
+                 METADATA.ion_bin_width)
 
+        df_wide = (df_ions
+         .pivot_table(index=['ion_mz_bin'], columns=['sequence'], 
+                      values='selection_flag', aggfunc='min')
+         .fillna(0).astype(int)
+        )
 
+        num_barcodes = df_wide.shape[1]
+        if num_barcodes == 0:
+            pd.DataFrame().to_csv(output[0], index=None)
 
+        barcode_ixs = []
+        for seed in METADATA.selection_seeds[:num_barcodes]:
+            barcode_ixs.append(fly.select_barcodes2(
+                            df_wide.values, METADATA.min_unique_ions, seed))
 
+        barcode_ix = sorted(barcode_ixs, key=len)[-1]
+        barcodes = list(df_wide.columns[barcode_ix])
 
+        cols = ['run', 'sequence', 'mz_bin', 'iRT_bin', 'iRT', 
+        'ion_name', 'ion', 'ion_mz_bin', 'intensity_prosit',
+       'ion_unique']
 
+        (df_ions
+         .query('sequence == @barcodes')
+         .assign(occurences=lambda x: 
+                x.groupby('ion_mz_bin')['sequence'].transform('size'))
+         .assign(ion_unique=lambda x: 
+                 x.eval('selection_flag == 2 & occurences == 1'))
+         [cols].to_csv(output[0], index=None)
+        )
+
+        ax = fly.plot_ion_usage(df_wide, barcode_ix, METADATA.ion_bins)
+        ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)

@@ -1,4 +1,4 @@
-from postdoc.utils import tqdn
+from postdoc.utils import tqdn, cast_cols
 
 import os
 import numpy as np
@@ -12,6 +12,12 @@ import seaborn as sns
 
 
 resources = os.path.join(os.path.dirname(globals()['__file__']), 'resources')
+
+# barcode flags
+UNUSED = 0
+AVOID = 1
+USABLE = 2
+
 
 def read_fasta(f):
     with open(f, 'r') as fh:
@@ -272,55 +278,63 @@ def select_barcodes(X, min_y_ions, seed):
     return np.where(barcodes)[0]
 
 
-def select_barcodes2(X, min_y_ions, seed):
+def check_barcodes(X, barcodes, min_y_ions):
+    good_ions = X[:, barcodes].sum(axis=1) == 1
+    good_ions_per_barcode = X[:, barcodes][good_ions].sum(axis=0)
+    return (good_ions_per_barcode >= min_y_ions).all()
+
+
+def select_barcodes2(X, min_ions, seed):
     """Select barcodes from ion usage table with the following encoding:
 
     0=ion not present
     1="avoid" ion -- counts against uniqueness but does not contribute to `min_y_ions`
-    2="usable" ion -- contributes to `min_y_ions`
+    2="usable" ion -- contributes to `min_ions`
 
-    Each selected barcodes has at least `min_y_ions` unique "usable" ions not present as
+    Each selected barcodes has at least `min_ions` unique "usable" ions not present as
     "avoid" or "usable" ions for any other selected barcode. 
     """
 
     rs = np.random.RandomState(seed=seed)
     num_barcodes = X.shape[1]
     barcodes = np.zeros(num_barcodes, dtype='bool')
-    start = rs.choice(np.arange(num_barcodes))
-    barcodes[start] = True
+    # start = rs.choice(np.arange(num_barcodes))
+    barcodes[seed] = True
+
 
     while True:
-        # usage of y-ions among selected barcodes
-        y_ion_usage = X[:, barcodes].sum(axis=1)
-        in_use = y_ion_usage == 1
-        # identify the y ions that cannot be touched
-        # - match a barcode at the minimum
+        # usage of ions among selected barcodes
+        ion_usage = (X[:, barcodes] != UNUSED).sum(axis=1)
+        # ions that are currently used to identify barcodes
+        in_use = (X[:, barcodes] == USABLE).sum(axis=1) == 1
+        # identify the ions that cannot be touched
+        # - match a critical barcode (has no excess usable ions)
         # - currently unique
-        critical_barcodes = X[in_use].sum(axis=0) == min_y_ions
+        critical_barcodes = X[in_use].sum(axis=0) == min_ions
         critical_barcodes[~barcodes] = False
-        critical_y_ions = X[:, critical_barcodes].sum(axis=1) == 1
+        critical_ions = (X[:, critical_barcodes] == USABLE).sum(axis=1) == 1
 
-        # potential new unique y-ions
-        include = y_ion_usage == 0
+        # potential new unique ions
+        include = ion_usage == 0
         # usage among all barcodes
-        newly_used = X[include].sum(axis=0)
-        # must be a new barcode that uses at least min untouched y-ions
-        mask = ~barcodes & (newly_used >= min_y_ions)
-        # can't take away any critical y-ions
+        newly_used = (X[include] == USABLE).sum(axis=0)
+        # must be a new barcode that uses at least min untouched ions
+        mask = ~barcodes & (newly_used >= min_ions)
+        # can't take away any critical ions
         # note that this is not a sufficient criterion!!
-        # a sub-critical barcode that overlaps at multiple y-ions with
+        # a sub-critical barcode that overlaps at multiple ions with
         # a new barcode can break the barcode set, hence the while loop
-        uses_critical = X[critical_y_ions].any(axis=0)
+        uses_critical = X[critical_ions].any(axis=0)
         mask = mask & ~uses_critical
 
         while mask.sum() > 0:
             # select a candidate
             candidates = np.arange(num_barcodes)
-            # could weight by number of unique y-ions remaining for each candidate
+            # could weight by number of unique ions remaining for each candidate
             select = rs.choice(candidates, p=mask/mask.sum())
             # this could fail if a subcritical barcode is lost
             barcodes[select] = True
-            if check_barcodes(X, barcodes, min_y_ions):
+            if check_barcodes2(X, barcodes, min_ions):
                 # accepted
                 break
             barcodes[select] = False
@@ -332,11 +346,11 @@ def select_barcodes2(X, min_y_ions, seed):
     return np.where(barcodes)[0]
 
 
-
-def check_barcodes(X, barcodes, min_y_ions):
-    good_ions = X[:, barcodes].sum(axis=1) == 1
-    good_ions_per_barcode = X[:, barcodes][good_ions].sum(axis=0)
-    return (good_ions_per_barcode >= min_y_ions).all()
+def check_barcodes2(X, barcodes, min_ions):
+    good_ions = (X[:, barcodes] == USABLE).sum(axis=1) == 1
+    good_ions &= (X[:, barcodes] == AVOID).sum(axis=1) == 0
+    good_ions_per_barcode = (X[:, barcodes][good_ions] == USABLE).sum(axis=0)
+    return (good_ions_per_barcode >= min_ions).all()
 
 
 def search_for_barcodes(X, min_y_ions, attempts=1000):
@@ -702,7 +716,8 @@ def add_prosit(df, d_spectra, d_irt, collision_energy, col='sequence',
     `intensity_threshold` are discarded. Prosit should predict either -1 
     or 0 for inapplicable ions (impossible length/charge).
 
-    Chunk size is important to limit GPU memory consumption.
+    Chunk size is important to limit GPU memory consumption. Model uses 995 MB,
+    peak memory use during predictions is 1327 MB
     """
     df = df.copy()
     num_chunks = int(np.ceil(len(df) / chunk_size))
@@ -787,4 +802,65 @@ def add_ion_properties(df):
     return (df.assign(ion=ions, ion_mz=ion_mz))
 
 
+
+def plot_ion_usage(df_wide, barcode_ix, ion_bins):
+    """Strip plot of ion usage by selected barcodes. Allows 
+    comparison to unselected barcodes and all possible ion mz bins.
+    """
+    fig, ax = plt.subplots()
+
+    (df_wide
+     .iloc[:,barcode_ix]
+     .reindex(ion_bins[::2]).fillna(-1)
+     .max(axis=1)
+     .pipe(lambda x: x + np.random.rand(len(x))*0.2 + 0.05)
+     .plot(marker='.', ls='', markersize=3, alpha=0.3, color='green',
+          label='1p, 2p even', ax=ax)
+    )
+
+    (df_wide
+     .iloc[:,barcode_ix]
+     .reindex(ion_bins[1::2]).fillna(-1)
+     .max(axis=1)
+     .pipe(lambda x: x + np.random.rand(len(x))*-0.2 - 0.05)
+     .plot(marker='.', ls='', markersize=3, alpha=0.3, color='red',
+          label='2p odd', ax=ax)
+    )
+
+    ax.legend(loc='right')
+
+    ax.set_yticks([-1, 0, 1, 2])
+    ax.set_yticklabels(['no input ions', 'unused', 'avoid', 'usable']);
+    
+    return ax
+
+
+def peptides_to_ions(df_peptides, usable_ion_gate, 
+                     ignore_ion_intensity, ion_bins, ion_bin_width):
+    # threshold Prosit fragmentation efficiencies
+    # removes about 20% of ions that made it past 
+    # (first_ion=3, last_ion=1) heuristic
+    valid_ions = (df_peptides
+     .set_index('sequence')
+     .filter(regex='^[yb]\d+_\d+p')
+     .stack().loc[lambda x: x > ignore_ion_intensity]
+     .reset_index()
+     .rename(columns={0: 'intensity_prosit', 'level_1': 'ion_name'})
+    )
+
+    cols = ['run', 'sequence', 'mz', 'mz_bin', 'iRT', 'iRT_bin']
+    join_cols = ['sequence']
+
+    return (df_peptides[cols]
+     .assign(length=lambda x: x['sequence'].str.len())
+     .join(valid_ions.set_index(join_cols), on=join_cols)
+     .pipe(lambda x: pd.concat(
+          [x, x['ion_name'].str.extract(pat_ion)], axis=1))
+     .pipe(cast_cols, int_cols=['ion_length', 'ion_charge'])
+     .pipe(add_ion_properties)
+     .assign(ion_mz_bin=lambda x: 
+        x['ion_mz'].pipe(bin_by_value, ion_bins, ion_bin_width))
+     .query('ion_mz_bin == ion_mz_bin')
+     .assign(selection_flag=lambda x: 1 + x.eval(usable_ion_gate))
+    )
 
