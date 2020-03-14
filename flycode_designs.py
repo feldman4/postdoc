@@ -37,6 +37,14 @@ class DESIGN_0():
     # number of barcodes into ion selection
     input_barcodes_per_paired_bin = 1000
 
+    ion_mz_min = 200
+    ion_mz_max = 1300
+    usable_ion_intensity = 0.05
+    ignore_ion_intensity = 0.02
+    usable_ion_gate = ('ion_type == "y" & {} < ion_mz < {} & ion_charge == 1'
+        '& 2 < ion_length < (length - 1) & {} < intensity_prosit'
+        .format(ion_mz_min, ion_mz_max, usable_ion_intensity))
+
 
 class DESIGN_1():
     name = 'RJ_76'

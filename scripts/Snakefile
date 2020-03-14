@@ -34,17 +34,19 @@ rule all:
         #     design=METADATA.name,
         #     run=RUNS,
         #     bin_mz=METADATA.precursor_bin_names.values()),
-        expand('process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.peptides.csv',
+        # expand('process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.peptides.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=METADATA.iRT_bin_names.values(),
+        #     bin_mz=METADATA.precursor_bin_names.values())
+        expand('process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.barcode_ions.csv',
             design=METADATA.name,
             bin_iRT=METADATA.iRT_bin_names.values(),
             bin_mz=METADATA.precursor_bin_names.values())
-
 
 rule generate_peptides:
     output:
         expand('process/{{design}}_{{run}}_{bin_mz}.peptides.csv', 
             bin_mz=METADATA.precursor_bin_names.values())
-
     run:
         df_precursors_all = (fly.generate_precursors(
             METADATA.num_to_generate, METADATA.min_length, METADATA.max_length)
@@ -91,5 +93,22 @@ rule predict_prosit:
                 .head(METADATA.input_barcodes_per_paired_bin)
                 .to_csv(f, index=None)
                 )
+
+
+rule filter_barcodes:
+    input:
+        'process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.peptides.csv'
+    output:
+        'process/{design}_iRT-{bin_iRT}_mz-{bin_mz}.barcode_ions.csv'        
+    run:
+        df_peptides = pd.read_csv(input[0])
+
+        # generate all y-ions
+        # mask b2 only?
+        
+
+
+
+
 
 

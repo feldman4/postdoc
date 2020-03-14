@@ -40,3 +40,11 @@ def csv_frame(files_or_search, tqdn=False, **kwargs):
         return pd.concat([read_csv(f) for f in tqdn(files)], sort=True)
     else:
         return pd.concat([read_csv(f) for f in files], sort=True)
+
+
+def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
+    return (df
+           .assign(**{c: df[c].astype(int) for c in int_cols})
+           .assign(**{c: df[c].astype(float) for c in float_cols})
+           .assign(**{c: df[c].astype(str) for c in str_cols})
+           )

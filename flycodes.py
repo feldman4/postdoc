@@ -183,11 +183,15 @@ def enumerate_ions(df_precursors, first_ion=2, last_ion=1):
      .reset_index()
     )
 
+    sort_cols = ['mz', 'orig_seq', 'sequence', 
+                   'ion_mz_shared_precursors']
+    if 'orig_seq' not in df_precursors:
+        sort_cols.remove('orig_seq')
+
     return (df_precursors
      .merge(ion_counts)
      .merge(df_ions)
-     .sort_values(['mz', 'orig_seq', 'sequence', 
-                   'ion_mz_shared_precursors'])
+     .sort_values(sort_cols)
     )
 
 
@@ -214,6 +218,10 @@ def calc_mass(s, charge=1):
 
 
 def select_barcodes(X, min_y_ions, seed):
+    """Select barcodes from binary ion usage table. Each selected barcodes 
+    has at least `min_y_ions` unique ions not associated with any other 
+    selected barcode.
+    """
 
     rs = np.random.RandomState(seed=seed)
     num_barcodes = X.shape[1]
@@ -262,6 +270,67 @@ def select_barcodes(X, min_y_ions, seed):
             break
             
     return np.where(barcodes)[0]
+
+
+def select_barcodes2(X, min_y_ions, seed):
+    """Select barcodes from ion usage table with the following encoding:
+
+    0=ion not present
+    1="avoid" ion -- counts against uniqueness but does not contribute to `min_y_ions`
+    2="usable" ion -- contributes to `min_y_ions`
+
+    Each selected barcodes has at least `min_y_ions` unique "usable" ions not present as
+    "avoid" or "usable" ions for any other selected barcode. 
+    """
+
+    rs = np.random.RandomState(seed=seed)
+    num_barcodes = X.shape[1]
+    barcodes = np.zeros(num_barcodes, dtype='bool')
+    start = rs.choice(np.arange(num_barcodes))
+    barcodes[start] = True
+
+    while True:
+        # usage of y-ions among selected barcodes
+        y_ion_usage = X[:, barcodes].sum(axis=1)
+        in_use = y_ion_usage == 1
+        # identify the y ions that cannot be touched
+        # - match a barcode at the minimum
+        # - currently unique
+        critical_barcodes = X[in_use].sum(axis=0) == min_y_ions
+        critical_barcodes[~barcodes] = False
+        critical_y_ions = X[:, critical_barcodes].sum(axis=1) == 1
+
+        # potential new unique y-ions
+        include = y_ion_usage == 0
+        # usage among all barcodes
+        newly_used = X[include].sum(axis=0)
+        # must be a new barcode that uses at least min untouched y-ions
+        mask = ~barcodes & (newly_used >= min_y_ions)
+        # can't take away any critical y-ions
+        # note that this is not a sufficient criterion!!
+        # a sub-critical barcode that overlaps at multiple y-ions with
+        # a new barcode can break the barcode set, hence the while loop
+        uses_critical = X[critical_y_ions].any(axis=0)
+        mask = mask & ~uses_critical
+
+        while mask.sum() > 0:
+            # select a candidate
+            candidates = np.arange(num_barcodes)
+            # could weight by number of unique y-ions remaining for each candidate
+            select = rs.choice(candidates, p=mask/mask.sum())
+            # this could fail if a subcritical barcode is lost
+            barcodes[select] = True
+            if check_barcodes(X, barcodes, min_y_ions):
+                # accepted
+                break
+            barcodes[select] = False
+            mask[select] = False
+
+        if mask.sum() == 0:
+            break
+            
+    return np.where(barcodes)[0]
+
 
 
 def check_barcodes(X, barcodes, min_y_ions):
@@ -515,6 +584,7 @@ def generate_bin_set(df_bins, mask_indices):
      .reset_index().drop(0, axis=1)
     )
 
+
 def generate_bin_sets(bin_sets):
     arr = []
     for bin_set, indices in bin_sets.items():
@@ -616,7 +686,7 @@ def prosit_ion_names():
     from itertools import product
     charges = 1, 2, 3
     ion_types = 'y', 'b'
-    lengths = range(29)
+    lengths = range(1, 30)
     template = '{ion_type}{length}_{charge}p'
     names = []
     for length, ion_type, charge in product(lengths, ion_types, charges):
@@ -663,5 +733,58 @@ def sort_by_spectral_efficiency(df, threshold=0.05):
     X = df.filter(regex='y\d+_1p').values
     ix = np.argsort((X > threshold).sum(axis=1))    
     return df.iloc[ix[::-1]]
+
+
+def fix_off_by_one(df_peptides):
+    date = df_peptides['run'].iloc[0].split('.')[1]
+    if date < '20200312':
+        rename = {}
+        for col in df_peptides:
+            if col.startswith('y') or col.startswith('b'):
+                col_ = re.sub(
+                    'y\d+', lambda x: 'y' + str(int(x[0][1:]) + 1), col)
+                col_ = re.sub(
+                    'b\d+', lambda x: 'b' + str(int(x[0][1:]) + 1), col_)
+                rename[col] = col_
+        df_peptides = df_peptides.rename(columns=rename)
+    return df_peptides
+
+
+def plot_vertical_intervals(data, color, label, x_col='iRT', 
+                   y_col0='Min Start Time', y_col1='Max End Time'):
+    """Scatter (x0, y0, y1) data as vertical intervals.
+    fg = (sns.FacetGrid(df_peaks, hue='File Name')
+     .map_dataframe(plot_intervals)
+     .add_legend()
+    )
+    """
+    df_peaks = data
+    ax = plt.gca()
+    for _, row in df_peaks.iterrows():
+        jitter = np.random.rand() * 3
+        x = row[x_col]
+        ax.plot([x, x], [row[y_col0], row[y_col1]],
+               ls='-', marker='.', markersize=3, lw=0.7, label=label, color=color)
+
+
+pat_ion = '(?P<ion_type>[by])(?P<ion_length>\d+)_(?P<ion_charge>\d+)p'
+
+ # .pipe(lambda x: pd.concat(
+ #     [x, x['ion_name'].str.extract(fly.pat_ion)], axis=1))
+ # .pipe(cast_cols, int_cols=['ion_length', 'ion_charge'])
+
+
+def add_ion_properties(df):
+    cols = ['sequence', 'ion_type', 'ion_length', 'ion_charge']
+    arr = []
+    for sequence, ion_type, length, charge in df[cols].values:
+        if ion_type == 'y':
+            ion = sequence[-length:]
+        if ion_type == 'b':
+            ion = sequence[:length]
+        arr.append([ion, calc_mass(ion, charge=charge)])
+    ions, ion_mz = zip(*arr)
+    return (df.assign(ion=ions, ion_mz=ion_mz))
+
 
 

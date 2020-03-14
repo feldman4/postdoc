@@ -1,6 +1,6 @@
 import postdoc as pos
 from postdoc.constants import *
-from postdoc.utils import timestamp, tqdn, csv_frame
+from postdoc.utils import timestamp, tqdn, csv_frame, cast_cols
 from postdoc import reporters
 from postdoc import flycodes as fly
 from postdoc.flycode_designs import *
