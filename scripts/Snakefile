@@ -106,6 +106,9 @@ rule filter_barcodes:
     run:
         df_peptides = pd.read_csv(input[0])
 
+        if len(df_peptides) == 0:
+            pd.DataFrame().to_csv(output[0], index=None)
+
         df_ions = fly.peptides_to_ions(df_peptides, 
                  METADATA.usable_ion_gate,
                  METADATA.ignore_ion_intensity,
@@ -119,9 +122,6 @@ rule filter_barcodes:
         )
 
         num_barcodes = df_wide.shape[1]
-        if num_barcodes == 0:
-            pd.DataFrame().to_csv(output[0], index=None)
-
         barcode_ixs = []
         for seed in METADATA.selection_seeds[:num_barcodes]:
             barcode_ixs.append(fly.select_barcodes2(

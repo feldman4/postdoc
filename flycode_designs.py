@@ -8,7 +8,6 @@ class DESIGN_0():
     min_length = 10
     max_length = 13
     num_to_generate = int(4e6)
-    num_to_generate = int(1e5)
     num_generation_runs = 30
 
     precursors_per_bin = 200
