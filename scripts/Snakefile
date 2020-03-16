@@ -1,6 +1,3 @@
-# snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile \
-# --config design=DESIGN_0 --resources gpu_mem_tenths=6
-
 # from postdoc.imports import *
 sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
 
@@ -50,7 +47,8 @@ rule generate_peptides:
             bin_mz=METADATA.precursor_bin_names.values())
     run:
         df_precursors_all = (fly.generate_precursors(
-            METADATA.num_to_generate, METADATA.min_length, METADATA.max_length)
+            METADATA.num_to_generate, METADATA.min_length, METADATA.max_length,
+            METADATA.rule_set)
             .assign(mz_bin=lambda x: 
                 x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
                     METADATA.precursor_bin_width))
@@ -82,8 +80,14 @@ rule predict_prosit:
             .rename(columns={'orig_seq': 'sequence'})
             )
 
+        num_to_predict = min(
+            len(df_precursors), 
+            METADATA.pred_barcodes_per_mz_bin)
+        
         df_predicted = (df_precursors
-         .pipe(fly.add_prosit, d_spectra, d_irt, METADATA.normalized_collision_energy)
+         .sample(num_to_predict, random_state=0)
+         .pipe(fly.add_prosit, d_spectra, d_irt, 
+            METADATA.normalized_collision_energy)
          .assign(iRT_bin=lambda x: 
                  x['iRT'].pipe(fly.bin_by_value, 
                                METADATA.iRT_bins, METADATA.iRT_bin_width))
@@ -145,3 +149,13 @@ rule filter_barcodes:
 
         ax = fly.plot_ion_usage(df_wide, barcode_ix, METADATA.ion_bins)
         ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)
+
+
+"""
+
+qlogin -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10
+
+snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile \
+ --config design=DESIGN_1 --resources gpu_mem_tenths=6
+
+"""

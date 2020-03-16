@@ -440,11 +440,11 @@ def filter_by_spacing(values, min_spacing):
     return np.in1d(starting_values, values)
 
 
-def generate_peptides(length, num_peptides, rule_set='RJ_no_H', seed=0):
+def generate_peptides(length, num_peptides, rule_set, seed=0):
 
     canonical = set('ACDEFGHIKLMNPQRSTVWY')
     
-    if rule_set == 'RJ_no_H':
+    if rule_set in ('RJ_noH_termR', 'RJ_noH_termK', 'RJ_no_H'):
         # these are not allowed in the middle of the peptide
         pos = 'KRH'
         ox = 'MC'
@@ -452,7 +452,11 @@ def generate_peptides(length, num_peptides, rule_set='RJ_no_H', seed=0):
         # these are not allowed as the N-terminal residue
         exclude_from_n_term = set('QP')
 
-        c_term = set('K')
+        if rule_set in ('RJ_noH_termK', 'RJ_no_H'):
+            c_term = set('K')
+        elif rule_set == 'RJ_noH_termR':
+            c_term = set('R')
+
         middle = canonical - set(pos + ox + same_as_L)
         n_term = middle - exclude_from_n_term
 
@@ -488,11 +492,11 @@ def rolling_window_sizes(values, window_size):
     return sizes
 
 
-def generate_precursors(num_to_generate, min_length, max_length):
+def generate_precursors(num_to_generate, min_length, max_length, rule_set):
     peptides = []
     for length in range(min_length, max_length + 1):
         num_peptides = int(num_to_generate / (max_length - min_length))
-        peptides += generate_peptides(length, num_peptides)
+        peptides += generate_peptides(length, num_peptides, rule_set)
     peptides = set(peptides)
     mz_dict = {x: calc_mass(x, charge=2) for x in peptides}
     peptides = np.array(sorted(peptides, key=mz_dict.get))

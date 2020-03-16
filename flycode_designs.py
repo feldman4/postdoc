@@ -5,6 +5,7 @@ from . import flycodes
 
 class DESIGN_0():
     name = 'random-termK'
+    rule_set = 'RJ_noH_termK'
     min_length = 10
     max_length = 13
     num_to_generate = int(4e6)
@@ -25,8 +26,11 @@ class DESIGN_0():
 
     # number of peptides retained for barcode selection
     # tested empirically to saturate barcode selection
-    input_barcodes_per_iRT_mz_bin = 10000
-
+    input_barcodes_per_iRT_mz_bin = 8000
+    pred_barcodes_per_mz_bin = (
+        input_barcodes_per_iRT_mz_bin * 
+        len(iRT_bins) * 2)
+    
     ion_mz_start = 200.1517
     ion_mz_max = 1300
     usable_ion_intensity = 0.1
@@ -38,12 +42,15 @@ class DESIGN_0():
     ion_bins = np.arange(ion_mz_start, ion_mz_max, MZ_DOUBLE_SPACING)
     ion_bin_width = MZ_DOUBLE_SPACING
 
-    selection_seeds = np.arange(15)
+    selection_seeds = np.arange(5)
     min_unique_ions = 2
 
 
+class DESIGN_1(DESIGN_0):
+    name = 'random-termR'
+    rule_set = 'RJ_noH_termR'
 
-class DESIGN_1():
+class DESIGN_2():
     name = 'RJ_76'
 
     precursor_bins = np.linspace(550, 850, 100)
