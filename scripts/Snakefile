@@ -112,50 +112,19 @@ rule filter_barcodes:
 
         if len(df_peptides) == 0:
             pd.DataFrame().to_csv(output[0], index=None)
-
-        df_ions = fly.peptides_to_ions(df_peptides, 
-                 METADATA.usable_ion_gate,
-                 METADATA.ignore_ion_intensity,
-                 METADATA.ion_bins,
-                 METADATA.ion_bin_width)
-
-        df_wide = (df_ions
-         .pivot_table(index=['ion_mz_bin'], columns=['sequence'], 
-                      values='selection_flag', aggfunc='min')
-         .fillna(0).astype(int)
-        )
-
-        num_barcodes = df_wide.shape[1]
-        barcode_ixs = []
-        for seed in METADATA.selection_seeds[:num_barcodes]:
-            barcode_ixs.append(fly.select_barcodes2(
-                            df_wide.values, METADATA.min_unique_ions, seed))
-
-        barcode_ix = sorted(barcode_ixs, key=len)[-1]
-        barcodes = list(df_wide.columns[barcode_ix])
-
-        cols = ['run', 'sequence', 'mz_bin', 'iRT_bin', 'iRT', 
-        'ion_name', 'ion', 'ion_mz_bin', 'intensity_prosit',
-       'ion_unique']
-
-        (df_ions
-         .query('sequence == @barcodes')
-         .assign(occurences=lambda x: 
-                x.groupby('ion_mz_bin')['sequence'].transform('size'))
-         .assign(ion_unique=lambda x: 
-                 x.eval('selection_flag == 2 & occurences == 1'))
-         [cols].to_csv(output[0], index=None)
-        )
-
-        ax = fly.plot_ion_usage(df_wide, barcode_ix, METADATA.ion_bins)
-        ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)
+        else:
+            df_ions_selected, df_wide = fly.snake_select_barcodes(
+                df_peptides, METADATA)
+            df_ions.to_csv(output[0], index=None)
+            ax = fly.plot_ion_usage(df_wide, barcode_ix, METADATA.ion_bins)
+            ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)
 
 
 """
 
 qlogin -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10
 
-snakemake -s /home/dfeldman/packages/postdoc/scripts/Snakefile \
+snakemake -k -s /home/dfeldman/packages/postdoc/scripts/Snakefile \
  --config design=DESIGN_1 --resources gpu_mem_tenths=6
 
 """

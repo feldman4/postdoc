@@ -868,3 +868,41 @@ def peptides_to_ions(df_peptides, usable_ion_gate,
      .assign(selection_flag=lambda x: 1 + x.eval(usable_ion_gate))
     )
 
+
+
+def snake_select_barcodes(df_peptides, METADATA):
+        cols = ['run', 'sequence', 'mz_bin', 'iRT_bin', 'iRT', 
+        'ion_name', 'ion', 'ion_mz_bin', 'intensity_prosit',
+       'ion_unique']
+
+        df_ions = peptides_to_ions(df_peptides, 
+             METADATA.usable_ion_gate,
+             METADATA.ignore_ion_intensity,
+             METADATA.ion_bins,
+             METADATA.ion_bin_width)
+
+        df_wide = (df_ions
+         .pivot_table(index=['ion_mz_bin'], columns=['sequence'], 
+                      values='selection_flag', aggfunc='min')
+         .fillna(0).astype(int)
+        )
+
+        num_barcodes = df_wide.shape[1]
+        barcode_ixs = []
+        for seed in METADATA.selection_seeds[:num_barcodes]:
+            barcode_ixs.append(select_barcodes2(
+                            df_wide.values, METADATA.min_unique_ions, seed))
+
+        barcode_ix = sorted(barcode_ixs, key=len)[-1]
+        barcodes = list(df_wide.columns[barcode_ix])
+
+        df_ions_selected = (df_ions
+         .query('sequence == @barcodes')
+         .assign(occurences=lambda x: 
+                x.groupby('ion_mz_bin')['sequence'].transform('size'))
+         .assign(ion_unique=lambda x: 
+                 x.eval('selection_flag == 2 & occurences == 1'))
+         [cols]
+        )
+
+        return df_ions_selected, df_wide
