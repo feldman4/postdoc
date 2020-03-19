@@ -626,7 +626,7 @@ def combine_ions_barcodes(df_ions, barcodes):
     )
 
 
-def summary_plots(df_bins, df_ions):
+def summary_plots(df_bins, df_barcodes):
 
     fig, ax_heatmap = plt.subplots(figsize=(10, 4))
     cbar_ax = fig.add_axes([.905, .311, .03, .38])
@@ -635,12 +635,12 @@ def summary_plots(df_bins, df_ions):
      .pipe(sns.heatmap, square=True, ax=ax_heatmap, cbar_ax=cbar_ax)
     )
 
-    ax_mz = (df_ions
+    ax_mz = (df_barcodes
      .drop_duplicates('sequence')
      ['mz'].pipe(scatter_mz_locations)
     )
 
-    ax_iRT = (df_ions
+    ax_iRT = (df_barcodes
      .drop_duplicates('sequence')
      ['iRT'].pipe(scatter_mz_locations)
     )
