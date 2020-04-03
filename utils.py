@@ -54,17 +54,19 @@ def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
 
 
 class regex_filter(logging.Filter):
-    def __init__(self, exclude, include, names):
+    def __init__(self, exclude, include, names=None):
         self.exclude = exclude
         self.include = include
+        self.names = names
         super().__init__()
 
     def filter(self, record):
         message = record.getMessage()
         keep = True
         # only filter messages from these loggers
-        if record.name not in names:
-            return keep
+        if self.names is not None:
+            if record.name not in self.names:
+                return keep
         # exclude matches, then re-include
         for term in self.exclude:
             if re.match(term, message, flags=re.MULTILINE):
@@ -100,7 +102,7 @@ class reformat_rosetta_logs(logging.Filter):
         return True
 
 
-def patch_logger():
+def patch_rosetta_logger():
     """
     pyrosetta does not properly name or set the level of Rosetta logs
     instead every LogRecord has name "rosetta" and level INFO
@@ -119,19 +121,24 @@ def patch_logger():
     s"""
 
     rosetta_logger = logging.getLogger('rosetta')
-    logging.root.setLevel(logging.WARNING)
     rosetta_logger.setLevel(logging.INFO)
-    logging.root.handlers = []
-
+    
     f = open(os.devnull, 'w')
     handler = logging.StreamHandler(stream=f)
     handler.addFilter(reformat_rosetta_logs())
     rosetta_logger.handlers = []
     rosetta_logger.addHandler(handler)
 
+
+def log_warnings(exclude, include, names=None):
+
     handler = logging.StreamHandler(sys.stderr)
+    
     formatter = logging.Formatter(f'%(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
+    
+    filter = regex_filter(exclude, include, names)
+    handler.addFilter(filter)
+    
     handler.setLevel(logging.WARNING)
-    logging.root.handlers = []
     logging.root.addHandler(handler)

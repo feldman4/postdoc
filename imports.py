@@ -26,26 +26,11 @@ IPython.get_ipython().run_line_magic('autoreload', '2')
 
 mpl.rcParams['figure.dpi'] = 200
 
-postdoc.utils.patch_logger()
 
+logger_exclude = ['missing heavyatom']
+logger_include = []
 
-# logger_exclude = ['core.pack.pack_rotamers',
-#                 'core.pack.task',
-#                 'core.scoring.ScoreFunctionFactory',
-#                 'core.pack.interaction_graph.interaction_graph_factory',
-#                 'basic.io.database', 
-#                 'core.scoring.etable',
-#                 'core.conformation.Conformation',
-#                 'basic.random.init_random_generator',
-#                 'core.chemical.GlobalResidueTypeSet',
-#                 'basic.thread_manager.RosettaThread',
-#                 'core.pack.pack_missing_sidechains',
-#                 'core.pack.rotamer_set.RotamerSets',
-#                 'automatically determined to be of type PDB',
-#                 'core.init', 
-#                 'basic.random.init_random_generator',
-#                 ]
+postdoc.utils.patch_rosetta_logger()
+logging.root.handlers = []
+postdoc.utils.log_warnings(logger_exclude, logger_include)
 
-# logger_include = []
-
-# filter = postdoc.utils.regex_filter(logger_exclude, logger_include)
