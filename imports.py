@@ -26,27 +26,26 @@ IPython.get_ipython().run_line_magic('autoreload', '2')
 
 mpl.rcParams['figure.dpi'] = 200
 
-logger_exclude = ['core.pack.pack_rotamers',
-                'core.pack.task',
-                'core.scoring.ScoreFunctionFactory',
-                'core.pack.interaction_graph.interaction_graph_factory',
-                'basic.io.database', 
-                'core.scoring.etable',
-                'core.conformation.Conformation',
-                'basic.random.init_random_generator',
-                'core.chemical.GlobalResidueTypeSet',
-                'basic.thread_manager.RosettaThread',
-                'core.pack.pack_missing_sidechains',
-                'core.pack.rotamer_set.RotamerSets',
-                'automatically determined to be of type PDB',
-                'core.init', 
-                'basic.random.init_random_generator',
-                ]
+postdoc.utils.patch_logger()
 
-logger_include = []
+
+# logger_exclude = ['core.pack.pack_rotamers',
+#                 'core.pack.task',
+#                 'core.scoring.ScoreFunctionFactory',
+#                 'core.pack.interaction_graph.interaction_graph_factory',
+#                 'basic.io.database', 
+#                 'core.scoring.etable',
+#                 'core.conformation.Conformation',
+#                 'basic.random.init_random_generator',
+#                 'core.chemical.GlobalResidueTypeSet',
+#                 'basic.thread_manager.RosettaThread',
+#                 'core.pack.pack_missing_sidechains',
+#                 'core.pack.rotamer_set.RotamerSets',
+#                 'automatically determined to be of type PDB',
+#                 'core.init', 
+#                 'basic.random.init_random_generator',
+#                 ]
+
+# logger_include = []
 
 # filter = postdoc.utils.regex_filter(logger_exclude, logger_include)
-
-# rosetta_logger = logging.getLogger('rosetta')
-# rosetta_logger.addFilter(filter)
-# rosetta_logger.setLevel(logging.INFO)
