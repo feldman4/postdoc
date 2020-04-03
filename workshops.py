@@ -208,7 +208,10 @@ def load_aa_legend():
             'hue_order': hue_order}
 
 
-
+def add_dssp_to_pose(pose):
+    import pyrosetta.rosetta.core.scoring.dssp
+    dssp = pyrosetta.rosetta.core.scoring.dssp.Dssp(self)
+    dssp.insert_ss_into_pose(self)
 
 
 
