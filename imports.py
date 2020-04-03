@@ -43,7 +43,7 @@ logger_exclude = ['core.pack.pack_rotamers',
 
 logger_include = []
 
-filter = postdoc.utils.rosetta_filter(logger_exclude, logger_include)
+filter = postdoc.utils.regex_filter(logger_exclude, logger_include)
 
 rosetta_logger = logging.getLogger('rosetta')
 rosetta_logger.addFilter(filter)
