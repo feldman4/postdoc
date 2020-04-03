@@ -1,6 +1,7 @@
 import time
 import re
 from glob import glob
+import logging
 
 import pandas as pd
 from natsort import natsorted
@@ -48,3 +49,22 @@ def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
            .assign(**{c: df[c].astype(float) for c in float_cols})
            .assign(**{c: df[c].astype(str) for c in str_cols})
            )
+
+
+class regex_filter(logging.Filter):
+    def __init__(self, exlcude, include):
+        self.exclude = exclude
+        self.include = include
+        super().__init__()
+
+    def filter(self, record):
+        message = record.getMessage()
+        keep = True
+        print(message)
+        for term in self.exclude:
+            if re.match(term, message, flags=re.MULTILINE):
+                keep = False
+        for term in self.include:
+            if re.match(term, message, flags=re.MULTILINE):
+                keep = True
+        return keep

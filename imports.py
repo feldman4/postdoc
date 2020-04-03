@@ -1,3 +1,4 @@
+import postdoc
 import postdoc as pos
 from postdoc.constants import *
 from postdoc.utils import timestamp, tqdn, csv_frame, cast_cols
@@ -7,6 +8,7 @@ from postdoc.flycode_designs import *
 from postdoc import workshops as ws
 
 from glob import glob
+import logging
 import os
 import re
 import sys
@@ -24,7 +26,7 @@ IPython.get_ipython().run_line_magic('autoreload', '2')
 
 mpl.rcParams['figure.dpi'] = 200
 
-mute_classes = ['core.pack.pack_rotamers',
+logger_exclude = ['core.pack.pack_rotamers',
                 'core.pack.task',
                 'core.scoring.ScoreFunctionFactory',
                 'core.pack.interaction_graph.interaction_graph_factory',
@@ -36,6 +38,13 @@ mute_classes = ['core.pack.pack_rotamers',
                 'basic.thread_manager.RosettaThread',
                 'core.pack.pack_missing_sidechains',
                 'core.pack.rotamer_set.RotamerSets',
+                'automatically determined to be of type PDB',
                 ]
 
-mute = '-mute {}'.format(' '.join(mute_classes))
+logger_include = []
+
+filter = postdoc.utils.rosetta_filter(logger_exclude, logger_include)
+
+rosetta_logger = logging.getLogger('rosetta')
+rosetta_logger.addFilter(filter)
+rosetta_logger.setLevel(logging.DEBUG)
