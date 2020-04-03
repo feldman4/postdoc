@@ -10,6 +10,7 @@ from natsort import natsorted
 import tqdm.notebook
 tqdn = tqdm.notebook.tqdm
 
+
 def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
     stamp = time.strftime(fmt)
     pat= r'(.*)\.(.*)'
@@ -77,31 +78,6 @@ class regex_filter(logging.Filter):
         return keep
 
 
-rosetta_levels = {'{0} [ WARNING ] ': logging.WARNING,
-                  'ERROR': logging.ERROR,
-                 }
-        
-class reformat_rosetta_logs(logging.Filter):
-    def filter(self, record):
-        """Modify LogRecord to mimic logging event originating in python.
-        """
-        if record.name != 'rosetta':
-            return True
-        
-        source = record.msg.split(': ')[0]
-        record.name = 'rosetta.' + source
-        record.msg = record.msg[len(source) + 2:]
-        
-        for rosetta_level, level in rosetta_levels.items():
-            if rosetta_level in record.getMessage():
-                record.msg = record.msg.replace(rosetta_level, '')
-                record.level = level
-                record.levelno = level
-                record.levelname = logging.getLevelName(level)
-            
-        return True
-
-
 def patch_rosetta_logger():
     """
     pyrosetta does not properly name or set the level of Rosetta logs
@@ -128,6 +104,32 @@ def patch_rosetta_logger():
     handler.addFilter(reformat_rosetta_logs())
     rosetta_logger.handlers = []
     rosetta_logger.addHandler(handler)
+
+
+rosetta_levels = (
+    ('WARNING', '{0} [ WARNING ] ', logging.WARNING),
+    ('ERROR',   '{0} [ ERROR ] ',   logging.ERROR),
+    )
+        
+class reformat_rosetta_logs(logging.Filter):
+    def filter(self, record):
+        """Modify LogRecord to mimic logging event originating in python.
+        """
+        if record.name != 'rosetta':
+            return True
+        
+        source = record.msg.split(': ')[0]
+        record.name = 'rosetta.' + source
+        record.msg = record.msg[len(source) + 2:]
+        
+        for rosetta_level, rosetta_label, level in rosetta_levels:
+            if rosetta_level in record.getMessage():
+                record.msg = record.msg.replace(rosetta_label, '')
+                record.level = level
+                record.levelno = level
+                record.levelname = logging.getLevelName(level)
+            
+        return True
 
 
 def log_warnings(exclude, include, names=None):
