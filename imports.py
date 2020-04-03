@@ -39,12 +39,14 @@ logger_exclude = ['core.pack.pack_rotamers',
                 'core.pack.pack_missing_sidechains',
                 'core.pack.rotamer_set.RotamerSets',
                 'automatically determined to be of type PDB',
+                'core.init', 
+                'basic.random.init_random_generator',
                 ]
 
 logger_include = []
 
-filter = postdoc.utils.regex_filter(logger_exclude, logger_include)
+# filter = postdoc.utils.regex_filter(logger_exclude, logger_include)
 
-rosetta_logger = logging.getLogger('rosetta')
-rosetta_logger.addFilter(filter)
-rosetta_logger.setLevel(logging.DEBUG)
+# rosetta_logger = logging.getLogger('rosetta')
+# rosetta_logger.addFilter(filter)
+# rosetta_logger.setLevel(logging.INFO)

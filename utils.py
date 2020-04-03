@@ -52,7 +52,7 @@ def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
 
 
 class regex_filter(logging.Filter):
-    def __init__(self, exclude, include):
+    def __init__(self, exclude, include, names):
         self.exclude = exclude
         self.include = include
         super().__init__()
@@ -60,7 +60,10 @@ class regex_filter(logging.Filter):
     def filter(self, record):
         message = record.getMessage()
         keep = True
-        print(message)
+        # only filter messages from these loggers
+        if record.name not in names:
+            return keep
+        # exclude matches, then re-include
         for term in self.exclude:
             if re.match(term, message, flags=re.MULTILINE):
                 keep = False
