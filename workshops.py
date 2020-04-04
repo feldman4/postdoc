@@ -1,5 +1,7 @@
 from postdoc.flycodes import load_clean_pdb
 
+import re
+import io
 import os
 import numpy as np
 import pandas as pd
@@ -25,7 +27,11 @@ def bond_angle(a,b,c):
     return np.arccos(dot / (ab**2).sum() + (bc**2).sum())
 
 def calculate_backbone_dihedrals(df, validate=True):
-    """
+    """Should match
+    chain_a = list(range(pose.chain_begin(1), pose.chain_end(1) + 1))
+    phi_pyr = [pose.phi(i) for i in chain_a]
+    psi_pyr = [pose.psi(i) for i in chain_a]
+    omega_pyr = [pose.omega(i) for i in chain_a]
     """
     c0_all = df.query('atom_name == "C"')[['x', 'y', 'z']].values
     n_all = df.query('atom_name == "N"')[['x', 'y', 'z']].values
@@ -112,7 +118,6 @@ def parse_secondary_struct(string):
 
     return df_ss[cols]
 
-
 def scan_neighbor_matrix(D_NO):
     results = []
     for i, j in product((0, 1), (0, 1)):
@@ -134,7 +139,6 @@ def detect_contiguous(values):
     lengths = ends - starts
     start = starts[lengths.argmax()]
     return start, lengths.max()
-
 
 def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     """Provide scores for parallel, anti-parallel structure of two beta
@@ -191,7 +195,6 @@ def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     
     return pd.concat(results).query('score > 0')
 
-
 def load_aa_legend():
     import postdoc
     filename = os.path.join(
@@ -207,15 +210,96 @@ def load_aa_legend():
     return df_aa, {'markers': markers, 'palette': palette, 
             'hue_order': hue_order}
 
-
 def add_dssp_to_pose(pose):
     import pyrosetta.rosetta.core.scoring.dssp
     dssp = pyrosetta.rosetta.core.scoring.dssp.Dssp(pose)
     dssp.insert_ss_into_pose(pose)
 
+def atom_record(record_name, atom_name, atom_serial, res_name, chain, res_seq, x, y, z, 
+                element, altLoc=' ', iCode=' ', occupancy=1, tempFactor=0, charge='', **junk
+               ):
 
+    fields = [
+     f'{record_name: <6}',
+     f'{atom_serial: >5}',
+     ' ',
+     f'{atom_name: >4}',
+     f'{altLoc}',
+     f'{res_name: <3}',
+     ' ',
+     f'{chain}',
+     f'{res_seq: >4}',
+     f'{iCode}',
+     '   ',
+     f'{x:>8.8g}',
+     f'{y:>8.8g}',
+     f'{z:>8.8g}',
+     f'{occupancy:>6.6g}',
+     f'{tempFactor:>6.6g}',
+     ' '*10,
+     f'{element:>2}',
+     f'{charge:>2}',
+    ]
+    return ''.join(fields)
 
+def write_pdb(df, filename, pipe=True):
+    lines = []
+    for row in df.T.to_dict().values():
+        lines.append(atom_record(**row))
+    with open(filename, 'w') as fh:
+        fh.write('\n'.join(lines))
+    if pipe:
+        return df
 
+def read_pdb(filename, **kwargs):
+    # http://www.wwpdb.org/documentation/file-format-content/format33/sect9.html
 
+    line_filter = '^ATOM'
+    with open(filename, 'r') as fh:
+        txt = [x for x in fh.readlines() if re.match(line_filter, x)]
+    buffer = io.StringIO('\n'.join(txt))
 
+    pdb_model_header = ('record_name', 'atom_serial', 'atom_name',
+    'res_name', 'chain',
+    'res_seq', 'x', 'y', 'z', 'occ', 'b', 'element', 'charge')
+    return (pd.read_csv(buffer, header=None, sep='\s+', **kwargs)
+            .rename(columns={i: x for i, x in enumerate(pdb_model_header)})
+            .assign(res_seq=lambda x: x['res_seq'].astype(int))
+    )
+
+def ws2_1_calc_torsion_angle(a, b, c, d):
+    """Result in radians.
+
+    Test:
+        c = np.random.rand(4, 3)
+        a = pyrosetta.toolbox.numpy_utils.calc_dihedral(c)
+        b = ws.ws2_1_calc_torsion_angle(*c) * 180/np.pi
+        assert (a - b < 1e-10)
+    """
+    abc = plane_from_points(a, b, c)
+    bcd = plane_from_points(b, c, d)
+    
+    theta = angle_between(abc, bcd)
+    displacement = c - b
+    sign = np.sign(dot(cross_product(abc, bcd), displacement))
+    dihedral = theta * sign
+    return dihedral
+
+def ws2_2_ideal_helix(pose):
+    """
+    from pyrosetta import pose_from_sequence
+    pose = pose_from_sequence('A'*20, 'fa_standard')
+    pose.dump_pdb('polyA_init.pdb')
+    ws.ws2_2_ideal_helix(pose)
+    pose.dump_pdb('polyA_helix.pdb')
+    """
+
+    phi = -75
+    psi = -30
+    chain_ix = list(range(pose.chain_begin(1), pose.chain_end(1) + 1))
+    for i in chain_ix:
+        pose.set_phi(i, phi)
+        pose.set_psi(i, psi)
+        
+    return pose
 

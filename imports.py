@@ -26,7 +26,6 @@ IPython.get_ipython().run_line_magic('autoreload', '2')
 
 mpl.rcParams['figure.dpi'] = 200
 
-
 logger_exclude = ['missing heavyatom']
 logger_include = []
 

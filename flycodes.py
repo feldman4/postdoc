@@ -1,12 +1,13 @@
 from postdoc.utils import tqdn, cast_cols
 
+import io
 import os
 import numpy as np
 import pandas as pd
 import re
 import functools
-import pyteomics.mass
 
+import pyteomics.mass
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -139,10 +140,16 @@ def load_idt_order(f):
 def load_clean_pdb(filename, **kwargs):
     # http://www.wwpdb.org/documentation/file-format-content/
     # format33/sect9.html
+
+    line_filter = '^ATOM'
+    with open(filename, 'r') as fh:
+        txt = [x for x in fh.readlines() if re.match(line_filter, x)]
+    buffer = io.StringIO('\n'.join(txt))
+
     pdb_model_header = ('record_name', 'atom_serial', 'atom_name',
     'res_name', 'chain',
     'res_seq', 'x', 'y', 'z', 'occ', 'b', 'element', 'charge')
-    return (pd.read_csv(filename, header=None, sep='\s+', **kwargs)
+    return (pd.read_csv(buffer, header=None, sep='\s+', **kwargs)
             .rename(columns={i: x for i, x in enumerate(pdb_model_header)})
             .query('record_name == "ATOM"')
             .assign(res_seq=lambda x: x['res_seq'].astype(int))
