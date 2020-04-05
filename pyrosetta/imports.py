@@ -18,7 +18,7 @@ from pyrosetta.rosetta.core.select import residue_selector
 from pyrosetta.toolbox import cleanATOM, mutate_residue
 
 from . import utils
-from .diy import pose_to_dataframe
+from .diy import read_pdb, pose_to_dataframe
 
 
 DEFAULT_VIEWER_WINDOW = (550, 450)
@@ -43,6 +43,8 @@ def start_pyrosetta():
     """
     pyrosetta.distributed.init(flags)
 
+    fix_pyrosetta_bugs()
+
     # allows modifying a style module by call, e.g., style(cartoon=True)
     def __call__(self, **kwargs):
         import copy
@@ -62,12 +64,23 @@ def start_pyrosetta():
     viewer.setStyle.__call__ = __call__
 
 
-def viewer_init(*args, **kwargs):
+def fix_pyrosetta_bugs():
+    import pyrosetta.bindings.homogeneous_transform
+    import pyrosetta.bindings.pose
+    import numpy as np
+
+    pyrosetta.bindings.homogeneous_transform.np = np
+    pyrosetta.bindings.pose.np = np
+
+
+def view(*args, **kwargs):
     """Sensible defaults for notebook.
     """
     defaults = dict(window_size=DEFAULT_VIEWER_WINDOW)
     defaults.update(kwargs)
-    return viewer.init(*args, **defaults) + viewer.setZoom(DEFAULT_ZOOM)
+    return (viewer.init(*args, **defaults) 
+        + styles.wire
+        + viewer.setZoom(DEFAULT_ZOOM))
 
 
 class SequentialStyles:

@@ -1,8 +1,10 @@
 import logging
 import os
-import sys
 import re
+import sys
 
+import pandas as pd
+from postdoc.constants import *
 
 def patch_rosetta_logger():
     """
@@ -99,3 +101,52 @@ class regex_filter(logging.Filter):
                 keep = True
         return keep
 
+
+def digs_path(accession):
+    accession = accession.lower()
+    prefix = accession[1:3].lower()
+    return f'/net/databases/pdb/{prefix}/pdb{accession}.ent.gz'
+
+
+def download_rcsb_blast_cluster(blast_file):
+    """ftp://resources.rcsb.org/sequence/clusters
+    """
+    HOME = os.environ['HOME']
+    remote = (f'ftp://resources.rcsb.org/sequence/clusters/'
+              f'{blast_file}')
+    local = os.path.join(HOME, 'rcsb', blast_file)
+    cmd = f'wget {remote} -O {local}'
+    get_ipython().system(cmd)
+
+
+def load_rcsb_blast_cluster(filename):
+    with open(filename, 'r') as fh:
+        lines = fh.readlines()
+    arr = []
+    for i, line in enumerate(lines):
+        for entry in line.split():
+            rcsb, chain = entry.split('_')
+            arr += [{RCSB: rcsb, 'chain': chain, 
+                     'cluster_id': i}]
+    return pd.DataFrame(arr)
+
+
+def extract_chains(df_accessions, extract_dir, progress=None):
+    if progress is None:
+        progress = lambda x: x
+    pdbtools_bin = '/home/dfeldman/.conda/envs/df-pyr/bin/'
+    pdb_selchain = os.path.join(pdbtools_bin, 'pdb_selchain')
+    pdb_keepcoord = os.path.join(pdbtools_bin, 'pdb_keepcoord')
+    cmd = (f'gunzip -c {{f}} | {pdb_selchain} -{{chain}}'
+           f'| {pdb_keepcoord} > {{f2}}')
+
+    os.makedirs(extract_dir, exist_ok=True)
+    for rcsb, df in progress(list(df_accessions.groupby('RCSB'))):
+        f = digs_path(rcsb)
+        for chain in df['chain']:
+            chain = ','.join(chain)
+            f2 = os.path.join(extract_dir, 
+                              f'{rcsb}_{chain}.clean.pdb')
+            cmd_ = cmd.format(f=f, f2=f2, chain=chain)
+            get_ipython().system(cmd_)
+            

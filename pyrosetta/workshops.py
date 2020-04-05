@@ -257,3 +257,35 @@ def ws2_pack_all(pose):
     pack_mover.apply(pose)
 
     return pose
+
+
+
+def ws2_plot_vectors(pose, atom1, atom2):
+    """Plot vectors from atom1 to atom2
+    """
+    df = diy.pose_to_dataframe(pose)
+    
+    ax = (df
+     .pivot_table(index=['res_seq'], 
+                  columns=['atom_name'],
+                  values=['x', 'y', 'z'])
+     .swaplevel(0, 1, axis=1)
+     .pipe(lambda x: x[atom2] - x[atom1])
+     .assign(parity=lambda x: np.arange(len(x)) % 2)
+     .reset_index()
+     .pipe(pd.plotting.parallel_coordinates, 'res_seq')
+    )
+    ax.set_title(f'{atom1} => {atom2}')
+    return ax
+
+
+def ws2_2_ideal_beta_strand(pose):
+    phi = -120
+    psi = 120
+    chain_ix = list(range(pose.chain_begin(1), pose.chain_end(1) + 1))
+    for i in chain_ix:
+        pose.set_phi(i, phi)
+        pose.set_psi(i, psi)
+        
+    return pose
+
