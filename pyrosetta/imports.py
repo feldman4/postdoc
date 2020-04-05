@@ -1,6 +1,6 @@
 import logging
 
-import pyrosetta
+import numpy as np
 from pyrosetta import (
     create_score_function,
     dump_pdb,
@@ -11,20 +11,20 @@ from pyrosetta import (
     pose_from_file,
     pose_from_sequence,
     )
-from pyrosetta.toolbox import cleanATOM, mutate_residue
-from pyrosetta.rosetta.core.select import residue_selector
-from pyrosetta.rosetta.core.chemical import ResidueProperty
+import pyrosetta
 from pyrosetta.distributed import viewer
-
-import numpy as np
+from pyrosetta.rosetta.core.chemical import ResidueProperty
+from pyrosetta.rosetta.core.select import residue_selector
+from pyrosetta.toolbox import cleanATOM, mutate_residue
 
 from . import utils
 from .diy import pose_to_dataframe
 
+
 DEFAULT_VIEWER_WINDOW = (550, 450)
 DEFAULT_ZOOM = 1.2
 
-# pyrosetta throws away rosetta log levels
+# pyrosetta throws away rosetta log levels, patch restores them
 # allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
 logger_exclude = ['missing heavyatom']
 logger_include = []
@@ -113,9 +113,11 @@ class ResidueSelectors:
         stringified = ','.join(np.array(arr).astype(int).astype(str))
         return residue_selector.ResidueIndexSelector(stringified)
 
+
 class CustomStyle:
     def __init__(self, style):
         self.style = style
+
 
 class CustomSelector:
     def __init__(self, selector):
@@ -123,12 +125,14 @@ class CustomSelector:
     def __add__(self, other):
         return viewer.setStyle(command=(self.selector, other.style))
 
+
 class CustomThings:
     backbone_atoms = ['N', 'CA', 'C', 'O']
     sidechains = CustomSelector({'not': {'atom': backbone_atoms}})
     wire = CustomStyle({
         'stick': {'radius': 0.05, 'colorscheme': 'grayCarbon'}
     })
+
 
 # shorthand
 styles = ViewerStyles

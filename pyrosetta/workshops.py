@@ -4,11 +4,14 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
+import pyrosetta
+from pyrosetta import get_fa_scorefxn
 from pyrosetta.rosetta.protocols.minimization_packing import (
     PackRotamersMover)
 
 from . import geometry as geo
 from . import diy
+
 
 def parse_secondary_struct(string):
     """Parse a string in "HHHEEELLL" format.
@@ -252,3 +255,5 @@ def ws2_pack_all(pose):
     scorefxn = get_fa_scorefxn()
     pack_mover = PackRotamersMover(scorefxn, task_pack)
     pack_mover.apply(pose)
+
+    return pose
