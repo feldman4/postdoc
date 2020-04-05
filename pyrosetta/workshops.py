@@ -1,89 +1,11 @@
-from postdoc.flycodes import load_clean_pdb
-
-import re
 import io
 import os
 import numpy as np
 import pandas as pd
-from itertools import product
 from scipy.spatial.distance import cdist
 
-radians_to_degrees = 180 / np.pi
-
-def v(row): 
-    """Coordinate vector from pdb dataframe row.
-    """
-    return row[['x', 'y', 'z']].values.astype(float)
-    
-def atom_dist(a, b):
-    return mag(v(a) - v(b))
-
-def bond_angle(a,b,c):
-    """Angle ABC
-    """
-    ab = v(a) - v(b)
-    bc = v(b) - v(c)
-    dot = (ab * bc).sum()
-    return np.arccos(dot / (ab**2).sum() + (bc**2).sum())
-
-def calculate_backbone_dihedrals(df, validate=True):
-    """Should match
-    chain_a = list(range(pose.chain_begin(1), pose.chain_end(1) + 1))
-    phi_pyr = [pose.phi(i) for i in chain_a]
-    psi_pyr = [pose.psi(i) for i in chain_a]
-    omega_pyr = [pose.omega(i) for i in chain_a]
-    """
-    c0_all = df.query('atom_name == "C"')[['x', 'y', 'z']].values
-    n_all = df.query('atom_name == "N"')[['x', 'y', 'z']].values
-    ca_all = df.query('atom_name == "CA"')[['x', 'y', 'z']].values
-
-    if validate:
-        df = df.sort_values('res_seq')
-        A = df.drop_duplicates(['res_seq', 'atom_name']).shape[0]
-        B = df.shape[0]
-        assert A == B
-        assert len(c0_all) == len(n_all)
-        assert len(c0_all) == len(ca_all)
-    
-    points = np.empty((3 * c0_all.shape[0], 3), dtype=float)
-    points[0::3] = n_all
-    points[1::3] = ca_all
-    points[2::3] = c0_all
-    displacements = np.diff(points, axis=0)
-    planes = []
-    for i in range(points.shape[0] - 2):
-        planes += [plane_from_points(points[i], 
-                                    points[i+1],
-                                    points[i+2])]
-    dihedrals = [] 
-    for i in range(len(planes) - 1):
-        a, b = planes[i],  planes[i+1]
-        theta = angle_between(a, b)
-        sign = np.sign(dot(cross_product(a, b), displacements[i]))
-        dihedrals += [theta * sign]
-    # first phi and last psi, omega are undefined (zero in rosetta)
-    dihedrals = [np.nan] + dihedrals + [np.nan, np.nan]
-    dihedrals = np.array(dihedrals) 
-    dihedrals *= radians_to_degrees # rosetta convention
-    phi, psi, omega = dihedrals[::3], dihedrals[1::3], dihedrals[2::3]
-    return phi, psi, omega
-    
-def plane_from_points(a, b, c):
-    v = cross_product((a - b), (c - b))
-    return v / mag(v)
-
-def mag(a):
-    return ((a**2).sum())**0.5
-
-def angle_between(a, b):
-    return np.arccos(dot(a, b) / (mag(a) * mag(b)))
-
-def cross_product(a, b):
-    eij = (1, 2), (2, 0), (0, 1)
-    return np.array([a[i]*b[j] - a[j]*b[i] for i,j in eij])
-
-def dot(a, b):
-    return (a*b).sum()
+from . import geometry as geo
+from . import diy
 
 def parse_secondary_struct(string):
     """Parse a string in "HHHEEELLL" format.
@@ -118,6 +40,7 @@ def parse_secondary_struct(string):
 
     return df_ss[cols]
 
+
 def scan_neighbor_matrix(D_NO):
     results = []
     for i, j in product((0, 1), (0, 1)):
@@ -125,6 +48,7 @@ def scan_neighbor_matrix(D_NO):
         start, score = detect_contiguous(np.diagonal(D))
         results += [{'i': i, 'j': j, 'start': start, 'score': score}]
     return pd.DataFrame(results)
+
 
 def detect_contiguous(values):
     """Find start and length of longest contiguous stretch of 
@@ -139,6 +63,7 @@ def detect_contiguous(values):
     lengths = ends - starts
     start = starts[lengths.argmax()]
     return start, lengths.max()
+
 
 def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     """Provide scores for parallel, anti-parallel structure of two beta
@@ -195,6 +120,7 @@ def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     
     return pd.concat(results).query('score > 0')
 
+
 def load_aa_legend():
     import postdoc
     filename = os.path.join(
@@ -210,62 +136,12 @@ def load_aa_legend():
     return df_aa, {'markers': markers, 'palette': palette, 
             'hue_order': hue_order}
 
+
 def add_dssp_to_pose(pose):
     import pyrosetta.rosetta.core.scoring.dssp
     dssp = pyrosetta.rosetta.core.scoring.dssp.Dssp(pose)
     dssp.insert_ss_into_pose(pose)
 
-def atom_record(record_name, atom_name, atom_serial, res_name, chain, res_seq, x, y, z, 
-                element, altLoc=' ', iCode=' ', occupancy=1, tempFactor=0, charge='', **junk
-               ):
-
-    fields = [
-     f'{record_name: <6}',
-     f'{atom_serial: >5}',
-     ' ',
-     f'{atom_name: >4}',
-     f'{altLoc}',
-     f'{res_name: <3}',
-     ' ',
-     f'{chain}',
-     f'{res_seq: >4}',
-     f'{iCode}',
-     '   ',
-     f'{x:>8.8g}',
-     f'{y:>8.8g}',
-     f'{z:>8.8g}',
-     f'{occupancy:>6.6g}',
-     f'{tempFactor:>6.6g}',
-     ' '*10,
-     f'{element:>2}',
-     f'{charge:>2}',
-    ]
-    return ''.join(fields)
-
-def write_pdb(df, filename, pipe=True):
-    lines = []
-    for row in df.T.to_dict().values():
-        lines.append(atom_record(**row))
-    with open(filename, 'w') as fh:
-        fh.write('\n'.join(lines))
-    if pipe:
-        return df
-
-def read_pdb(filename, **kwargs):
-    # http://www.wwpdb.org/documentation/file-format-content/format33/sect9.html
-
-    line_filter = '^ATOM'
-    with open(filename, 'r') as fh:
-        txt = [x for x in fh.readlines() if re.match(line_filter, x)]
-    buffer = io.StringIO('\n'.join(txt))
-
-    pdb_model_header = ('record_name', 'atom_serial', 'atom_name',
-    'res_name', 'chain',
-    'res_seq', 'x', 'y', 'z', 'occ', 'b', 'element', 'charge')
-    return (pd.read_csv(buffer, header=None, sep='\s+', **kwargs)
-            .rename(columns={i: x for i, x in enumerate(pdb_model_header)})
-            .assign(res_seq=lambda x: x['res_seq'].astype(int))
-    )
 
 def ws2_1_calc_torsion_angle(a, b, c, d):
     """Result in radians.
@@ -276,14 +152,15 @@ def ws2_1_calc_torsion_angle(a, b, c, d):
         b = ws.ws2_1_calc_torsion_angle(*c) * 180/np.pi
         assert (a - b < 1e-10)
     """
-    abc = plane_from_points(a, b, c)
-    bcd = plane_from_points(b, c, d)
+    abc = geo.plane_from_points(a, b, c)
+    bcd = geo.plane_from_points(b, c, d)
     
-    theta = angle_between(abc, bcd)
+    theta = geo.angle_between(abc, bcd)
     displacement = c - b
-    sign = np.sign(dot(cross_product(abc, bcd), displacement))
+    sign = np.sign(geo.dot(geo.cross_product(abc, bcd), displacement))
     dihedral = theta * sign
     return dihedral
+
 
 def ws2_2_ideal_helix(pose):
     """
@@ -303,3 +180,58 @@ def ws2_2_ideal_helix(pose):
         
     return pose
 
+
+def ws2_get_hbond_donors_acceptors(pose):
+    df_hbonds = ws2_get_hbond_table(pose)
+
+    df = (diy.pose_to_dataframe(pose)
+     .assign(atom_serial_rosetta=lambda x:
+        1 + x['atom_serial'] 
+         - x.groupby('res_seq')['atom_serial'].transform('first'))
+    )
+    
+    # rosetta indexes atoms within residue only
+    # want to get pdb serial numbers for visualization
+    # Rosetta's to_pdbstring orders atoms within residues by
+    # their Rosetta atom index
+    index = (df.set_index(['res_seq', 'atom_serial_rosetta'])
+         ['atom_serial'].to_dict())
+    acceptors, donors = [], []
+    for _, row in df_hbonds.iterrows():
+        acc = index[(row['acc'], row['acc_serial'])]
+        don_res = pose.residue(row['don'])
+        don_heavy = don_res.get_adjacent_heavy_atoms(
+            row['don_serial'])
+        don_heavy = list(don_heavy)[0]
+        don = index[(row['don'], don_heavy)]
+        donors += [don]
+        acceptors += [acc]
+        
+    return donors, acceptors
+
+
+def ws2_highlight_atoms(serial_ids, color):
+    from pyrosetta.distributed import viewer
+    style = {
+        'sphere': {'color': color, 'radius': 0.5, 'opacity': 0.7},
+        'stick': {}
+      }
+    return viewer.setStyle(command=({'serial': serial_ids}, style))
+
+
+def ws2_get_hbond_table(pose):
+    hbond_set = pose.get_hbonds(exclude_bsc=True, 
+                                exclude_scb=True, 
+                                exclude_sc=True)
+    hbonds = list(hbond_set.hbonds())
+
+    n = len(pose.sequence())
+    arr = []
+    for hbond in hbonds:
+        arr += [{'acc': hbond.acc_res(), 
+                 'don': hbond.don_res(), 
+                 'acc_serial': hbond.acc_atm(),
+                 'don_serial': hbond.don_hatm(),
+                 }]
+
+    return pd.DataFrame(arr).assign(offset=lambda x: x.eval('don - acc'))

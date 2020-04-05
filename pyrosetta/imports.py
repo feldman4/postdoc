@@ -14,6 +14,7 @@ from pyrosetta.rosetta.core.select import residue_selector
 from pyrosetta.rosetta.core.chemical import ResidueProperty
 from pyrosetta.distributed import viewer
 
+import numpy as np
 
 def start_pyrosetta():
     pyrosetta.init('-constant_seed', set_logging_handler='logging')
@@ -51,16 +52,42 @@ def viewer_init(*args, **kwargs):
     return viewer.init(*args, **defaults)
 
 
+class SequentialStyles:
+    """A hack to compose styles prior to application.
+    """
+    def __init__(self, styles):
+        self.styles = styles
+    def apply(self, viewer, pose, pdbstring):
+        for style in self.styles:
+            viewer = style.apply(viewer, pose, pdbstring)
+        return viewer
+
+
 class ViewerStyles:
     defaults = dict(cartoon=False, label=False)
-    wire = viewer.setStyle(**defaults)
+    wire = viewer.setStyle(colorscheme='greenCarbon', **defaults)
     stick = viewer.setStyle(style='stick', radius=0.5,
         colorscheme='magentaCarbon', **defaults)
+    hydrogens = viewer.setHydrogens(polar_only=True)
+    hbonds = SequentialStyles(
+        [viewer.setHydrogenBonds(dashed=True, color='black'),
+                hydrogens])
+
+    hbonds_thick = SequentialStyles(
+        [viewer.setHydrogenBonds(dashed=False, color='yellow', radius=0.07),
+                hydrogens])
+
+    # custom styles
+    # http://3dmol.csb.pitt.edu/doc/$3Dmol.GLViewer.html#setStyle
 
 
 class ResidueSelectors:
     aromatic = residue_selector.ResiduePropertySelector(
         ResidueProperty.AROMATIC)
+    def ix(arr, zero_index=True):
+        stringified = ','.join(np.array(arr).astype(int).astype(str))
+        return residue_selector.ResidueIndexSelector(stringified)
+
 
 # shorthand
 styles = ViewerStyles

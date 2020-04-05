@@ -5,7 +5,7 @@ from postdoc.utils import timestamp, tqdn, csv_frame, cast_cols
 from postdoc import reporters
 from postdoc import flycodes as fly
 from postdoc.flycode_designs import *
-from postdoc import workshops as ws
+from postdoc.pyrosetta import workshops as ws
 
 from glob import glob
 import logging
