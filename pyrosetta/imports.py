@@ -1,3 +1,5 @@
+import logging
+
 import pyrosetta
 from pyrosetta import (
     create_score_function,
@@ -16,6 +18,18 @@ from pyrosetta.distributed import viewer
 
 import numpy as np
 
+from . import utils
+
+# pyrosetta throws away rosetta log levels
+# this allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
+logger_exclude = ['missing heavyatom']
+logger_include = []
+
+utils.patch_rosetta_logger()
+logging.root.handlers = []
+utils.log_warnings(logger_exclude, logger_include)
+
+
 def start_pyrosetta():
     pyrosetta.init('-constant_seed', set_logging_handler='logging')
 
@@ -25,8 +39,7 @@ def start_pyrosetta():
     """
     pyrosetta.distributed.init(flags)
 
-
-
+    # allows modifying a style module by call, e.g., style(cartoon=True)
     def __call__(self, **kwargs):
         import copy
         new_self = copy.copy(self)
@@ -42,11 +55,12 @@ def start_pyrosetta():
             setattr(new_self, k, v)
         return new_self
 
-    # modify a style by call, e.g., style(cartoon=True)
     viewer.setStyle.__call__ = __call__
 
 
 def viewer_init(*args, **kwargs):
+    """Sensible defaults for notebook.
+    """
     defaults = dict(window_size=(600, 400))
     defaults.update(kwargs)
     return viewer.init(*args, **defaults)
@@ -64,6 +78,14 @@ class SequentialStyles:
 
 
 class ViewerStyles:
+    """Container for useful styles.
+    Finer control can be obtained using 
+
+    viewer.setStyle(command=(selection, style))
+
+    http://3dmol.csb.pitt.edu/doc/$3Dmol.GLViewer.html#setStyle
+
+    """
     defaults = dict(cartoon=False, label=False)
     wire = viewer.setStyle(colorscheme='greenCarbon', **defaults)
     stick = viewer.setStyle(style='stick', radius=0.5,
@@ -77,11 +99,10 @@ class ViewerStyles:
         [viewer.setHydrogenBonds(dashed=False, color='yellow', radius=0.07),
                 hydrogens])
 
-    # custom styles
-    # http://3dmol.csb.pitt.edu/doc/$3Dmol.GLViewer.html#setStyle
-
 
 class ResidueSelectors:
+    """Container for useful selectors.
+    """
     aromatic = residue_selector.ResiduePropertySelector(
         ResidueProperty.AROMATIC)
     def ix(arr, zero_index=True):
@@ -93,6 +114,7 @@ class ResidueSelectors:
 styles = ViewerStyles
 selectors = ResidueSelectors
 
-# automatically display in notebook
+# automatically display viewer objects in notebook
 pyrosetta.distributed.viewer.core.Viewer._ipython_display_ = (
     lambda self: self.show())
+

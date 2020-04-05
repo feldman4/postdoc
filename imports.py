@@ -26,10 +26,3 @@ IPython.get_ipython().run_line_magic('autoreload', '2')
 
 mpl.rcParams['figure.dpi'] = 200
 
-logger_exclude = ['missing heavyatom']
-logger_include = []
-
-postdoc.utils.patch_rosetta_logger()
-logging.root.handlers = []
-postdoc.utils.log_warnings(logger_exclude, logger_include)
-
