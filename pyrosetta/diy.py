@@ -10,12 +10,14 @@ def read_pdb(filename):
 
 def read_pdb_string(pdb_string):
     line_filter = '^ATOM'
-    txt = [x for x in pdb_string.split('\n') if re.match(line_filter, x)]    
+    txt = [x for x in pdb_string.split('\n') if re.match(line_filter, x)]
     return read_pdb_records('\n'.join(txt))
 
 
 def read_pdb_records(pdb_string):
-    """http://www.wwpdb.org/documentation/file-format-content/format33/sect9.html
+    """
+    http://www.wwpdb.org/
+     documentation/file-format-content/format33/sect9.html
     """
     buffer = io.StringIO(pdb_string)
     pdb_model_header = ('record_name', 'atom_serial', 'atom_name',
@@ -27,9 +29,10 @@ def read_pdb_records(pdb_string):
     )
 
 
-def atom_record(record_name, atom_name, atom_serial, res_name, chain, res_seq, x, y, z, 
-                element, altLoc=' ', iCode=' ', occupancy=1, tempFactor=0, charge='', **junk
-               ):
+def atom_record(record_name, atom_name, atom_serial, 
+    res_name, chain, res_seq, x, y, z, 
+    element, altLoc=' ', iCode=' ', occupancy=1, tempFactor=0, charge='', 
+    **junk):
 
     fields = [
      f'{record_name: <6}',

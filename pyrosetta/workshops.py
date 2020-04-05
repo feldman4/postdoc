@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
+from pyrosetta.rosetta.protocols.minimization_packing import (
+    PackRotamersMover)
+
 from . import geometry as geo
 from . import diy
 
@@ -33,7 +36,8 @@ def parse_secondary_struct(string):
             ss_ix[d] = i
 
     df_ss['domain_ix'] = df_ss['domain'].map(ss_ix)
-    df_ss['domain_id'] = df_ss['ss_code'] + df_ss['domain_ix'].apply('{:02d}'.format)
+    df_ss['domain_id'] = (df_ss['ss_code'] 
+        + df_ss['domain_ix'].apply('{:02d}'.format))
 
     cols = ['ss_name', 'ss_code', 'domain_id', 'domain',  
             'domain_ix', 'domain_start', 'domain_length']
@@ -69,11 +73,12 @@ def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     """Provide scores for parallel, anti-parallel structure of two beta
     sheets.
 
-    Currently just sums backbone C and N within distance threshold. Filtering
-    by scanning distance matrix for a contigous stretch of alternating C and O 
-    works for anti-parallel but needs to be debugged for parallel.
+    Currently just sums backbone C and N within distance threshold. 
+    Filtering by scanning distance matrix for a contigous stretch of 
+    alternating C and O works for anti-parallel but needs to be debugged 
+    for parallel.
 
-    Could at least include start and length of contact surface to improve plotting.
+    Could include start and length of contact surface to improve plotting.
     """
     
     N = lambda x: x.query('atom_name == "N"')[['x', 'y', 'z']].values
@@ -235,3 +240,15 @@ def ws2_get_hbond_table(pose):
                  }]
 
     return pd.DataFrame(arr).assign(offset=lambda x: x.eval('don - acc'))
+
+
+def ws2_pack_all(pose):
+    task_pack = pyrosetta.standard_packer_task(pose)
+    task_pack.restrict_to_repacking()
+    task_pack.temporarily_fix_everything()
+    for i, _ in enumerate(pose.residues):
+        task_pack.temporarily_set_pack_residue(i + 1, True)
+
+    scorefxn = get_fa_scorefxn()
+    pack_mover = PackRotamersMover(scorefxn, task_pack)
+    pack_mover.apply(pose)

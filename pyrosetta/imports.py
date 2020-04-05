@@ -19,9 +19,13 @@ from pyrosetta.distributed import viewer
 import numpy as np
 
 from . import utils
+from .diy import pose_to_dataframe
+
+DEFAULT_VIEWER_WINDOW = (550, 450)
+DEFAULT_ZOOM = 1.2
 
 # pyrosetta throws away rosetta log levels
-# this allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
+# allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
 logger_exclude = ['missing heavyatom']
 logger_include = []
 
@@ -61,9 +65,9 @@ def start_pyrosetta():
 def viewer_init(*args, **kwargs):
     """Sensible defaults for notebook.
     """
-    defaults = dict(window_size=(600, 400))
+    defaults = dict(window_size=DEFAULT_VIEWER_WINDOW)
     defaults.update(kwargs)
-    return viewer.init(*args, **defaults)
+    return viewer.init(*args, **defaults) + viewer.setZoom(DEFAULT_ZOOM)
 
 
 class SequentialStyles:
@@ -109,10 +113,27 @@ class ResidueSelectors:
         stringified = ','.join(np.array(arr).astype(int).astype(str))
         return residue_selector.ResidueIndexSelector(stringified)
 
+class CustomStyle:
+    def __init__(self, style):
+        self.style = style
+
+class CustomSelector:
+    def __init__(self, selector):
+        self.selector = selector
+    def __add__(self, other):
+        return viewer.setStyle(command=(self.selector, other.style))
+
+class CustomThings:
+    backbone_atoms = ['N', 'CA', 'C', 'O']
+    sidechains = CustomSelector({'not': {'atom': backbone_atoms}})
+    wire = CustomStyle({
+        'stick': {'radius': 0.05, 'colorscheme': 'grayCarbon'}
+    })
 
 # shorthand
 styles = ViewerStyles
 selectors = ResidueSelectors
+custom = CustomThings
 
 # automatically display viewer objects in notebook
 pyrosetta.distributed.viewer.core.Viewer._ipython_display_ = (
