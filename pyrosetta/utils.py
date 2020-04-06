@@ -55,7 +55,6 @@ class reformat_rosetta_logs(logging.Filter):
         
         for rosetta_level, rosetta_label, level in rosetta_levels:
             if rosetta_level in record.getMessage():
-                print("now it's", record.msg)
                 record.msg = record.msg.replace(rosetta_label, '')
                 record.level = level
                 record.levelno = level
@@ -102,7 +101,24 @@ class regex_filter(logging.Filter):
         return keep
 
 
-def digs_path(accession):
+def setLogLevel(level):
+    """Sets the logging level of the first handler on root. 
+    Works if patch_rosetta_logger was used to set up logging.
+    """
+    names = {
+        'critical': logging.CRITICAL,
+        'error': logging.ERROR,
+        'warning': logging.WARNING,
+        'warn': logging.WARNING,
+        'info': logging.INFO,
+        'debug': logging.DEBUG
+    }
+    if isinstance(level, str):
+        level = names[level.lower()]
+    logging.root.handlers[0].setLevel(level)
+
+
+def get_digs_path(accession):
     accession = accession.lower()
     prefix = accession[1:3].lower()
     return f'/net/databases/pdb/{prefix}/pdb{accession}.ent.gz'
@@ -131,7 +147,11 @@ def load_rcsb_blast_cluster(filename):
     return pd.DataFrame(arr)
 
 
-def extract_chains(df_accessions, extract_dir, progress=None):
+def extract_chains(df_accessions, extract_dir, overwrite=True, 
+    progress=None):
+    """Extract clean pdb files corresponding to RCSB accessions and chains
+    from gzipped digs database using pdb-tools.
+    """
     if progress is None:
         progress = lambda x: x
     pdbtools_bin = '/home/dfeldman/.conda/envs/df-pyr/bin/'
@@ -142,11 +162,44 @@ def extract_chains(df_accessions, extract_dir, progress=None):
 
     os.makedirs(extract_dir, exist_ok=True)
     for rcsb, df in progress(list(df_accessions.groupby('RCSB'))):
-        f = digs_path(rcsb)
+        f = get_digs_path(rcsb)
         for chain in df['chain']:
             chain = ','.join(chain)
             f2 = os.path.join(extract_dir, 
                               f'{rcsb}_{chain}.clean.pdb')
+            if not overwrite and os.path.exists(f2):
+                continue
             cmd_ = cmd.format(f=f, f2=f2, chain=chain)
             get_ipython().system(cmd_)
-            
+
+
+def extract_rcsb_30p(max_cluster_id=None, overwrite=False, progress=None):
+    """High level function to produce clean pdbs from blast-clustered RCSB
+    database. Only processed accessions available at /net/databases/pdb 
+    (~95% of clusters have at least one member present).
+    """
+    f = 'rcsb/bc-30.out'
+    if overwrite or not os.path.exists(f):
+        download_rcsb_blast_cluster('bc-30.out')
+    
+    df_accessions_all = (
+    load_rcsb_blast_cluster('rcsb/bc-30.out')
+     .assign(digs_file=lambda x: x[RCSB].apply(get_digs_path))
+    )
+    
+    if max_cluster_id is None:
+        max_cluster_id = df_accessions_all['cluster_id'].max()
+        
+    df_accessions = (df_accessions_all
+     .query('cluster_id <= @max_cluster_id')
+     .assign(digs_file_exists=lambda x: 
+         x['digs_file'].apply(os.path.exists))
+     .query('digs_file_exists')
+     .groupby('cluster_id').head(1)
+    )
+    
+    extract_dir = 'rcsb/blast_cluster_30'
+    extract_chains(df_accessions, extract_dir, overwrite=overwrite, 
+        progress=progress)
+
+    return df_accessions

@@ -18,8 +18,9 @@ from pyrosetta.rosetta.core.select import residue_selector
 from pyrosetta.toolbox import cleanATOM, mutate_residue
 
 from . import utils
-from .diy import read_pdb, pose_to_dataframe
-
+from .diy import (write_pdb, read_pdb, pdb_frame,
+    pose_to_dataframe, dataframe_to_pose)
+from .utils import setLogLevel
 
 DEFAULT_VIEWER_WINDOW = (550, 450)
 DEFAULT_ZOOM = 1.2

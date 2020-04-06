@@ -24,5 +24,10 @@ import IPython
 IPython.get_ipython().run_line_magic('load_ext', 'autoreload')
 IPython.get_ipython().run_line_magic('autoreload', '2')
 
-mpl.rcParams['figure.dpi'] = 200
+mpl.rcParams['figure.dpi'] = 100
 
+import warnings
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore', '', category=FutureWarning)
+    import tqdm.notebook
+    tqdm.notebook.tqdm.pandas()

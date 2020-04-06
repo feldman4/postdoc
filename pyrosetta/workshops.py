@@ -12,6 +12,8 @@ from pyrosetta.rosetta.protocols.minimization_packing import (
 from . import geometry as geo
 from . import diy
 
+HOME = os.environ['HOME']
+
 
 def parse_secondary_struct(string):
     """Parse a string in "HHHEEELLL" format.
@@ -151,7 +153,39 @@ def add_dssp_to_pose(pose):
     dssp.insert_ss_into_pose(pose)
 
 
-def ws2_1_calc_torsion_angle(a, b, c, d):
+def get_rcsb_blast_cluster_30p():
+    """Download RCSB blast clustering at 30% similarity and extract clean
+    pdb of first entry from each cluster to rcsb/blast_cluster_30 using
+    digs pdb database (~95% of pdb files are in database).
+    """
+
+    remote, cluster_dir = (
+    'ftp://resources.rcsb.org/sequence/clusters/bc-30.out', 
+    'blast_cluster_30')
+    extract_dir = os.path.join(HOME, 'rcsb', cluster_dir)
+
+    blast_file = 'bc-30.out'
+    utils.download_rcsb_blast_cluster(blast_file)
+
+    df_accessions = (
+        utils.load_rcsb_blast_cluster('../rcsb/bc-30.out')
+     .assign(digs_file=lambda x: x['RCSB'].apply(utils.digs_path))
+     # slow
+     .assign(digs_file_exists=lambda x: 
+         x['digs_file'].apply(os.path.exists))
+    )
+
+    (df_accessions
+     .query('digs_file_exists')
+     .groupby('cluster_id').head(1)
+     .pipe(utils.extract_chains, extract_dir, progress=tqdn)
+    )
+
+    return df_accessions
+
+
+
+def ws2_calc_torsion_angle(a, b, c, d):
     """Result in radians.
 
     Test:
@@ -170,15 +204,7 @@ def ws2_1_calc_torsion_angle(a, b, c, d):
     return dihedral
 
 
-def ws2_2_ideal_helix(pose):
-    """
-    from pyrosetta import pose_from_sequence
-    pose = pose_from_sequence('A'*20, 'fa_standard')
-    pose.dump_pdb('polyA_init.pdb')
-    ws.ws2_2_ideal_helix(pose)
-    pose.dump_pdb('polyA_helix.pdb')
-    """
-
+def ws2_ideal_helix(pose):
     phi = -75
     psi = -30
     chain_ix = list(range(pose.chain_begin(1), pose.chain_end(1) + 1))
@@ -279,7 +305,7 @@ def ws2_plot_vectors(pose, atom1, atom2):
     return ax
 
 
-def ws2_2_ideal_beta_strand(pose):
+def ws2_ideal_beta_strand(pose):
     phi = -120
     psi = 120
     chain_ix = list(range(pose.chain_begin(1), pose.chain_end(1) + 1))
