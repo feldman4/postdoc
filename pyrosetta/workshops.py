@@ -1,18 +1,24 @@
-import io
 import os
+import io
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.spatial.distance import cdist
-
-import pyrosetta
 from pyrosetta import get_fa_scorefxn
+import pyrosetta
 from pyrosetta.rosetta.protocols.minimization_packing import (
     PackRotamersMover)
+from scipy.spatial.distance import cdist
+import seaborn as sns
+
 
 from . import geometry as geo
 from . import diy
 
 HOME = os.environ['HOME']
+
+
+ss_names = {'E': 'beta_sheet', 'H': 'alpha_helix', 'L': 'loop'}
 
 
 def parse_secondary_struct(string):
@@ -26,9 +32,8 @@ def parse_secondary_struct(string):
             domain += 1
         
     domains += [domain]
-    names = {'E': 'beta_sheet', 'H': 'alpha_helix', 'L': 'loop'}
     df_ss = (pd.DataFrame({'ss_code': list(string), 'domain': domains})
-        .assign(ss_name=lambda x: x['ss_code'].map(names))
+        .assign(ss_name=lambda x: x['ss_code'].map(ss_names))
         .assign(domain_length=lambda x: 
             x.groupby('domain')['ss_code'].transform(len))
         .assign(domain_start=lambda x:
@@ -184,6 +189,46 @@ def get_rcsb_blast_cluster_30p():
     return df_accessions
 
 
+def get_ss_counts(df_pdb):
+    pose = diy.dataframe_to_pose(df_pdb)
+    add_dssp_to_pose(pose)
+    df_ss = parse_secondary_struct(pose.secstruct())
+
+    return (df_pdb
+     .drop_duplicates('res_ix')
+     .join(df_ss, on='res_ix')
+     .groupby(['res_name', 'ss_name']).size()
+    )
+
+
+def ramachandran_plot(df_pdb, ax=None):
+    phi, psi, omega = geo.calculate_backbone_dihedrals(df_pdb)
+    
+    df_plot = (df_pdb
+     .drop_duplicates('res_seq')
+     .assign(phi=phi, psi=psi, omega=omega)
+    )
+    
+    
+    df_aa, aa_legend = load_aa_legend()
+    
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 7))
+
+    (df_plot
+     .merge(df_aa[['res_name', 'color', 'marker']])
+     .pipe(lambda x: sns.scatterplot(
+        data=x, x='phi', y='psi', hue='res_name', style='res_name',
+         ax=ax, **aa_legend,
+     ))
+    )
+
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2);
+    ax.set_xlim([-180, 180])
+    ax.set_ylim([-180, 180])
+    
+    return ax
+
 
 def ws2_calc_torsion_angle(a, b, c, d):
     """Result in radians.
@@ -285,7 +330,6 @@ def ws2_pack_all(pose):
     return pose
 
 
-
 def ws2_plot_vectors(pose, atom1, atom2):
     """Plot vectors from atom1 to atom2
     """
@@ -315,3 +359,78 @@ def ws2_ideal_beta_strand(pose):
         
     return pose
 
+
+def ws2_define_ss_zones():
+    helix = '-150 < (phi + psi) < -50 & -65 < psi < 20'
+    sheet = '-30 < (phi + psi) < 100 & 100 < psi < 180'
+    angle_bins = np.linspace(-180, 180, 41).astype(int)
+
+    shape = len(angle_bins), len(angle_bins)
+    df_zones = (pd.DataFrame(np.zeros(shape), 
+                  columns=pd.Index(angle_bins, name='phi'), 
+                  index=pd.Index(angle_bins, name='psi'))
+     .stack().rename('ss_code').reset_index()
+     .assign(ss_code='L')
+    )
+
+    df_zones.loc[lambda x: x.eval(helix), 'ss_code'] = 'H'
+    df_zones.loc[lambda x: x.eval(sheet), 'ss_code'] = 'E'
+    return df_zones
+
+
+def ws2_add_ss_from_zones(df_pdb, df_zones):
+    phi, psi, omega = geo.calculate_backbone_dihedrals(df_pdb)
+    
+    phi_bins = df_zones['phi'].drop_duplicates()
+    psi_bins = df_zones['psi'].drop_duplicates()
+
+    i = np.digitize(psi, psi_bins) - 1
+    j = np.digitize(phi, phi_bins) - 1
+
+    X = df_zones.pivot_table(index='psi', columns='phi', 
+                         values='ss_code', aggfunc='first').values
+    
+    index = df_pdb['res_seq'].drop_duplicates()
+    
+    ss_codes = pd.Series(X[i, j], index=index, name='ss_code')
+    return df_pdb.join(ss_codes, on='res_seq')
+
+
+def ws2_plot_ss_prob(df_ss_counts, res_name='res_name', ss_name='ss_name'):
+    
+    df_plot = (df_ss_counts
+     .groupby([res_name, ss_name])
+     .sum().unstack(ss_name).fillna(0)
+     .pipe(lambda x: x / x.sum().sum())
+     # equalize ss sampling
+     .pipe(lambda x: x.div(x.sum(axis=0), axis=1))
+     .pipe(lambda x: x
+           # p(res, ss | res)
+          .div(x.sum(axis=1), axis=0)
+          )
+    )
+
+    cg = df_plot.pipe(sns.clustermap, col_cluster=False, cmap='viridis')
+    plt.close(cg.fig)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.heatmap(cg.data2d, cmap='viridis');
+    
+    return df_plot, fig
+
+
+def ws2_plot_ss_propensities(df_ss_counts, res_name='res_name', ss_name='ss_name'):
+    
+    df_plot = (df_ss_counts
+     .groupby([res_name, ss_name])
+     .sum().unstack(ss_name).fillna(0)
+     .pipe(lambda x: x.div(x.sum(axis=0), axis=1))
+    )
+
+    cg = df_plot.pipe(sns.clustermap, col_cluster=False, cmap='viridis')
+    plt.close(cg.fig)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.heatmap(cg.data2d, cmap='viridis');
+    
+    return df_plot, fig

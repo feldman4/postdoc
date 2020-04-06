@@ -31,7 +31,7 @@ def calculate_backbone_dihedrals(df, validate=True):
 
     if validate:
         df = df.sort_values('res_seq')
-        A = df.drop_duplicates(['res_seq', 'atom_name']).shape[0]
+        A = df[['res_seq', 'atom_name']].drop_duplicates().shape[0]
         B = df.shape[0]
         assert A == B
         assert len(c0_all) == len(n_all)

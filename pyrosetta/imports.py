@@ -17,7 +17,7 @@ from pyrosetta.rosetta.core.chemical import ResidueProperty
 from pyrosetta.rosetta.core.select import residue_selector
 from pyrosetta.toolbox import cleanATOM, mutate_residue
 
-from . import utils
+from . import diy, geometry, utils
 from .diy import (write_pdb, read_pdb, pdb_frame,
     pose_to_dataframe, dataframe_to_pose)
 from .utils import setLogLevel

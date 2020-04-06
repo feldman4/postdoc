@@ -182,9 +182,6 @@ def test_pdb_roundtrip(files, max_numeric_error=0.1):
     for i, (c1, c2) in enumerate(zip(entry, record)):
         print(i+1, c1, c2)
 
-    for i, c in enumerate(entry):
-        print(i+1, c)
-
     """
     test_filename = os.path.join(tempfile.tempdir, 'test.pdb')
 
@@ -225,3 +222,38 @@ def pdb_frame(files_or_search, col_file='file', progress=None):
 
     return pd.concat([read_pdb(f).assign(**{col_file: f}) 
         for f in progress(files)], sort=False)
+
+
+def debug_parsing(row, entry):
+    record = diy.atom_record(**df.iloc[ix])
+    print(entry)
+    print(record)
+
+    for i, (c1, c2) in enumerate(zip(entry, record)):
+        print(f'{i+1: >2} {c1} {c2}')
+
+
+def debug_pdb_spec(pdb_spec):
+    i = 1
+    for name, _, width, _ in pdb_spec:
+        print(i, '-', i + width - 1, name)
+        i = i + width
+
+
+def first_altloc(df_pdb):
+    """Boolean mask corresponding to first listed altLoc for each residue.
+    """
+    it = df_pdb[['res_seq', 'altLoc', 'atom_name']].values
+    current_seq = None
+    current_altLoc = None
+    mask = []
+    for res_seq, altLoc, atom_name in it:
+        if res_seq != current_seq:
+            current_seq = res_seq
+            current_altLoc = altLoc
+        if altLoc != current_altLoc:
+            mask.append(False)
+        else:
+            mask.append(True)
+    return mask
+
