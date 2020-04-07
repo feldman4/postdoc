@@ -1,9 +1,11 @@
-import time
-import re
+import collections
 from glob import glob
 import logging
+import io
 import os
+import re
 import sys
+import time
 
 import pandas as pd
 from natsort import natsorted
@@ -53,3 +55,22 @@ def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
            .assign(**{c: df[c].astype(str) for c in str_cols})
            )
 
+
+def stdout_to_dataframe(lines, columns=None, header=None):
+    buffer = io.StringIO('\n'.join(lines))
+    df = pd.read_csv(buffer, sep='\s+', header=header)
+    if columns:
+        df.columns = columns
+    return df
+
+
+class AddPath(str):
+    """Sub-classing pathlib.Path was a nuisance.
+    """
+    def __add__(self, other):
+        new_path = os.path.join(str(self), str(other))
+        return self.__class__(new_path)
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self})'
+    def __fspath__(self):
+        return str(self)

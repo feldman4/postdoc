@@ -1,4 +1,5 @@
 import logging
+import os
 
 import numpy as np
 from pyrosetta import (
@@ -12,148 +13,17 @@ from pyrosetta import (
     pose_from_sequence,
     )
 import pyrosetta
-from pyrosetta.distributed import viewer
-from pyrosetta.rosetta.core.chemical import ResidueProperty
-from pyrosetta.rosetta.core.select import residue_selector
 from pyrosetta.toolbox import cleanATOM, mutate_residue
 
 from . import diy, geometry, utils
 from .diy import (write_pdb, read_pdb, pdb_frame,
     pose_to_dataframe, dataframe_to_pose)
-from .utils import setLogLevel
+from .utils import setLogLevel, start_pyrosetta
 
-DEFAULT_VIEWER_WINDOW = (550, 450)
-DEFAULT_ZOOM = 1.2
+from pyrosetta.distributed import viewer
+from .view import default_viewer as view
+from .view import ViewerStyles as styles
+from .view import ResidueSelectors as selectors
+from .view import CustomThings as custom
 
-# pyrosetta throws away rosetta log levels, patch restores them
-# allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
-logger_exclude = ['missing heavyatom']
-logger_include = []
-
-utils.patch_rosetta_logger()
-logging.root.handlers = []
-utils.log_warnings(logger_exclude, logger_include)
-
-
-def start_pyrosetta():
-    pyrosetta.init('-constant_seed', set_logging_handler='logging')
-
-    flags = """
-    -auto_setup_metals 1
-    -detect_disulf 1
-    """
-    pyrosetta.distributed.init(flags)
-
-    fix_pyrosetta_bugs()
-
-    # allows modifying a style module by call, e.g., style(cartoon=True)
-    def __call__(self, **kwargs):
-        import copy
-        new_self = copy.copy(self)
-        for k, v in kwargs.items():
-            try:
-                getattr(new_self, k)
-            except AttributeError:
-                matches = [x for x in dir(new_self) if x.startswith(k) ]
-                if len(matches) == 1:
-                    k = matches[0]
-                else:
-                    raise AttributeError
-            setattr(new_self, k, v)
-        return new_self
-
-    viewer.setStyle.__call__ = __call__
-
-
-def fix_pyrosetta_bugs():
-    import pyrosetta.bindings.homogeneous_transform
-    import pyrosetta.bindings.pose
-    import numpy as np
-
-    pyrosetta.bindings.homogeneous_transform.np = np
-    pyrosetta.bindings.pose.np = np
-
-
-def view(*args, **kwargs):
-    """Sensible defaults for notebook.
-    """
-    defaults = dict(window_size=DEFAULT_VIEWER_WINDOW)
-    defaults.update(kwargs)
-    return (viewer.init(*args, **defaults) 
-        + styles.wire
-        + viewer.setZoom(DEFAULT_ZOOM))
-
-
-class SequentialStyles:
-    """A hack to compose styles prior to application.
-    """
-    def __init__(self, styles):
-        self.styles = styles
-    def apply(self, viewer, pose, pdbstring):
-        for style in self.styles:
-            viewer = style.apply(viewer, pose, pdbstring)
-        return viewer
-
-
-class ViewerStyles:
-    """Container for useful styles.
-    Finer control can be obtained using 
-
-    viewer.setStyle(command=(selection, style))
-
-    http://3dmol.csb.pitt.edu/doc/$3Dmol.GLViewer.html#setStyle
-
-    """
-    defaults = dict(cartoon=False, label=False)
-    wire = viewer.setStyle(colorscheme='greenCarbon', **defaults)
-    stick = viewer.setStyle(style='stick', radius=0.5,
-        colorscheme='magentaCarbon', **defaults)
-    hydrogens = viewer.setHydrogens(polar_only=True)
-    hbonds = SequentialStyles(
-        [viewer.setHydrogenBonds(dashed=True, color='black'),
-                hydrogens])
-
-    hbonds_thick = SequentialStyles(
-        [viewer.setHydrogenBonds(dashed=False, color='yellow', radius=0.07),
-                hydrogens])
-
-
-class ResidueSelectors:
-    """Container for useful selectors.
-    """
-    aromatic = residue_selector.ResiduePropertySelector(
-        ResidueProperty.AROMATIC)
-    def ix(arr, zero_index=True):
-        stringified = ','.join(np.array(arr).astype(int).astype(str))
-        return residue_selector.ResidueIndexSelector(stringified)
-
-
-class CustomStyle:
-    def __init__(self, style):
-        self.style = style
-
-
-class CustomSelector:
-    def __init__(self, selector):
-        self.selector = selector
-    def __add__(self, other):
-        return viewer.setStyle(command=(self.selector, other.style))
-
-
-class CustomThings:
-    backbone_atoms = ['N', 'CA', 'C', 'O']
-    sidechains = CustomSelector({'not': {'atom': backbone_atoms}})
-    wire = CustomStyle({
-        'stick': {'radius': 0.05, 'colorscheme': 'grayCarbon'}
-    })
-
-
-# shorthand
-styles = ViewerStyles
-selectors = ResidueSelectors
-custom = CustomThings
-
-# automatically display viewer objects in notebook
-pyrosetta.distributed.viewer.core.Viewer._ipython_display_ = (
-    lambda self: self.show())
-
+from .constants import *

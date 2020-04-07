@@ -14,8 +14,7 @@ import seaborn as sns
 
 from . import geometry as geo
 from . import diy
-
-HOME = os.environ['HOME']
+from .constants import *
 
 
 ss_names = {'E': 'beta_sheet', 'H': 'alpha_helix', 'L': 'loop'}
@@ -230,6 +229,37 @@ def ramachandran_plot(df_pdb, ax=None):
     return ax
 
 
+def calculate_lengths(df_xyz, col_pairs, missing='ignore'):
+    arr = []
+    for col1, col2 in col_pairs:
+        if col1 not in df_xyz or col2 not in df_xyz:
+            if missing == 'ignore':
+                continue
+        length = (((df_xyz[col1] - df_xyz[col2])**2)
+                  .sum(axis=1, skipna=False))
+        length.name = f'{col1}_{col2}'
+        arr += [length]
+    
+    return pd.concat(arr, axis=1)
+
+
+def find_bond_lengths(df_pdb, atom_pairs):
+    
+    df_coords = (df_pdb
+     .pivot_table(index=['res_seq', 'res_name'], 
+                  columns=['atom_name'],
+                  values=['x', 'y', 'z'])
+     .swaplevel(1, 0, axis=1)
+     .sort_index(axis=1)
+    )
+    
+    return (calculate_lengths(df_coords, atom_pairs)
+     .reset_index(0, drop=True)
+     .stack().reset_index()
+     .rename(columns={'level_1': 'bond_name', 0: 'bond_length'})
+    )
+
+
 def ws2_calc_torsion_angle(a, b, c, d):
     """Result in radians.
 
@@ -434,3 +464,37 @@ def ws2_plot_ss_propensities(df_ss_counts, res_name='res_name', ss_name='ss_name
     sns.heatmap(cg.data2d, cmap='viridis');
     
     return df_plot, fig
+
+
+def ws2_load_ideal_internal_coordinates():
+    files = glob(AA_PARAMS_DIR + '*.params')
+
+    arr = []
+    for f in files:
+        params = diy.read_rosetta_params(f)
+        # rosetta and pdb use different names for some atoms
+        if 'ATOM_ALIAS' in params:
+            alias = (params['ATOM_ALIAS']
+                     .set_index('atom_name_alias')['atom_name']
+                     .to_dict())
+        else:
+            alias = {}
+        dealias = lambda x: alias.get(x, x)
+        (params['ICOOR_INTERNAL']
+         .assign(child=lambda x: x['child'].apply(dealias))
+         .assign(parent=lambda x: x['parent'].map(dealias))
+         .pipe(arr.append)
+        )
+
+    df_icoor = pd.concat(arr)
+
+    atom_pairs = (df_icoor[['parent', 'child']]
+     .drop_duplicates()
+     .query('parent != child')
+     .query('parent != ["UPPER", "LOWER"]')
+     .query('child != ["UPPER", "LOWER"]')
+     .values
+    )
+    
+    return df_icoor, atom_pairs
+

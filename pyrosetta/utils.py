@@ -5,6 +5,9 @@ import sys
 
 import pandas as pd
 from postdoc.constants import *
+import pyrosetta
+from .view import patch_pyrosetta_viewer
+
 
 def patch_rosetta_logger():
     """
@@ -38,7 +41,8 @@ rosetta_levels = (
     ('WARNING', '[ WARNING ] ', logging.WARNING),
     ('ERROR',   '[ ERROR ] ',   logging.ERROR),
     )
-        
+
+
 class reformat_rosetta_logs(logging.Filter):
     def filter(self, record):
         """Modify LogRecord to mimic logging event originating in python.
@@ -203,3 +207,35 @@ def extract_rcsb_30p(max_cluster_id=None, overwrite=False, progress=None):
         progress=progress)
 
     return df_accessions
+
+
+def start_pyrosetta():
+    pyrosetta.init('-constant_seed', set_logging_handler='logging')
+
+    # pyrosetta throws away rosetta log levels, patch restores them
+    # allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
+    logger_exclude = ['missing heavyatom']
+    logger_include = []
+
+    patch_rosetta_logger()
+    logging.root.handlers = []
+    log_warnings(logger_exclude, logger_include)
+
+    flags = """
+    -auto_setup_metals 1
+    -detect_disulf 1
+    """
+    pyrosetta.distributed.init(flags)
+
+    fix_pyrosetta_bugs()
+
+    patch_pyrosetta_viewer()
+
+
+def fix_pyrosetta_bugs():
+    import pyrosetta.bindings.homogeneous_transform
+    import pyrosetta.bindings.pose
+    import numpy as np
+
+    pyrosetta.bindings.homogeneous_transform.np = np
+    pyrosetta.bindings.pose.np = np

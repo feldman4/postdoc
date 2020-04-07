@@ -257,3 +257,33 @@ def first_altloc(df_pdb):
             mask.append(True)
     return mask
 
+def read_rosetta_params(filename):
+    
+    tables = {'ICOOR_INTERNAL': 
+              ('child', 'phi', 'theta', 'distance', 'parent', 
+              'angle', 'torsion'),
+              'ATOM':
+              ('res_name_alias', 'Rosetta atom type', 
+               'CHARMM atom type', 'partial_charge', 
+               'partial charge 2 (?)'),
+              'CHI': ('chi_num', 'a', 'b', 'c', 'd'),
+              'ATOM_ALIAS': ('atom_name_alias', 'atom_name'),
+             }
+    with open(filename, 'r') as fh:
+        lines = fh.readlines()
+
+    for line in lines:
+        if line.startswith('NAME '):
+            name = line.split()[1]
+    
+    results = dict(res_name=name)
+    for table, columns in tables.items():
+        body = '\n'.join(x for x in lines if x.startswith(table))
+        if body:
+            df = pd.read_csv(io.StringIO(body), sep='\s+', 
+                             header=None)
+            df = df.iloc[:, 1:]
+            df.columns = columns[:df.shape[1]]
+            results[table] = df
+        
+    return results
