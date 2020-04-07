@@ -231,15 +231,46 @@ def ramachandran_plot(df_pdb, ax=None):
 
 
 def calculate_lengths(df_xyz, col_pairs, missing='ignore'):
+    """Does not include res_name.
+    """
     arr = []
     for col1, col2 in col_pairs:
         if col1 not in df_xyz or col2 not in df_xyz:
             if missing == 'ignore':
                 continue
         length = (((df_xyz[col1] - df_xyz[col2])**2)
-                  .sum(axis=1, skipna=False))
+                  .sum(axis=1, skipna=False)**0.5)
         length.name = f'{col1}_{col2}'
         arr += [length]
+    
+    return pd.concat(arr, axis=1)
+
+
+def calculate_angles(df_xyz, col_triplets, missing='ignore'):
+    """Includes res_name.
+    """
+    arr = []
+    for col_A, col_B, col_C in col_triplets:
+        skip = False
+        for col in col_A, col_B, col_C:
+            if col not in df_xyz:
+                if missing != 'ignore':
+                    raise ValueError(f'missing column {col}')
+                else:
+                    skip = True
+        if skip:
+            continue
+        AB = df_xyz[col_A] - df_xyz[col_B]
+        BC = df_xyz[col_B] - df_xyz[col_C]
+        dot_product = (AB * BC).sum(axis=1, skipna=False)
+        
+        denom = ((AB**2).sum(axis=1, skipna=False) 
+                  * (BC**2).sum(axis=1, skipna=False))**0.5
+        angle = np.arccos(dot_product / denom)
+        angle = angle * 180/np.pi # rosetta convention
+        angle.name = f'{col_A}_{col_B}_{col_C}'
+        # assert False
+        arr += [angle]
     
     return pd.concat(arr, axis=1)
 
@@ -258,6 +289,23 @@ def find_bond_lengths(df_pdb, atom_pairs):
      .reset_index(0, drop=True)
      .stack().reset_index()
      .rename(columns={'level_1': 'bond_name', 0: 'bond_length'})
+    )
+
+
+def find_bond_angles(df_pdb, atom_triplets):
+    
+    df_coords = (df_pdb
+     .pivot_table(index=['res_seq', 'res_name'], 
+                  columns=['atom_name'],
+                  values=['x', 'y', 'z'])
+     .swaplevel(1, 0, axis=1)
+     .sort_index(axis=1)
+    )
+    
+    return (calculate_angles(df_coords, atom_triplets)
+     .reset_index(0, drop=True)
+     .stack().reset_index()
+     .rename(columns={'level_1': 'bond_name', 0: 'bond_angle'})
     )
 
 
@@ -482,8 +530,8 @@ def ws2_load_ideal_internal_coordinates():
             alias = {}
         dealias = lambda x: alias.get(x, x)
         (params['ICOOR_INTERNAL']
-         .assign(child=lambda x: x['child'].apply(dealias))
-         .assign(parent=lambda x: x['parent'].map(dealias))
+         # .assign(child=lambda x: x['child'].apply(dealias))
+         # .assign(parent=lambda x: x['parent'].apply(dealias))
          .assign(res_name=params['res_name'])
          .pipe(arr.append)
         )
@@ -491,16 +539,32 @@ def ws2_load_ideal_internal_coordinates():
     return pd.concat(arr)
 
 
-def ws2_compare_to_ideal_lengths(df_pdbs, df_icoor, 
-    bond_class=None, max_per_bond=20):
-    
-    atom_pairs = (df_icoor[['parent', 'child']]
+def ws2_icoor_atom_pairs(df_icoor):
+    return (df_icoor[['parent', 'child']]
      .drop_duplicates()
      .query('parent != child')
      .query('parent != ["UPPER", "LOWER"]')
      .query('child != ["UPPER", "LOWER"]')
      .values
     )
+
+
+def ws2_icoor_atom_triplets(df_icoor):
+    return (df_icoor
+     # [['res_name', 'child', 'parent', 'angle']]
+     [['child', 'parent', 'angle']]
+     .query('child != parent & parent != angle & child != angle')
+     .loc[lambda x: (x != 'UPPER').all(axis=1)]
+     .loc[lambda x: (x != 'LOWER').all(axis=1)]
+     .drop_duplicates() # not necessary for lcaa, just in case
+     .values
+    )
+
+
+def ws2_compare_to_ideal_lengths(df_pdbs, df_icoor, 
+    bond_class=None, max_per_bond=20):
+    
+    atom_pairs = ws2_icoor_atom_pairs(df_icoor)
 
     ideal_lengths = (df_icoor
      .assign(bond_name=lambda x: x['parent'] + '_' + x['child'])
@@ -524,11 +588,10 @@ def ws2_compare_to_ideal_lengths(df_pdbs, df_icoor,
         df_pdbs['file'] = 'dummy'
         
     df_bonds = (df_pdbs
+     .query('res_name == @CANONICAL_RESIDUES')
      .groupby('file')
       .apply(find_bond_lengths, atom_pairs)
      .reset_index(drop=True)
-     # should restrict to canonical
-     .query('res_name != "UNK"')
      .assign(bond_class=lambda x: 
              x['bond_name'].apply(classify_bond))
     )
@@ -544,9 +607,11 @@ def ws2_compare_to_ideal_lengths(df_pdbs, df_icoor,
     if bond_class:
         df_plot = df_plot.query('bond_class == @bond_class')
     
-    return ws2_plot_bond_length_comparison(df_plot, ideal_lengths)
+    return df_bonds, ws2_plot_bond_length_comparison(df_plot, ideal_lengths)
 
-def ws2_plot_bond_length_comparison(df_plot, ideal_lengths):
+
+def ws2_plot_bond_length_comparison(df_plot, ideal_values, 
+    value='bond_length'):
 
     df = df_plot
     bonds = sorted(set(df['bond_name']))
@@ -560,22 +625,66 @@ def ws2_plot_bond_length_comparison(df_plot, ideal_lengths):
     )
 
     num_entries = df.drop_duplicates('name').shape[0]
-    fig, ax = plt.subplots(figsize=(4, 0.2 * num_entries))
+    fig, ax = plt.subplots(figsize=(6, 0.2 * num_entries))
 
-    df.plot.scatter(x='bond_length', y='name', 
+    df.plot.scatter(x=value, y='name', 
                     c=list(df['color']), ax=ax);
 
 
     it = (df.drop_duplicates('name')
-          [['res_name', 'bond_name', 'bond_length']].values)
+          [['res_name', 'bond_name', value]].values)
+
+    left_margin = df[value].min() - 0.05 * (df[value].max() - df[value].min())
 
     for i, (res_name, bond_name, bond_length) in enumerate(it):
         try:
-            bond_length = ideal_lengths[(res_name, bond_name)]
+            bond_length = ideal_values[(res_name, bond_name)]
             ax.scatter(bond_length, i, c='red', marker='x')
         except:
-            ax.scatter(1.1, i, c='blue', marker='o')
+            ax.scatter(left_margin, i, c='blue', marker='o')
     
     # tight y limit
     ax.set_ylim([-0.7, i + 0.7])
+    ax.figure.tight_layout()
     return ax
+
+
+def ws2_compare_to_ideal_angles(df_pdbs, df_icoor,
+                               max_per_bond=20):
+
+    # atom sets for which to calculate angles
+    atom_triplets = (df_icoor
+     .query('~child.str.match("(H)|(\dH)")')
+     .query('res_name != ["PRO"]')
+     .query('res_name == @CANONICAL_RESIDUES')
+     .pipe(ws2_icoor_atom_triplets)
+    )
+
+    # calculate theta angles for all triplets present in table of pdbs
+    df_bonds = (df_pdbs
+     .query('res_name == @CANONICAL_RESIDUES')
+     .query('res_name != "PRO"')
+     .groupby('file')
+      .apply(find_bond_angles, atom_triplets)
+     .reset_index(drop=True)
+    )
+
+    # ideal angles from residue set
+    ideal_angles = (df_icoor
+     .assign(bond_name=lambda x: 
+             x['child'] + '_' + x['parent'] + '_' + x['angle'])
+     .set_index(['res_name', 'bond_name'])
+     ['theta'].to_dict()
+    )
+
+    # limit total # of points to plot
+    df_plot = (df_bonds
+     .groupby(['res_name', 'bond_name'])
+      .head(max_per_bond)
+     .reset_index(drop=True)
+     .assign(name=lambda x: 
+             x['bond_name'] + '_' + x['res_name'])
+    )
+
+    return (df_bonds, ws2_plot_bond_length_comparison(
+        df_plot, ideal_angles, value='bond_angle'))

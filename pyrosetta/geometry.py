@@ -16,7 +16,7 @@ def bond_angle(a,b,c):
     ab = v(a) - v(b)
     bc = v(b) - v(c)
     dot = (ab * bc).sum()
-    return np.arccos(dot / (ab**2).sum() + (bc**2).sum())
+    return np.arccos(dot / ((ab**2).sum() * (bc**2).sum()) ** 0.5)
 
 def calculate_backbone_dihedrals(df, validate=True):
     """Should match
