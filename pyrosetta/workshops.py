@@ -1,5 +1,6 @@
-import os
 import io
+from glob import glob
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -483,11 +484,16 @@ def ws2_load_ideal_internal_coordinates():
         (params['ICOOR_INTERNAL']
          .assign(child=lambda x: x['child'].apply(dealias))
          .assign(parent=lambda x: x['parent'].map(dealias))
+         .assign(res_name=params['res_name'])
          .pipe(arr.append)
         )
 
-    df_icoor = pd.concat(arr)
+    return pd.concat(arr)
 
+
+def ws2_compare_to_ideal_lengths(df_pdbs, df_icoor, 
+    bond_class=None, max_per_bond=20):
+    
     atom_pairs = (df_icoor[['parent', 'child']]
      .drop_duplicates()
      .query('parent != child')
@@ -495,6 +501,81 @@ def ws2_load_ideal_internal_coordinates():
      .query('child != ["UPPER", "LOWER"]')
      .values
     )
-    
-    return df_icoor, atom_pairs
 
+    ideal_lengths = (df_icoor
+     .assign(bond_name=lambda x: x['parent'] + '_' + x['child'])
+     .set_index(['res_name', 'bond_name'])
+     ['distance'].to_dict()
+    )
+
+    # sometimes a bond name occurs in reverse orientation in different
+    # residues (e.g., ('PHE', 'CD2_CE2'))
+    keys = list(ideal_lengths.keys())
+    for res, bond in keys:
+        bond_rev = '_'.join(bond.split('_')[::-1])
+        ideal_lengths[(res, bond_rev)] = ideal_lengths[(res, bond)]
+
+    
+    def classify_bond(bond):
+        elem1, elem2 = sorted([x[0] for x in bond.split('_')])
+        return f'{elem1}_{elem2}'
+
+    if 'file' not in df_pdbs:
+        df_pdbs['file'] = 'dummy'
+        
+    df_bonds = (df_pdbs
+     .groupby('file')
+      .apply(find_bond_lengths, atom_pairs)
+     .reset_index(drop=True)
+     # should restrict to canonical
+     .query('res_name != "UNK"')
+     .assign(bond_class=lambda x: 
+             x['bond_name'].apply(classify_bond))
+    )
+    
+    df_plot = (df_bonds
+     .groupby(['res_name', 'bond_name'])
+      .head(max_per_bond)
+     .reset_index(drop=True)
+     .assign(name=lambda x: 
+             x['bond_name'] + '_' + x['res_name'])
+    )
+    
+    if bond_class:
+        df_plot = df_plot.query('bond_class == @bond_class')
+    
+    return ws2_plot_bond_length_comparison(df_plot, ideal_lengths)
+
+def ws2_plot_bond_length_comparison(df_plot, ideal_lengths):
+
+    df = df_plot
+    bonds = sorted(set(df['bond_name']))
+    palette = sns.color_palette(
+        n_colors=len(bonds), palette='Set2')
+    color_map = {b: c for b,c in zip(bonds, palette)}
+
+    df = (df
+     .assign(color=lambda x: x['bond_name'].map(color_map))
+     .sort_values('name')
+    )
+
+    num_entries = df.drop_duplicates('name').shape[0]
+    fig, ax = plt.subplots(figsize=(4, 0.2 * num_entries))
+
+    df.plot.scatter(x='bond_length', y='name', 
+                    c=list(df['color']), ax=ax);
+
+
+    it = (df.drop_duplicates('name')
+          [['res_name', 'bond_name', 'bond_length']].values)
+
+    for i, (res_name, bond_name, bond_length) in enumerate(it):
+        try:
+            bond_length = ideal_lengths[(res_name, bond_name)]
+            ax.scatter(bond_length, i, c='red', marker='x')
+        except:
+            ax.scatter(1.1, i, c='blue', marker='o')
+    
+    # tight y limit
+    ax.set_ylim([-0.7, i + 0.7])
+    return ax

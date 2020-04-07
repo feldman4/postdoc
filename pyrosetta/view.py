@@ -29,7 +29,6 @@ def patch_pyrosetta_viewer():
     viewer.setStyle.__call__ = __call__
 
 
-
 def default_viewer(*args, **kwargs):
     """Sensible defaults for notebook.
     """
