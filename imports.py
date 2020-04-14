@@ -5,7 +5,6 @@ from postdoc.utils import *
 from postdoc import reporters
 from postdoc import flycodes as fly
 from postdoc.flycode_designs import *
-from postdoc.pyrosetta import workshops as ws
 
 from glob import glob
 import logging
