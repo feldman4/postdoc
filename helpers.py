@@ -17,6 +17,7 @@ def download_pdb_resource(remote, zip_path=None):
         wget.download(remote, local)
     
     if zip_path:
+        # retain directory structure from zip file
         destination = pdb_dir/zip_path
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         extract_zip(local, zip_path, destination)                
