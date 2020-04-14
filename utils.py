@@ -74,3 +74,16 @@ class AddPath(str):
         return f'{self.__class__.__name__}({self})'
     def __fspath__(self):
         return str(self)
+
+class DivPath(str):
+    """Sub-classing pathlib.Path was a nuisance.
+    """
+    def __truediv__(self, other):
+        new_path = os.path.join(str(self), str(other))
+        return self.__class__(new_path)
+    def __add__(self, other):
+        return str(self) + str(other)
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self})'
+    def __fspath__(self):
+        return str(self)
