@@ -13,13 +13,17 @@ def chainbow(selection='all'):
     util.chainbow(selection)
 
 def find_polar(selection='all'):
-    name = "{}_polar_conts".format(selection)
+    tmp = 'temp123'
+    cmd.select(tmp, selection)
+
+    name = "{}_polar_conts".format(tmp)
     cmd.dist(
         name,
-        "({}) and not (solvent)".format(selection),
-        "({}) and not (solvent)".format(selection),
+        "({}) and not (solvent)".format(tmp),
+        "({}) and not (solvent)".format(tmp),
         quiet=1,mode=2,label=0,reset=1);
     cmd.enable(name)
+    cmd.delete(tmp)
 
 def hide_hydrogens(selection='all'):
     cmd.hide("({} and hydro)".format(selection))
@@ -27,7 +31,10 @@ def hide_hydrogens(selection='all'):
 def color_not_carbon(selection='all'):
     util.cnc(selection);
 
-def run_script(name):
+def run_script(name=None):
+    if name is None:
+        return list_scripts()
+        
     if not os.path.exists(name):
         path = os.path.join(home, scripts_dir)
         files = glob.glob(os.path.join(path, '*pml'))
@@ -58,14 +65,19 @@ def list_scripts(absolute=False):
     print('*'*20)
     return files
 
+def select_ligands(name='ligands'):
+    selector = 'not pol. and not sol.'
+    cmd.select(name, selector)
 
-
+# local pdb loading
+    
 python end
 
-cmd.extend("nowater",hide_water)
-cmd.extend("noh",hide_hydrogens)
-cmd.extend("chainbow",chainbow)
-cmd.extend("findpolar",find_polar)
+cmd.extend("nowater", hide_water)
+cmd.extend("nohoh", hide_water)
+cmd.extend("noh", hide_hydrogens)
+cmd.extend("chainbow", chainbow)
+cmd.extend("findpolar", find_polar)
 cmd.extend("cnc", color_not_carbon)
 cmd.extend("pml_run", run_script)
-cmd.extend("pml_list", list_scripts)
+cmd.extend("grabligands", select_ligands)
