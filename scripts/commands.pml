@@ -1,4 +1,11 @@
 python
+
+import glob
+import os
+home = os.environ['HOME']
+scripts_dir = 'drive/packages/postdoc/scripts'
+
+
 def hide_water():
     cmd.hide('everything', 'resn hoh')
 
@@ -20,23 +27,36 @@ def hide_hydrogens(selection='all'):
 def color_not_carbon(selection='all'):
     util.cnc(selection);
 
-import os
-home = os.environ['HOME']
-scripts_dir = 'drive/packages/postdoc/scripts'
-
 def run_script(name):
-    path = os.path.join(home, scripts_dir, name)
-    cmd.run(path)
+    if not os.path.exists(name):
+        path = os.path.join(home, scripts_dir)
+        files = glob.glob(os.path.join(path, '*pml'))
+        files += glob.glob(os.path.join(path, '*py'))
+        matches = [os.path.basename(f).startswith(name) for f in files]
+        if sum(matches) > 1:
+            print('Ambiguous name')
+            return
+        if sum(matches) == 0:
+            print('No matching file')
+            return
+        name = files[matches.index(True)]
+
+    cmd.run(name)
 
 def list_scripts(absolute=False):
     path = os.path.join(home, scripts_dir, '*pml')
-    files = glob(path)
+    files = glob.glob(path)
+    exclude = ['pymolrc.pml', 'commands.pml']
     if not absolute:
         files = [os.path.basename(f) for f in files]
+    print('*'*20)
+    print('Available scripts:')
     for f in files:
-        if f.endswith('commands.pml'):
+        if any(f.endswith(x) for x in exclude):
             continue
-        print(f)
+        print('  ', f)
+    print('*'*20)
+    return files
 
 
 
