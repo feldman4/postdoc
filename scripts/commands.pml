@@ -29,7 +29,7 @@ def run_script(name):
     cmd.run(path)
 
 def list_scripts(absolute=False):
-    path = os.path.join(home, scripts_dir, name, '*pml')
+    path = os.path.join(home, scripts_dir, '*pml')
     files = glob(path)
     if not absolute:
         files = [os.path.basename(f) for f in files]
