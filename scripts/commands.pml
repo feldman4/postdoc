@@ -20,6 +20,13 @@ def hide_hydrogens(selection='all'):
 def color_not_carbon(selection='all'):
     util.cnc(selection);
 
+def run_script(name):
+    import os
+    home = os.environ['HOME']
+    scripts_dir = 'drive/packages/postdoc/scripts'
+    path = os.path.join(home, scripts_dir, name)
+    cmd.run(path)
+
 python end
 
 cmd.extend("nowater",hide_water)
@@ -27,3 +34,4 @@ cmd.extend("noh",hide_hydrogens)
 cmd.extend("chainbow",chainbow)
 cmd.extend("findpolar",find_polar)
 cmd.extend("cnc", color_not_carbon)
+cmd.extend("run_script", run_script)

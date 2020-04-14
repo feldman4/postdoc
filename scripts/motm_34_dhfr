@@ -1,0 +1,10 @@
+fetch 7dfr, async=0
+fetch 3dfr, async=0
+no hoh
+nowater
+/cmd.set('stereo',1,'',0)
+/cmd.set('stereo',0,'',0)
+/cmd.set('grid_mode',1,'',0)
+orient
+align 3dfr, 7dfr
+orient

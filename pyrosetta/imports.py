@@ -14,6 +14,9 @@ from pyrosetta import (
     )
 import pyrosetta
 from pyrosetta.toolbox import cleanATOM, mutate_residue
+from pyrosetta.toolbox.rcsb import load_from_rcsb
+
+from pyrosetta.rosetta.core.scoring import ScoreTypeManager, ScoreFunction
 
 from . import diy, geometry, utils
 from .diy import (write_pdb, read_pdb, pdb_frame,

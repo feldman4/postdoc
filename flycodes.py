@@ -451,21 +451,35 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
 
     canonical = set('ACDEFGHIKLMNPQRSTVWY')
     
-    if rule_set in ('RJ_noH_termR', 'RJ_noH_termK', 'RJ_no_H'):
-        # these are not allowed in the middle of the peptide
-        pos = 'KRH'
-        ox = 'MC'
-        same_as_L = 'I'
-        # these are not allowed as the N-terminal residue
-        exclude_from_n_term = set('QP')
+    # these are not allowed in the middle of the peptide
+    pos = 'KRH'
+    # these might oxidize in storage
+    ox = 'MC'
+    same_as_L = 'I'
+    exclude_from_n_term = 'QP'
+    # DB suggested to exclude
+    bulky_hydrophobic = 'F'
 
+    if rule_set in ('RJ_noH_termR', 'RJ_noH_termK', 'RJ_no_H'):
         if rule_set in ('RJ_noH_termK', 'RJ_no_H'):
             c_term = set('K')
         elif rule_set == 'RJ_noH_termR':
             c_term = set('R')
 
         middle = canonical - set(pos + ox + same_as_L)
-        n_term = middle - exclude_from_n_term
+        n_term = middle - set(exclude_from_n_term)
+
+        options = ((n_term,) + (middle,)*(length - 2) + 
+                   (c_term,))
+
+    if rule_set in ('RJ_noHnoF_termR', 'RJ_noHnoF_termK'):
+        if rule_set == 'RJ_noH_termK':
+            c_term = set('K')
+        elif rule_set == 'RJ_noH_termR':
+            c_term = set('R')
+
+        middle = canonical - set(pos + ox + same_as_L + bulky_hydrophobic)
+        n_term = middle - set(exclude_from_n_term + bulky_hydrophobic)
 
         options = ((n_term,) + (middle,)*(length - 2) + 
                    (c_term,))

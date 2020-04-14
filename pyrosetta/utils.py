@@ -239,3 +239,5 @@ def fix_pyrosetta_bugs():
 
     pyrosetta.bindings.homogeneous_transform.np = np
     pyrosetta.bindings.pose.np = np
+
+

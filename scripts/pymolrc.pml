@@ -13,4 +13,4 @@ set fetch_path, $TMPDIR
 
 
 # run $PACKAGES/postdoc/scripts/6mrr.pml
-run $HOME/drive/packages/postdoc/scripts/6mrr.pml
+# run $HOME/drive/packages/postdoc/scripts/6mrr.pml
