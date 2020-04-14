@@ -516,7 +516,7 @@ def ws2_plot_ss_propensities(df_ss_counts, res_name='res_name', ss_name='ss_name
 
 
 def ws2_load_ideal_internal_coordinates():
-    files = glob(AA_PARAMS_DIR + '*.params')
+    files = glob(AA_PARAMS_DIR / '*.params')
 
     arr = []
     for f in files:
