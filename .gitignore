@@ -133,3 +133,4 @@ digs
 *.DS_Store
 resources/._*
 resources/pdbs/
+scripts/external/
