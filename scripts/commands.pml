@@ -6,6 +6,8 @@ home = os.path.join(os.environ['HOME'], 'drive', 'packages', 'postdoc')
 scripts_dir = os.path.join(home, 'scripts')
 pdbs_dir = os.path.join(home, 'resources/pdbs')
 
+exclude_pml = ['pymolrc.pml', 'commands.pml', 'settings.pml']
+
 
 def list_pdbs():
     return glob.glob(os.path.join(pdbs_dir, '**/*pdb'), recursive=True)
@@ -87,11 +89,11 @@ def run_script(name=None):
 def list_scripts():
     files = glob.glob(os.path.join(scripts_dir, '*pml'))
     files += glob.glob(os.path.join(scripts_dir, '*py'))
-    exclude = ['pymolrc.pml', 'commands.pml']
+    files += glob.glob(os.path.join(scripts_dir, 'external', '*py'))
     filtered = []
     for f in files:
         base = os.path.basename(f)
-        if not any(base.startswith(x) for x in exclude):
+        if not any(base.startswith(x) for x in exclude_pml):
             filtered.append(f)
     return filtered
 
@@ -106,16 +108,37 @@ def select_ligands(name='ligands'):
     selector = 'not pol. and not sol.'
     cmd.select(name, selector)
 
-# local pdb loading
+def load_external_scripts():
+    files = glob.glob(os.path.join(scripts_dir, 'external', '*py'))
+    for f in files:
+        cmd.do(f'run {f}')
+
+def show_polar_h_only(selection='all'):
+    """https://pymolwiki.org/index.php/Show
+    """
+    #cmd.do(f'hide everything, ele h and {selection}')
+    #cmd.do(f'show lines, ele h and neighbor (ele n+o) and {selection}')
+    # hide nonpolar hydrogens
+    cmd.do(f'hide (h. and (e. c extend 1)) and {selection}')
+
+
+def initialize_settings():
+    cmd.run(os.path.join(scripts_dir, 'settings.pml'))
+
     
 python end
 
 cmd.extend('nowater', hide_water)
 cmd.extend('nohoh', hide_water)
 cmd.extend('noh', hide_hydrogens)
+cmd.extend('nononpolarh', show_polar_h_only)
 cmd.extend('chainbow', chainbow)
 cmd.extend('findpolar', find_polar)
 cmd.extend('cnc', color_not_carbon)
 cmd.extend('pmlrun', run_script)
 cmd.extend('pdbload', load_local_pdb)
 cmd.extend('grabligands', select_ligands)
+
+load_external_scripts()
+
+cmd.extend('initialize_settings', initialize_settings)

@@ -1,4 +1,6 @@
-delete all
+reinitialize
+initialize_settings
+
 fetch 6D0TA
 pdb BB1
 align BB1, 6D0TA
@@ -18,14 +20,31 @@ cnc 6D0TA
 
 findpolar 6D0TA and bb., 6D0TA_hbonds
 
-select glycines, resn GLY and 6D0TA
+select glycines, 6D0TA and (resi 26+44+54+56+80+104)
 color yellow, glycines
 show spheres, glycines and name CA
-set sphere_scale, 0.3
+set sphere_scale, 0.3, glycines
+
+findSurfaceAtoms 6D0TA
+select exposed_atm_01, exposed_atm_01 and not bb.
+select 6D0TA_inner, (6D0TA and polymer \
+    and not (byres exposed_atm_01) and (not bb. or name CA))
+delete exposed_atm_01
+
+# matching residues, BB1 skips N-term methionine
+stored.resi = []
+iterate 6D0TA_inner, stored.resi.append(resi)
+python
+BB1_inner_resi = []
+for i in set(stored.resi):
+    BB1_inner_resi.append(str(int(i) - 1))
+BB1_inner_resi = '+'.join(BB1_inner_resi)
+python end
+
+cmd.do(f'select BB1_inner, (BB1 and polymer and resi {BB1_inner_resi})')
 
 orient
 deselect
-
 
 _ set_view (\
 _    -0.407253981,    0.899100959,   -0.160509929,\
@@ -34,3 +53,40 @@ _    -0.716207802,   -0.423446298,   -0.554741442,\
 _     0.000000000,    0.000000000, -118.366256714,\
 _     6.546800613,    3.101176739,   38.186603546,\
 _    51.626346588,  185.106201172,  -20.000000000 )
+
+scene front, append
+
+set_view (\
+    -0.451695085,   -0.005935177,    0.892153859,\
+    -0.004256834,    0.999978423,    0.004496935,\
+    -0.892162204,   -0.001767335,   -0.451710612,\
+     0.000000000,    0.000000000,  -81.323875427,\
+     6.546800613,    3.101176739,   38.186603546,\
+    14.583930969,  148.063827515,  -20.000000000 )
+
+show sticks, 6D0TA_inner
+show spheres, 6D0TA_inner
+set sphere_transparency, 0.55, 6D0TA_inner
+
+scene top, append
+
+hide all
+show wire, BB1_inner
+show wire, 6D0TA_inner 
+show mesh, BB1
+set mesh_width, 0.1
+
+nononpolarh
+
+set_view (\
+     0.319672853,   -0.944808900,   -0.071708746,\
+    -0.326101661,   -0.038647790,   -0.944545090,\
+     0.889643848,    0.325329542,   -0.320461601,\
+     0.000000000,    0.000000000,  -82.935920715,\
+     7.715160370,    2.844753742,   38.723171234,\
+    65.387313843,  100.484527588,  -20.000000000 )
+
+scene inside, append
+
+
+#cmd.scene(key='front', action='recall', animate=0)

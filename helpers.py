@@ -7,6 +7,7 @@ from .utils import DivPath
 
 repo = DivPath(os.path.dirname(__file__))
 pdb_dir = repo / 'resources' / 'pdbs'
+scripts_dir = repo / 'scripts'
 
 
 def download_pdb_resource(remote, zip_path=None):
@@ -33,3 +34,8 @@ def download_all():
     zip_path = 'BB_models/BB1.pdb'
     remote = 'https://zenodo.org/record/1216229/files/BB_design_models.zip'
     download_pdb_resource(remote, zip_path)
+
+    os.makedirs(scripts_dir / 'external', exist_ok=True)
+    remote = 'https://raw.githubusercontent.com/Pymol-Scripts/Pymol-script-repo/master/findSurfaceResidues.py'
+    local = scripts_dir / 'external' / 'findSurfaceResidues.py'
+    wget.download(remote, local)
