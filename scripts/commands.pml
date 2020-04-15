@@ -2,9 +2,48 @@ python
 
 import glob
 import os
-home = os.environ['HOME']
-scripts_dir = 'drive/packages/postdoc/scripts'
+home = os.path.join(os.environ['HOME'], 'drive', 'packages', 'postdoc')
+scripts_dir = os.path.join(home, 'scripts')
+pdbs_dir = os.path.join(home, 'resources/pdbs')
 
+
+def list_pdbs():
+    return glob.glob(os.path.join(pdbs_dir, '**/*pdb'), recursive=True)
+
+def fuzzy_match(files, search):
+    # could implement partial matching throughout directory structure
+    # e.g., models/backbone1.pdb => mo/b
+    files = sorted(set(files))
+
+    # first exact matches
+    if search in files:
+        return search
+
+    # now partial matches to filename
+    matches = []
+    for f in files:
+        if os.path.basename(f).startswith(search):
+            matches.append(f)
+
+    if not matches:
+        print('No matching file')
+        return
+    elif len(matches) > 1:
+        print('Ambiguous:\n' + '\n'.join('  ' + x for x in matches))
+        return
+    else:
+        return matches[0]
+
+def load_local_pdb(name=None):
+    files = list_pdbs()
+    if name is None:
+        files = [os.path.relpath(f, pdbs_dir) for f in files]
+        pretty_print('Available pdbs:', files)
+        return
+
+    pdb = fuzzy_match(files, name)
+    if pdb:
+        cmd.load(pdb)
 
 def hide_water():
     cmd.hide('everything', 'resn hoh')
@@ -12,58 +51,56 @@ def hide_water():
 def chainbow(selection='all'):
     util.chainbow(selection)
 
-def find_polar(selection='all'):
+def find_polar(selection='all', name=None):
     tmp = 'temp123'
     cmd.select(tmp, selection)
 
-    name = "{}_polar_conts".format(tmp)
+    if name is None:
+        name = '{}_polar_conts'.format('_'.join(selection.split()))
     cmd.dist(
         name,
-        "({}) and not (solvent)".format(tmp),
-        "({}) and not (solvent)".format(tmp),
+        '({}) and not (solvent)'.format(tmp),
+        '({}) and not (solvent)'.format(tmp),
         quiet=1,mode=2,label=0,reset=1);
     cmd.enable(name)
     cmd.delete(tmp)
 
+
+
 def hide_hydrogens(selection='all'):
-    cmd.hide("({} and hydro)".format(selection))
+    cmd.hide('({} and hydro)'.format(selection))
 
 def color_not_carbon(selection='all'):
     util.cnc(selection);
 
 def run_script(name=None):
+    files = list_scripts()
     if name is None:
-        return list_scripts()
+        files = [os.path.relpath(f, scripts_dir) for f in files]
+        pretty_print('Available scripts:', files)
+        return
         
-    if not os.path.exists(name):
-        path = os.path.join(home, scripts_dir)
-        files = glob.glob(os.path.join(path, '*pml'))
-        files += glob.glob(os.path.join(path, '*py'))
-        matches = [os.path.basename(f).startswith(name) for f in files]
-        if sum(matches) > 1:
-            print('Ambiguous name')
-            return
-        if sum(matches) == 0:
-            print('No matching file')
-            return
-        name = files[matches.index(True)]
+    script = fuzzy_match(files, name)
+    if script:
+        cmd.run(script)
 
-    cmd.run(name)
-
-def list_scripts(absolute=False):
-    path = os.path.join(home, scripts_dir, '*pml')
-    files = glob.glob(path)
+def list_scripts():
+    files = glob.glob(os.path.join(scripts_dir, '*pml'))
+    files += glob.glob(os.path.join(scripts_dir, '*py'))
     exclude = ['pymolrc.pml', 'commands.pml']
-    if not absolute:
-        files = [os.path.basename(f) for f in files]
-    print('*'*20)
-    print('Available scripts:')
+    filtered = []
     for f in files:
-        if any(f.endswith(x) for x in exclude):
-            continue
-        print('  ', f)
+        base = os.path.basename(f)
+        if not any(base.startswith(x) for x in exclude):
+            filtered.append(f)
+    return filtered
+
+def pretty_print(header, items):
     print('*'*20)
-    return files
+    print(header)
+    for x in items:
+        print('  ', x)
+    print('*'*20)
 
 def select_ligands(name='ligands'):
     selector = 'not pol. and not sol.'
@@ -73,11 +110,12 @@ def select_ligands(name='ligands'):
     
 python end
 
-cmd.extend("nowater", hide_water)
-cmd.extend("nohoh", hide_water)
-cmd.extend("noh", hide_hydrogens)
-cmd.extend("chainbow", chainbow)
-cmd.extend("findpolar", find_polar)
-cmd.extend("cnc", color_not_carbon)
-cmd.extend("pml_run", run_script)
-cmd.extend("grabligands", select_ligands)
+cmd.extend('nowater', hide_water)
+cmd.extend('nohoh', hide_water)
+cmd.extend('noh', hide_hydrogens)
+cmd.extend('chainbow', chainbow)
+cmd.extend('findpolar', find_polar)
+cmd.extend('cnc', color_not_carbon)
+cmd.extend('pmlrun', run_script)
+cmd.extend('pdbload', load_local_pdb)
+cmd.extend('grabligands', select_ligands)

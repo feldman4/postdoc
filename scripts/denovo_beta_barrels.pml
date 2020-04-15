@@ -1,13 +1,22 @@
-# load BB1.pdb
-
 delete all
 fetch 6D0TA
+pdb BB1
+align BB1, 6D0TA
+
 hide (6D0TA)
+hide (BB1)
+
+show wire, BB1 and bb.
+color gray, BB1
+
+findpolar BB1 and bb., BB1_hbonds
+color gray, BB1_hbonds
+
 show wire, 6D0TA and bb.
 chainbow 6D0TA
 cnc 6D0TA
 
-findpolar 6D0TA and bb.
+findpolar 6D0TA and bb., 6D0TA_hbonds
 
 select glycines, resn GLY and 6D0TA
 color yellow, glycines
