@@ -6,8 +6,6 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-from pyrosetta.distributed.io import pose_from_pdbstring
-
 logger = logging.getLogger(__name__)
 
 
@@ -156,6 +154,8 @@ def dataframe_to_pdbstring(df):
 
 
 def dataframe_to_pose(df):
+    from pyrosetta.distributed.io import pose_from_pdbstring
+
     serial_ids = df['atom_serial']
     if len(serial_ids) != len(set(serial_ids)):
         raise ValueError('serial IDs not unique')
