@@ -1,7 +1,10 @@
 import os
-import wget
 import shutil
 import zipfile
+
+import pandas as pd
+import wget
+
 from .utils import DivPath
 
 
@@ -35,7 +38,32 @@ def download_all():
     remote = 'https://zenodo.org/record/1216229/files/BB_design_models.zip'
     download_pdb_resource(remote, zip_path)
 
-    os.makedirs(scripts_dir / 'external', exist_ok=True)
-    remote = 'https://raw.githubusercontent.com/Pymol-Scripts/Pymol-script-repo/master/findSurfaceResidues.py'
-    local = scripts_dir / 'external' / 'findSurfaceResidues.py'
+    remote = 'https://yanglab.nankai.edu.cn/trRosetta/output/TR007121/mjrcaj/model1.pdb'
+    local = pdb_dir / 'BB1.tr.pdb'
     wget.download(remote, local)
+
+    pymol_scripts = ['findSurfaceResidues.py']
+    for script in pymol_scripts:
+        os.makedirs(scripts_dir / 'external', exist_ok=True)
+        remote = ('https://raw.githubusercontent.com/Pymol-Scripts/'
+                  f'Pymol-script-repo/master/{script}')
+        local = scripts_dir / 'external' / script
+        wget.download(remote, local)
+
+
+def load_aa_legend():
+    import postdoc
+    filename = os.path.join(
+        os.path.dirname(postdoc.__file__), 
+        'resources/amino_acid_legend.csv')
+    df_aa = (pd.read_csv(filename)
+     .sort_values(['color', 'marker']))
+
+    markers = df_aa.set_index('res_name')['marker'].to_dict()
+    palette = df_aa.set_index('res_name')['color'].to_dict()
+    hue_order = df_aa['res_name'].pipe(list)
+    
+    return df_aa, {'markers': markers, 'palette': palette, 
+            'hue_order': hue_order}
+
+

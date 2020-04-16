@@ -136,22 +136,6 @@ def score_beta_sheet(df_0, df_1, threshold=3.2, validate=False):
     return pd.concat(results).query('score > 0')
 
 
-def load_aa_legend():
-    import postdoc
-    filename = os.path.join(
-        os.path.dirname(postdoc.__file__), 
-        'resources/amino_acid_legend.csv')
-    df_aa = (pd.read_csv(filename)
-     .sort_values(['color', 'marker']))
-
-    markers = df_aa.set_index('res_name')['marker'].to_dict()
-    palette = df_aa.set_index('res_name')['color'].to_dict()
-    hue_order = df_aa['res_name'].pipe(list)
-    
-    return df_aa, {'markers': markers, 'palette': palette, 
-            'hue_order': hue_order}
-
-
 def add_dssp_to_pose(pose):
     import pyrosetta.rosetta.core.scoring.dssp
     dssp = pyrosetta.rosetta.core.scoring.dssp.Dssp(pose)
