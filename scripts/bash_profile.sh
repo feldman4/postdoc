@@ -16,7 +16,7 @@ bind 'TAB: menu-complete'
 alias hist="sort | uniq -c | sort -r"
 alias tar='tar -zxvf'
 alias less='less -S'
-alias rgf='rg --file | rg'
+alias rgf='rg --files | rg'
 
 export TERM=xterm-color
 
