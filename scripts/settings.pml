@@ -9,4 +9,10 @@ set scene_animation_duration, 0.75
 
 python
 cmd.do('set fetch_path, {}'.format(os.path.join(pdbs_dir, 'fetch')))
+
+import os
+log_file = os.path.join(os.environ['HOME'], '.pymol', 'log.pml')
+cmd.do(f'log_open {log_file}, a')
 python end
+
+pml axes.py
