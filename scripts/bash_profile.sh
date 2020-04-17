@@ -1,7 +1,11 @@
 export EDITOR=vim
 export VISUAL=$EDITOR
 
-alias   l='ls -lg -h -a -G'
+SCRIPTPATH="$( cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 ; pwd -P )"
+Z=$SCRIPTPATH/external/z.sh
+[ -f $Z ] && . $Z
+
+alias   l='ls -lg -h -a -G --color=auto'
 alias   ls='ls -CF'
 alias   rsync='rsync -Rr --progress --update'
 alias   rename='rename -s'
