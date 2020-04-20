@@ -30,3 +30,5 @@ from .view import ResidueSelectors as selectors
 from .view import CustomThings as custom
 
 from .constants import *
+
+from scipy.spatial.distance import cdist, pdist

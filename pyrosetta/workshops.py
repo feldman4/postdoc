@@ -16,6 +16,7 @@ import seaborn as sns
 from . import geometry as geo
 from . import diy
 from .constants import *
+from ..helpers import load_aa_legend
 
 
 ss_names = {'E': 'beta_sheet', 'H': 'alpha_helix', 'L': 'loop'}

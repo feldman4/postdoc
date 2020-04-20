@@ -34,4 +34,4 @@ with warnings.catch_warnings():
     tqdm.notebook.tqdm.pandas()
 
 import postdoc.helpers
-df_aa, _ = postdoc.helpers.load_aa_legend()
+df_aa, aa_legend = postdoc.helpers.load_aa_legend()

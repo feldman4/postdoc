@@ -282,3 +282,22 @@ def get_hbonds(pose):
      'acc_atm', 'don_hatm', 'hbond']
     return pd.DataFrame(arr)[columns]
 
+
+def get_atoms(pose):
+    arr = []
+    for i in range(1, 1 + pose.total_residue()):
+        res = pose.residue(i)
+        for j in range(1, 1 + res.natoms()):
+            xyz = res.atom(j).xyz()
+            arr.append({
+             'atom_name': res.atom_name(j).strip(),
+             'atom_index': j,
+             'x': xyz[0],
+             'y': xyz[1],
+             'z': xyz[2],
+             'res_name': res.name(),
+             'res_index': i
+            })
+    return pd.DataFrame(arr)
+
+    

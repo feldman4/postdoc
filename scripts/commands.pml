@@ -45,6 +45,7 @@ def load_local_pdb(name=None):
 
     pdb = fuzzy_match(files, name)
     if pdb:
+        print(f'Loading {pdb}')
         cmd.load(pdb)
 
 def hide_water():
@@ -84,7 +85,9 @@ def run_script(name=None):
         
     script = fuzzy_match(files, name)
     if script:
+        print(f'Running {script}')
         cmd.run(script)
+        print(f'Finished running {script}')
 
 def list_scripts():
     files = glob.glob(os.path.join(scripts_dir, '*pml'))
