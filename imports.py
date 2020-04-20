@@ -32,3 +32,6 @@ with warnings.catch_warnings():
     warnings.filterwarnings('ignore', '', category=FutureWarning)
     import tqdm.notebook
     tqdm.notebook.tqdm.pandas()
+
+import postdoc.helpers
+df_aa, _ = postdoc.helpers.load_aa_legend()

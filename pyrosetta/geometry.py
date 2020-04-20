@@ -2,19 +2,16 @@ import numpy as np
 
 radians_to_degrees = 180 / np.pi
 
-def v(row): 
-    """Coordinate vector from pdb dataframe row.
-    """
-    return row[['x', 'y', 'z']].values.astype(float)
-    
+
 def atom_dist(a, b):
-    return mag(v(a) - v(b))
+    return mag(a - b)
 
 def bond_angle(a,b,c):
     """Angle ABC
     """
-    ab = v(a) - v(b)
-    bc = v(b) - v(c)
+    a, b, c = np.array(a), np.array(b), np.array(c)
+    ab = a - b
+    bc = b - c
     dot = (ab * bc).sum()
     return np.arccos(dot / ((ab**2).sum() * (bc**2).sum()) ** 0.5)
 
