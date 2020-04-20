@@ -100,6 +100,8 @@ show sticks, 6D0TA_inner
 show spheres, 6D0TA_inner
 set sphere_transparency, 0.15, 6D0TA_inner
 
+orient 6D0TA_inner
+
 scene core, append
 
 ### CORE PACKING
@@ -156,12 +158,12 @@ cmd.group('distances', 'dist_*')
 python end
 
 hide labels
-set dash_gap, 0.1
-set dash_length, 0.1
-set dash_width, 6
+set dash_gap, 0.1, distances
+set dash_length, 0.1, distances
+set dash_width, 6, distances
 disable BB1
 
-scene trRosetta3, store
+#scene trRosetta3, store
 
 hide everything, BB1_tr or 6D0TA or BB1
 show cartoon, BB1_tr or 6D0TA or BB1
@@ -172,7 +174,7 @@ disable BB1
 label 6D0TA and name CA and resi 1, "N-term"
 label 6D0TA and name CA and resi 111, "C-term"
 
-scene trRosetta4, store
+scene trRosetta3, store
 #cmd.scene(key='front', action='recall', animate=0)
 
 
@@ -211,4 +213,4 @@ compare_sel( \
     '( byres BB1_tr_inner and x > 8)', \
     )
 #compare_sel('6D0TA_inner', 'BB1_tr_inner')
-scene trRosetta5, store
+scene trRosetta4, store
