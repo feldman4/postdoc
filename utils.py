@@ -77,3 +77,14 @@ class DivPath(str):
     def __fspath__(self):
         return str(self)
 
+
+class SimpleBox:
+    def __init__(self, input_dict):
+        for key, value in input_dict.items():
+            setattr(self, key, value)
+    def __repr__(self):
+        txt = []
+        for field in dir(self):
+            if not field.startswith('_'):
+                txt.append(f'{field}: {getattr(self, field)}')
+        return '\n'.join(txt)

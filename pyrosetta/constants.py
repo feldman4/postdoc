@@ -1,5 +1,5 @@
 import os
-from postdoc.utils import AddPath
+from postdoc.utils import DivPath
 import pyrosetta
 
 

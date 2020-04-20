@@ -7,6 +7,7 @@ import pandas as pd
 from postdoc.constants import *
 import pyrosetta
 from .view import patch_pyrosetta_viewer
+from ..utils import SimpleBox
 
 
 def patch_rosetta_logger():
@@ -240,4 +241,44 @@ def fix_pyrosetta_bugs():
     pyrosetta.bindings.homogeneous_transform.np = np
     pyrosetta.bindings.pose.np = np
 
+
+def score_types_from_fxn(scorefxn):
+    score_types = scorefxn.get_nonzero_weighted_scoretypes()
+    return SimpleBox({t.name: t for t in score_types})
+
+
+
+def get_scorefxn_weights(scorefxn):
+    score_types = scorefxn.get_nonzero_weighted_scoretypes()
+    weights =  pd.Series(
+        {s.name: scorefxn[s] for s in score_types}, name='weight')
+    weights.index.name = 'score_type'
+    return weights
+
+
+def get_res_energies(pose):
+    from pyrosetta.bindings.energies import residue_total_energies_array
+    energies = residue_total_energies_array(pose.energies())
+    index = pd.Index(range(1, len(energies) + 1), name='res_ix')
+    return pd.DataFrame(energies, index=index)
+
+
+def get_hbonds(pose):
+    arr = []
+    for hbond in pose.get_hbonds().hbonds():
+        don_res = pose.residue(hbond.don_res())
+        acc_res = pose.residue(hbond.acc_res())
+        arr.append({
+        'don_res': hbond.don_res(),
+        'don_res_name': don_res.name(),
+        'don_hatm': don_res.atom_name(hbond.don_hatm()).strip(),
+        'acc_res': hbond.acc_res(),
+        'acc_res_name': acc_res.name(),
+        'acc_atm': acc_res.atom_name(hbond.acc_atm()).strip(),
+        'hbond': hbond,
+        })
+    columns = ['don_res', 'don_res_name', 
+     'acc_res', 'acc_res_name', 
+     'acc_atm', 'don_hatm', 'hbond']
+    return pd.DataFrame(arr)[columns]
 
