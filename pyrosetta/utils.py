@@ -296,8 +296,8 @@ def get_atoms(pose):
              'y': xyz[1],
              'z': xyz[2],
              'res_name': res.name(),
-             'res_index': i
+             'res_index': i,
+             'backbone': res.atom_is_backbone(j),
             })
     return pd.DataFrame(arr)
 
-    

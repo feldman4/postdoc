@@ -17,6 +17,7 @@ from pyrosetta.toolbox import cleanATOM, mutate_residue
 from pyrosetta.toolbox.rcsb import load_from_rcsb
 
 from pyrosetta.rosetta.core.scoring import ScoreTypeManager, ScoreFunction
+from pyrosetta.rosetta.core.pose import Pose
 
 from . import diy, geometry, utils
 from .diy import (write_pdb, read_pdb, pdb_frame,
@@ -31,4 +32,4 @@ from .view import CustomThings as custom
 
 from .constants import *
 
-from scipy.spatial.distance import cdist, pdist
+from scipy.spatial.distance import cdist, pdist, squareform
