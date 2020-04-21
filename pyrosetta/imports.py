@@ -18,6 +18,7 @@ from pyrosetta.toolbox.rcsb import load_from_rcsb
 
 from pyrosetta.rosetta.core.scoring import ScoreTypeManager, ScoreFunction
 from pyrosetta.rosetta.core.pose import Pose
+from pyrosetta import PyMOLMover
 
 from . import diy, geometry, utils
 from .diy import (write_pdb, read_pdb, pdb_frame,

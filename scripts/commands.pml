@@ -128,6 +128,16 @@ def show_polar_h_only(selection='all'):
 def initialize_settings():
     cmd.run(os.path.join(scripts_dir, 'settings.pml'))
 
+
+def label_termini(selection='all'):
+    from collections import defaultdict
+    stored.resi = defaultdict(list)
+    cmd.iterate(selection, stored.resi[model].append(resi))
+    for model in stored.resi:
+        last = max(stored.resi[model])
+
+        cmd.do(f'label {selection} and name CA and resi 1, "N-term"')
+        cmd.do(f'label {selection} and name CA and resi {last}, "C-term"')
     
 python end
 
@@ -141,6 +151,7 @@ cmd.extend('cnc', color_not_carbon)
 cmd.extend('pmlrun', run_script)
 cmd.extend('pdbload', load_local_pdb)
 cmd.extend('grabligands', select_ligands)
+cmd.extend('labeltermini', label_termini)
 
 load_external_scripts()
 
