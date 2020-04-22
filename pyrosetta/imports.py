@@ -23,7 +23,7 @@ from pyrosetta import PyMOLMover
 from . import diy, geometry, utils
 from .diy import (write_pdb, read_pdb, pdb_frame,
     pose_to_dataframe, dataframe_to_pose)
-from .utils import setLogLevel, start_pyrosetta
+from .utils import setLogLevel, start_pyrosetta, dir_no_, dir_no__
 
 from pyrosetta.distributed import viewer
 from .view import default_viewer as view
