@@ -4,8 +4,11 @@ import re
 import sys
 
 import pandas as pd
-from postdoc.constants import *
+
 import pyrosetta
+from pyrosetta.rosetta.core.pose import Pose
+
+from postdoc.constants import *
 from .view import patch_pyrosetta_viewer
 from ..utils import SimpleBox
 
@@ -260,7 +263,15 @@ def get_res_energies(pose):
     from pyrosetta.bindings.energies import residue_total_energies_array
     energies = residue_total_energies_array(pose.energies())
     index = pd.Index(range(1, len(energies) + 1), name='res_ix')
-    return pd.DataFrame(energies, index=index)
+    df_energies = pd.DataFrame(energies, index=index)
+    df_energies.columns.name = 'score_type'
+    return df_energies
+
+
+def convert_emap(scorefxn, emap):
+    score_types = score_types_from_fxn(scorefxn)
+    return pd.Series(
+        {name: emap[st] for name, st in score_types._items()})
 
 
 def get_hbonds(pose):
@@ -300,4 +311,51 @@ def get_atoms(pose):
              'backbone': res.atom_is_backbone(j),
             })
     return pd.DataFrame(arr)
+
+
+def dir_no_(x):
+    return [y for y in dir(x) if not y.startswith('_')]
+
+
+def dir_no__(x):
+    return [y for y in dir(x) if not y.startswith('__')]
+
+
+def standardize_mm(df):
+    df = df.T
+    m0, m1 = df.min(), df.max()
+    return ((df - m0) / (m1 - m0)).T
+    
+def standardize(df):
+    df = df.T
+    m, std = df.mean(), df.std()
+    return ((df - m) / std).T
+
+def color_code(items, palette, desat=None):
+    import seaborn as sns
+    categories = pd.Series(items).drop_duplicates().pipe(list)
+    n_colors = len(categories)
+    colors = sns.color_palette(palette, n_colors, desat)
+    color_map = {x: c for x, c in zip(categories, colors)}
+    return [color_map[x] for x in items]
+
+
+def patch_empty_return(cls):
+    def generate_wrapper(f):
+        def self_instead_of_none(*args, **kwargs):
+            result = f(*args, **kwargs)
+            if result is None:
+                return args[0] # self
+            return result
+        return self_instead_of_none
+    
+    cls._class = cls
+    methods = {}
+    for field in dir(cls):
+        value = getattr(cls, field)
+        if not field.startswith('_') and callable(value):
+            setattr(cls, field, generate_wrapper(value))
+    
+    if 'apply' in dir(cls):
+        cls.__call__ = cls.apply
 

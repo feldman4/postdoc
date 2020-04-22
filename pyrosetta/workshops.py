@@ -174,10 +174,18 @@ def get_rcsb_blast_cluster_30p():
     return df_accessions
 
 
-def get_ss_counts(df_pdb):
-    pose = diy.dataframe_to_pose(df_pdb)
+def get_secstruct(pose_or_dataframe):
+    if isinstance(pose_or_dataframe, pd.DataFrame):
+        pose = diy.dataframe_to_pose(pose_or_dataframe)
+    else:
+        pose = pose_or_dataframe
     add_dssp_to_pose(pose)
     df_ss = parse_secondary_struct(pose.secstruct())
+    return df_ss
+
+
+def get_secstruct_counts(df_pdb):
+    df_ss = get_secstruct(df_pdb)
 
     return (df_pdb
      .drop_duplicates('res_ix')
