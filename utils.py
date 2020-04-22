@@ -84,7 +84,15 @@ class SimpleBox:
             setattr(self, key, value)
     def __repr__(self):
         txt = []
-        for field in dir(self):
-            if not field.startswith('_'):
-                txt.append(f'{field}: {getattr(self, field)}')
+        for field in self._get_contents():
+            txt.append(f'{field}: {getattr(self, field)}')
         return '\n'.join(txt)
+
+    def _get_contents(self):
+        return [field for field in dir(self) if not field.startswith('_')]
+
+    def _items(self):
+        return [(field, getattr(self, field)) for field in self._get_contents()]
+
+    def __iter__(self):
+        return iter(self._get_contents())
