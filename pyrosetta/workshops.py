@@ -17,6 +17,7 @@ from . import geometry as geo
 from . import diy
 from .constants import *
 from ..helpers import load_aa_legend
+from . import utils
 
 
 ss_names = {'E': 'beta_sheet', 'H': 'alpha_helix', 'L': 'loop'}
@@ -681,3 +682,27 @@ def ws2_compare_to_ideal_angles(df_pdbs, df_icoor,
 
     return (df_bonds, ws2_plot_bond_length_comparison(
         df_plot, ideal_angles, value='bond_angle'))
+
+
+def patch_classes():
+    from pyrosetta.rosetta.protocols.simple_moves import (
+        SmallMover, ShearMover, RandomTorsionMover, 
+        ClassicFragmentMover)
+
+    from pyrosetta.rosetta.protocols.moves import (
+        SequenceMover, MonteCarlo, RepeatMover, TrialMover, PyMOLMover)
+
+    from pyrosetta.rosetta.core.kinematics import MoveMap
+
+    from pyrosetta.rosetta.protocols.minimization_packing import (
+        MinMover)
+
+    [utils.patch_empty_return(x) 
+     for x in (SmallMover, ShearMover, RandomTorsionMover,
+               ClassicFragmentMover,
+               SequenceMover, MonteCarlo, RepeatMover, TrialMover,
+               MoveMap,
+               MinMover,
+               PyMOLMover
+              )];
+    
