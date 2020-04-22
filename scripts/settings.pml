@@ -6,7 +6,7 @@ set cartoon_smooth_loops, 0
 set stick_radius, 0.3
 
 set scene_animation_duration, 0.75
-set movie_fps, 2
+set movie_fps, 15
 
 python
 cmd.do('set fetch_path, {}'.format(os.path.join(pdbs_dir, 'fetch')))
