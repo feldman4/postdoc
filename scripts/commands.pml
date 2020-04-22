@@ -132,14 +132,16 @@ def initialize_settings():
 def label_termini(selection='all'):
     from collections import defaultdict
     stored.resi = defaultdict(list)
-    cmd.iterate(selection, stored.resi[model].append(resi))
-    for model in stored.resi:
-        last = max(stored.resi[model])
+    cmd.iterate_state(-1, selection + ' and pol.', 'stored.resi[(model, chain)].append((int(resi), x))')
+    for (model, chain) in stored.resi:
+        first = min(stored.resi[(model, chain)])
+        last = max(stored.resi[(model, chain)])
+        select_this = f'{model} and chain {chain} and name CA'
+        cmd.do(f'label {select_this} and resi {first[0]}, "N-term"')
+        cmd.do(f'label {select_this} and resi {last[0]}, "C-term"')
+        print(model, chain, first, last)
 
-        cmd.do(f'label {selection} and name CA and resi 1, "N-term"')
-        cmd.do(f'label {selection} and name CA and resi {last}, "C-term"')
-    
-python end
+python end 
 
 cmd.extend('nowater', hide_water)
 cmd.extend('nohoh', hide_water)
@@ -152,6 +154,7 @@ cmd.extend('pmlrun', run_script)
 cmd.extend('pdbload', load_local_pdb)
 cmd.extend('grabligands', select_ligands)
 cmd.extend('labeltermini', label_termini)
+cmd.extend('debugger', debugger)
 
 load_external_scripts()
 
