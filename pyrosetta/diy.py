@@ -257,6 +257,7 @@ def first_altloc(df_pdb):
             mask.append(True)
     return mask
 
+
 def read_rosetta_params(filename):
     
     tables = {'ICOOR_INTERNAL': 

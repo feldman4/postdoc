@@ -34,3 +34,5 @@ from .view import CustomThings as custom
 from .constants import *
 
 from scipy.spatial.distance import cdist, pdist, squareform
+
+from .utils import print_xml_summary as xhelp

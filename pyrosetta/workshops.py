@@ -685,24 +685,36 @@ def ws2_compare_to_ideal_angles(df_pdbs, df_icoor,
 
 
 def patch_classes():
+    A = set(locals().keys())
+    
     from pyrosetta.rosetta.protocols.simple_moves import (
         SmallMover, ShearMover, RandomTorsionMover, 
         ClassicFragmentMover)
-
     from pyrosetta.rosetta.protocols.moves import (
         SequenceMover, MonteCarlo, RepeatMover, TrialMover, PyMOLMover)
-
     from pyrosetta.rosetta.core.kinematics import MoveMap
-
     from pyrosetta.rosetta.protocols.minimization_packing import (
         MinMover)
+    from pyrosetta.rosetta.protocols.relax import FastRelax
+    from pyrosetta.rosetta.core.pack.task import TaskFactory
+    from pyrosetta.rosetta.core.select.movemap import MoveMapFactory
+    from pyrosetta.rosetta.protocols.denovo_design.movers import (
+        FastDesign)
 
-    [utils.patch_empty_return(x) 
-     for x in (SmallMover, ShearMover, RandomTorsionMover,
-               ClassicFragmentMover,
-               SequenceMover, MonteCarlo, RepeatMover, TrialMover,
-               MoveMap,
-               MinMover,
-               PyMOLMover
-              )];
+    B = set(locals().keys()) - A - {'A'}
+    for name in B:
+        utils.patch_empty_return(eval(name))
     
+
+def gamma_heatmap(df_scores, gamma=4, cmap='RdBu_r', **kwargs):
+    rescale = lambda x: np.abs(x)**(1/gamma) * np.sign(x)
+    reverse_scale = lambda x: x**gamma * np.sign(x)
+
+    ax = (df_scores
+     .pipe(rescale).pipe(sns.heatmap, cmap=cmap, **kwargs)
+    )
+
+    cbar = ax.figure.get_axes()[1]
+    cbar.set_yticklabels([int(reverse_scale(x)) 
+                          for x in cbar.get_yticks()])
+    return ax

@@ -7,10 +7,12 @@ import pandas as pd
 
 import pyrosetta
 from pyrosetta.rosetta.core.pose import Pose
+from pyrosetta.rosetta.utility.tag import XMLSchemaDefinition
 
 from postdoc.constants import *
 from .view import patch_pyrosetta_viewer
 from ..utils import SimpleBox
+from . import diy
 
 
 def patch_rosetta_logger():
@@ -250,7 +252,6 @@ def score_types_from_fxn(scorefxn):
     return SimpleBox({t.name: t for t in score_types})
 
 
-
 def get_scorefxn_weights(scorefxn):
     score_types = scorefxn.get_nonzero_weighted_scoretypes()
     weights =  pd.Series(
@@ -325,11 +326,13 @@ def standardize_mm(df):
     df = df.T
     m0, m1 = df.min(), df.max()
     return ((df - m0) / (m1 - m0)).T
-    
+
+
 def standardize(df):
     df = df.T
     m, std = df.mean(), df.std()
     return ((df - m) / std).T
+
 
 def color_code(items, palette, desat=None):
     import seaborn as sns
@@ -359,3 +362,57 @@ def patch_empty_return(cls):
     if 'apply' in dir(cls):
         cls.__call__ = cls.apply
 
+
+def select_sequence(pose, selector):
+    mask = list(selector.apply(pose))
+    seq = np.array(list(pose.sequence()))
+    return ''.join(seq[mask])
+
+
+def print_alignment(a, b, width=60):
+    """Levenshtein alignment.
+    """
+    import edlib
+    alignment = edlib.align(a, b, task='path')
+    d = edlib.getNiceAlignment(alignment, a, b)
+    for i in range(0, max(map(len, d.values())), width):
+        print(i)
+        for x in d.values():
+            print(x[i:i+width])
+
+
+def pymol_select_pose2pdb(x):
+    res, chain = x.split()
+    return f'chain {chain} and res {res}'
+
+
+def pymol_bin_join(xs, binop):
+    return f' {binop} '.join(f'({x})' for x in xs)
+
+
+def pymol_or(xs):
+    return pymol_bin_join(xs, 'or')
+
+
+def pdb_selector(pose, selector):
+    mask = list(selector.apply(pose))
+    df_res = (diy.pose_to_dataframe(pose)
+     .drop_duplicates('res_seq')
+    )
+    it = df_res[mask].groupby('chain')['res_seq']
+    pymol_selectors = []
+    for chain, res_seqs in it:
+        residues = '+'.join(res_seqs.astype(str))
+        s = f'chain {chain} and resi {residues}'
+        pymol_selectors += [s]
+    return pymol_or(pymol_selectors)
+
+
+def xml_summary(thing):
+    xml = XMLSchemaDefinition()
+    thing.provide_xml_schema(xml)
+    return xml.human_readable_summary()
+
+
+def print_xml_summary(thing):
+    print(xml_summary(thing))
