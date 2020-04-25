@@ -687,7 +687,7 @@ def ws2_compare_to_ideal_angles(df_pdbs, df_icoor,
 def patch_classes():
     A = set(locals().keys())
     from pyrosetta.rosetta.protocols.simple_moves import (
-        SmallMover, ShearMover, RandomTorsionMover, 
+        SmallMover, ShearMover, RandomTorsionMover, ReturnSidechainMover,
         ClassicFragmentMover)
     from pyrosetta.rosetta.protocols.moves import (
         SequenceMover, MonteCarlo, RepeatMover, TrialMover, PyMOLMover)
@@ -703,7 +703,6 @@ def patch_classes():
         RestrictAbsentCanonicalAASRLT)
     from pyrosetta.rosetta.protocols.fold_from_loops.movers import (
         DisplayPoseLabelsMover)
-
     from pyrosetta.rosetta.core.scoring import ScoreFunction
 
     B = set(locals().keys()) - A - {'A'}

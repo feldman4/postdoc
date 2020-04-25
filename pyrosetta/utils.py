@@ -378,7 +378,13 @@ def patch_empty_return(cls):
             setattr(cls, field, generate_wrapper(value))
     
     if 'apply' in dir(cls):
-        cls.__call__ = cls.apply
+        def not_in_place(self, pose):
+            pose_ = pose.clone()
+            self.apply(pose_)
+            return pose_
+        # let's not repeat this
+        if not hasattr(cls, '__call__'):
+            cls.__call__ = not_in_place
 
 
 def select_sequence(pose, selector):

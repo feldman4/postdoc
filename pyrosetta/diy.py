@@ -198,8 +198,26 @@ def test_pdb_roundtrip(files, max_numeric_error=0.1):
 
 
 def pose_to_dataframe(pose):
+    """Is it safe to assume the order of residue entries from `to_pdb_string`
+    reflects the Rosetta residue numbering?
+    """
     from pyrosetta.distributed.io import to_pdbstring
-    return read_pdb_string(to_pdbstring(pose))
+    df_pdb = read_pdb_string(to_pdbstring(pose))
+
+    validate_pose_dataframe_numbering(pose, df_pdb)
+
+    return (df_pdb
+        .assign(res_ix=lambda x: x.groupby(['chain', 'res_seq']).ngroup() + 1))
+
+
+def validate_pose_dataframe_numbering(pose, df_pdb):
+    pdb_numbering = df_pdb[['chain', 'res_seq']].drop_duplicates().values
+    pdb_info = pose.pdb_info()
+    for i in range(1, 1 + pose.total_residue()):
+        res_seq, chain = pdb_info.pose2pdb(i).split()
+        res_seq = int(res_seq)
+        assert chain == pdb_numbering[i - 1][0]
+        assert res_seq == pdb_numbering[i - 1][1]
 
 
 def pdb_frame(files_or_search, col_file='file', progress=None):
