@@ -228,7 +228,7 @@ def extract_rcsb_30p(max_cluster_id=None, overwrite=False, progress=None):
 
 
 def start_pyrosetta(flags='-constant_seed'):
-    pyrosetta.init(flags, set_logging_handler='logging')
+    pyrosetta.init(flags, set_logging_handler='logging', silent=True)
 
     # pyrosetta throws away rosetta log levels, patch restores them
     # allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)
@@ -238,12 +238,6 @@ def start_pyrosetta(flags='-constant_seed'):
     patch_rosetta_logger()
     logging.root.handlers = []
     log_warnings(logger_exclude, logger_include)
-
-    flags = """
-    -auto_setup_metals 1
-    -detect_disulf 1
-    """
-    pyrosetta.distributed.init(flags)
 
     fix_pyrosetta_bugs()
 
