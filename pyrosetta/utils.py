@@ -7,10 +7,13 @@ import pandas as pd
 
 import pyrosetta
 from pyrosetta.rosetta.core.pose import Pose
+from pyrosetta.rosetta.utility.tag import XMLSchemaDefinition
+from pyrosetta.rosetta.core.select.movemap import MoveMapFactory
 
 from postdoc.constants import *
 from .view import patch_pyrosetta_viewer
 from ..utils import SimpleBox
+from . import diy
 
 
 def patch_rosetta_logger():
@@ -67,6 +70,15 @@ class reformat_rosetta_logs(logging.Filter):
                 record.level = level
                 record.levelno = level
                 record.levelname = logging.getLevelName(level)
+
+        # hack, logging module is awful to work with
+        # root formatter should recognize display level
+        if 'DisplayPoseLabelsMover' in record.name:
+            level = logging.INFO + 1
+            record.levelname = 'DISPLAY'
+            record.levelno = level
+            record.level = level
+            print(record.msg)
             
         return True
 
@@ -119,7 +131,9 @@ def setLogLevel(level):
         'warning': logging.WARNING,
         'warn': logging.WARNING,
         'info': logging.INFO,
-        'debug': logging.DEBUG
+        'debug': logging.DEBUG,
+        # custom
+        'display': logging.INFO + 1,
     }
     if isinstance(level, str):
         level = names[level.lower()]
@@ -250,7 +264,6 @@ def score_types_from_fxn(scorefxn):
     return SimpleBox({t.name: t for t in score_types})
 
 
-
 def get_scorefxn_weights(scorefxn):
     score_types = scorefxn.get_nonzero_weighted_scoretypes()
     weights =  pd.Series(
@@ -277,20 +290,26 @@ def convert_emap(scorefxn, emap):
 def get_hbonds(pose):
     arr = []
     for hbond in pose.get_hbonds().hbonds():
-        don_res = pose.residue(hbond.don_res())
-        acc_res = pose.residue(hbond.acc_res())
+        # index
+        don_res = hbond.don_res()
+        acc_res = hbond.acc_res()
+        # residue object
+        don_residue = pose.residue(don_res)
+        acc_residue = pose.residue(acc_res)
         arr.append({
-        'don_res': hbond.don_res(),
-        'don_res_name': don_res.name(),
-        'don_hatm': don_res.atom_name(hbond.don_hatm()).strip(),
-        'acc_res': hbond.acc_res(),
-        'acc_res_name': acc_res.name(),
-        'acc_atm': acc_res.atom_name(hbond.acc_atm()).strip(),
+        'don_res': don_res,
+        'don_res_name': don_residue.name(),
+        'don_hatm': don_residue.atom_name(hbond.don_hatm()).strip(),
+        'acc_res': acc_res,
+        'acc_res_name': acc_residue.name(),
+        'acc_atm': acc_residue.atom_name(hbond.acc_atm()).strip(),
         'hbond': hbond,
+        'don_chain': pose.chain(don_res),
+        'acc_chain': pose.chain(acc_res),
         })
     columns = ['don_res', 'don_res_name', 
      'acc_res', 'acc_res_name', 
-     'acc_atm', 'don_hatm', 'hbond']
+     'acc_atm', 'don_hatm', 'hbond', 'don_chain', 'acc_chain']
     return pd.DataFrame(arr)[columns]
 
 
@@ -325,11 +344,13 @@ def standardize_mm(df):
     df = df.T
     m0, m1 = df.min(), df.max()
     return ((df - m0) / (m1 - m0)).T
-    
+
+
 def standardize(df):
     df = df.T
     m, std = df.mean(), df.std()
     return ((df - m) / std).T
+
 
 def color_code(items, palette, desat=None):
     import seaborn as sns
@@ -357,5 +378,108 @@ def patch_empty_return(cls):
             setattr(cls, field, generate_wrapper(value))
     
     if 'apply' in dir(cls):
-        cls.__call__ = cls.apply
+        def not_in_place(self, pose):
+            pose_ = pose.clone()
+            self.apply(pose_)
+            return pose_
+        # let's not repeat this
+        if not hasattr(cls, '__call__'):
+            cls.__call__ = not_in_place
+
+
+def select_sequence(pose, selector):
+    mask = list(selector.apply(pose))
+    seq = np.array(list(pose.sequence()))
+    return ''.join(seq[mask])
+
+
+def print_alignment(a, b, width=60):
+    """Levenshtein alignment.
+    """
+    import edlib
+    alignment = edlib.align(a, b, task='path')
+    d = edlib.getNiceAlignment(alignment, a, b)
+    for i in range(0, max(map(len, d.values())), width):
+        print(i)
+        for x in d.values():
+            print(x[i:i+width])
+
+
+def pymol_select_pose2pdb(x):
+    res, chain = x.split()
+    return f'chain {chain} and res {res}'
+
+
+def pymol_bin_join(xs, binop):
+    return f' {binop} '.join(f'({x})' for x in xs)
+
+
+def pymol_or(xs):
+    return pymol_bin_join(xs, 'or')
+
+
+def pdb_selector(pose, selector):
+    mask = list(selector.apply(pose))
+    df_res = (diy.pose_to_dataframe(pose)
+     .drop_duplicates('res_seq')
+    )
+    it = df_res[mask].groupby('chain')['res_seq']
+    pymol_selectors = []
+    for chain, res_seqs in it:
+        residues = '+'.join(res_seqs.astype(str))
+        s = f'chain {chain} and resi {residues}'
+        pymol_selectors += [s]
+    return pymol_or(pymol_selectors)
+
+
+def xml_summary(thing):
+    xml = XMLSchemaDefinition()
+    thing.provide_xml_schema(xml)
+    return xml.human_readable_summary()
+
+
+def print_xml_summary(thing):
+    print(xml_summary(thing))
+
+
+def construct_from_tag(rosetta_constructor, 
+                       **rosetta_scripts_options):
+    import pyrosetta.rosetta.utility.tag
+    name = rosetta_constructor.__name__
+    rso = rosetta_scripts_options
+    options = ' '.join(f'{k}="{v}"' for k, v in rso.items())
+        
+    xml = f"<{name} {options} />"
+    tag = pyrosetta.rosetta.utility.tag.Tag.create(xml)
+    thing = rosetta_constructor()
+    try:
+        thing.parse_tag(tag)
+    except TypeError as e:
+        if 'datacache' in str(e):
+            # datacache probably contains the namespace generated by 
+            # a rosetta script
+            raise ValueError('constructor uses datacache =(')
+    return thing
+
+
+def display_pose_labels(pose, tf, mm_or_mmf):
+    from pyrosetta.rosetta.protocols.fold_from_loops.movers import (
+        DisplayPoseLabelsMover)
+    patch_empty_return(DisplayPoseLabelsMover)
+
+    display_pose = DisplayPoseLabelsMover()
+    display_pose.tasks(tf)
+    if isinstance(mm_or_mmf, MoveMapFactory):
+        display_pose.movemap_factory(mm_or_mmf)
+    else:
+        display_pose.movemap(mm_or_mmf)
+    display_pose.apply(pose)
+
+
+def display_scuttlebutt(pose, tf, mmf):
+    display_pose_labels(pose, tf, mmf)
+    print('\n', '~'*60, '\n')
+    packer_task = tf.create_task_and_apply_taskoperations(
+        pose)
+    print(packer_task)
 

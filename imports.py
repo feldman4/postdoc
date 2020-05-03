@@ -6,6 +6,7 @@ from postdoc import reporters
 from postdoc import flycodes as fly
 from postdoc.flycode_designs import *
 
+from collections import Counter
 from glob import glob
 import logging
 import os

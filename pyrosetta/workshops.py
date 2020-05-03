@@ -685,24 +685,80 @@ def ws2_compare_to_ideal_angles(df_pdbs, df_icoor,
 
 
 def patch_classes():
+    A = set(locals().keys())
     from pyrosetta.rosetta.protocols.simple_moves import (
-        SmallMover, ShearMover, RandomTorsionMover, 
+        SmallMover, ShearMover, RandomTorsionMover, ReturnSidechainMover,
         ClassicFragmentMover)
-
     from pyrosetta.rosetta.protocols.moves import (
         SequenceMover, MonteCarlo, RepeatMover, TrialMover, PyMOLMover)
-
     from pyrosetta.rosetta.core.kinematics import MoveMap
-
     from pyrosetta.rosetta.protocols.minimization_packing import (
         MinMover)
+    from pyrosetta.rosetta.protocols.relax import FastRelax
+    from pyrosetta.rosetta.core.pack.task import TaskFactory
+    from pyrosetta.rosetta.core.select.movemap import MoveMapFactory
+    from pyrosetta.rosetta.protocols.denovo_design.movers import (
+        FastDesign)
+    from pyrosetta.rosetta.core.pack.task.operation import (
+        RestrictAbsentCanonicalAASRLT)
+    from pyrosetta.rosetta.protocols.fold_from_loops.movers import (
+        DisplayPoseLabelsMover)
+    from pyrosetta.rosetta.core.scoring import ScoreFunction
 
-    [utils.patch_empty_return(x) 
-     for x in (SmallMover, ShearMover, RandomTorsionMover,
-               ClassicFragmentMover,
-               SequenceMover, MonteCarlo, RepeatMover, TrialMover,
-               MoveMap,
-               MinMover,
-               PyMOLMover
-              )];
+    B = set(locals().keys()) - A - {'A'}
+    for name in B:
+        utils.patch_empty_return(eval(name))
     
+
+def gamma_heatmap(df_scores, gamma=4, cmap='RdBu_r', **kwargs):
+    rescale = lambda x: np.abs(x)**(1/gamma) * np.sign(x)
+    reverse_scale = lambda x: x**gamma * np.sign(x)
+
+    ax = (df_scores
+     .pipe(rescale).pipe(sns.heatmap, cmap=cmap, **kwargs)
+    )
+
+    cbar = ax.figure.get_axes()[1]
+    cbar.set_yticklabels([int(reverse_scale(x)) 
+                          for x in cbar.get_yticks()])
+    return ax
+
+
+def compare_pose_energies(poses, deltas=None, gamma=4):
+    deltas = {} if deltas is None else deltas
+    
+    arr = []
+    for name, pose in poses.items():
+        # scorefxn(pose)
+        (utils.get_res_energies(pose)
+         .sum().rename(name)
+         .pipe(arr.append)
+        )
+    df_scores = pd.concat(arr, axis=1)
+
+    arr = []
+    for name, pose in poses.items():
+        # scorefxn(pose)
+        (utils.get_res_energies(pose)
+         ['total_score'].rename(name)
+         .pipe(arr.append)
+        )
+    df_scores_per_res = pd.concat(arr, axis=1)
+    
+    for name, delta in deltas.items():
+        df_scores[name] = df_scores.eval(delta)
+        df_scores_per_res[name] = df_scores_per_res.eval(delta)
+        
+    cols = list(poses.keys()) + list(deltas.keys())
+    last_col = cols[-1]
+    ax0 = (df_scores
+     .sort_values(last_col)
+     .pipe(gamma_heatmap, gamma=gamma, yticklabels=True)
+    )
+
+    fig, ax1 = plt.subplots(figsize=(10, 4))
+    (df_scores_per_res
+     .T
+     .pipe(gamma_heatmap, gamma=gamma, yticklabels=True, ax=ax1)
+    )
+    return ax0, ax1
