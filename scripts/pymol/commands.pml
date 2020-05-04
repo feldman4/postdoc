@@ -3,7 +3,7 @@ python
 import glob
 import os
 home = os.path.join(os.environ['HOME'], 'drive', 'packages', 'postdoc')
-scripts_dir = os.path.join(home, 'scripts')
+scripts_dir = os.path.join(home, 'scripts', 'pymol')
 pdbs_dir = os.path.join(home, 'resources/pdbs')
 
 exclude_pml = ['pymolrc.pml', 'commands.pml', 'settings.pml']
@@ -154,7 +154,6 @@ cmd.extend('pmlrun', run_script)
 cmd.extend('pdbload', load_local_pdb)
 cmd.extend('grabligands', select_ligands)
 cmd.extend('labeltermini', label_termini)
-cmd.extend('debugger', debugger)
 
 load_external_scripts()
 
