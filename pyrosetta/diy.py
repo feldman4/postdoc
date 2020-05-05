@@ -2,7 +2,10 @@ import io
 import logging
 import re
 import tempfile
+import os
+from glob import glob
 
+from natsort import natsorted
 import numpy as np
 import pandas as pd
 
@@ -185,7 +188,7 @@ def test_pdb_roundtrip(files, max_numeric_error=0.1):
     """
     test_filename = os.path.join(tempfile.tempdir, 'test.pdb')
 
-    for f in tqdn(files):
+    for f in files:
         df = read_pdb(f)
         write_pdb(df, test_filename)
         df2 = read_pdb(test_filename)
@@ -242,8 +245,7 @@ def pdb_frame(files_or_search, col_file='file', progress=None):
         for f in progress(files)], sort=False)
 
 
-def debug_parsing(row, entry):
-    record = diy.atom_record(**df.iloc[ix])
+def debug_parsing(entry, record):
     print(entry)
     print(record)
 

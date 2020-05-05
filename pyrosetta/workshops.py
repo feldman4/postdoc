@@ -1,24 +1,23 @@
 import io
-from glob import glob
 import os
+from glob import glob
+from itertools import product
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pyrosetta import get_fa_scorefxn
 import pyrosetta
-from pyrosetta.rosetta.protocols.minimization_packing import (
-    PackRotamersMover)
-from scipy.spatial.distance import cdist
 import seaborn as sns
+from pyrosetta import get_fa_scorefxn
+from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
+from scipy.spatial.distance import cdist
 
+from ..helpers import load_aa_legend
+from . import diy
 
 from . import geometry as geo
-from . import diy
-from .constants import *
-from ..helpers import load_aa_legend
 from . import utils
-
+from .constants import *
 
 ss_names = {'E': 'beta_sheet', 'H': 'alpha_helix', 'L': 'loop'}
 
@@ -144,7 +143,7 @@ def add_dssp_to_pose(pose):
     dssp.insert_ss_into_pose(pose)
 
 
-def get_rcsb_blast_cluster_30p():
+def get_rcsb_blast_cluster_30p(progress=None):
     """Download RCSB blast clustering at 30% similarity and extract clean
     pdb of first entry from each cluster to rcsb/blast_cluster_30 using
     digs pdb database (~95% of pdb files are in database).
@@ -169,7 +168,7 @@ def get_rcsb_blast_cluster_30p():
     (df_accessions
      .query('digs_file_exists')
      .groupby('cluster_id').head(1)
-     .pipe(utils.extract_chains, extract_dir, progress=tqdn)
+     .pipe(utils.extract_chains, extract_dir, progress=progress)
     )
 
     return df_accessions
