@@ -12,4 +12,4 @@ cluster: "sbatch
   -e logs_slurm/{rule}_{wildcards}"
 default-resources: [cpus=1, mem_mb=2000, time_min=60]
 resources: [cpus=100, mem_mb=200000] # no constraint on total time usage
-latency-wait: 30 # wait for distributed file system
+latency-wait: 45 # wait for distributed file system

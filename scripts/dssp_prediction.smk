@@ -30,7 +30,7 @@ def pdb_to_dssp(filename):
 
 rule all:
     input:
-        expand('rcsb/dssp_work/{chunk}.csv', chunk=chunks.keys())
+        expand('.snakemake/dssp_work/{chunk}.csv', chunk=chunks.keys())
     output:
         'rcsb/dssp_work/blast_cluster_30.dssp.csv'
     shell:
@@ -39,7 +39,7 @@ rule all:
 
 rule predict:
     output: 
-        temp('rcsb/dssp_work/{chunk}.csv')
+        temp('rcsb/{chunk}.csv')
     resources: mem_mb=2000, cpus=1
     run:
         def try_pdb_to_dssp(f):
