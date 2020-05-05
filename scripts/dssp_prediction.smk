@@ -1,19 +1,28 @@
-INPUT = 'rcsb/blast_cluster_30.list'
-CHUNK = 10
-
+import sys
 import pandas as pd
 
-with open(INPUT, 'r') as fh:
-    files = fh.read().split('\n')
+INPUT = 'rcsb/blast_cluster_30.csv'
+files = (pd.read_csv(INPUT)
+ .query('num_residues < 200')
+ .rename(columns={'file': 'pdb'})
+ ['pdb'].pipe(list)
+)
 
-files = files[:200]
-chunks = {f'{i:02d}': files[i:i+CHUNK] for i in range(0, len(files), CHUNK)}
+CHUNK = 50
 
+# files = files[:50]
+chunks = {f'{i:06d}': files[i:i+CHUNK] for i in range(0, len(files), CHUNK)}
+
+print(f'{len(chunks)} jobs with {CHUNK} pdbs each')
 
 def pdb_to_dssp(filename):
+    """Return None if the file cannot be loaded.
+    """
     from pyrosetta import init, pose_from_pdb
-    init(options='-mute all', silent=True)
     import pyrosetta.rosetta.core.scoring.dssp
+    
+    init(options='-mute all -pack_missing_sidechains false', silent=True)
+    
     pose = pose_from_pdb(filename)
     dssp = pyrosetta.rosetta.core.scoring.dssp.Dssp(pose)
     return dssp.get_dssp_secstruct()
@@ -33,7 +42,13 @@ rule predict:
         temp('rcsb/dssp_work/{chunk}.csv')
     resources: mem_mb=2000, cpus=1
     run:
+        def try_pdb_to_dssp(f):
+            try:
+                return pdb_to_dssp(f)
+            except RuntimeError:
+                print('Rosetta error, writing blank DSSP:', f, file=sys.stderr)
+                return
         (pd.DataFrame({'pdb': chunks[wildcards.chunk]})
-         .assign(dssp=lambda x: x['pdb'].apply(pdb_to_dssp))
+         .assign(dssp=lambda x: x['pdb'].apply(try_pdb_to_dssp))
          .to_csv(output[0], index=None)
         )

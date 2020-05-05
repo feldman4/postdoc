@@ -1,6 +1,15 @@
+# https://www.sichong.site/2020/02/25/snakemake-and-slurm-how-to-manage-workflow-with-resource-constraint-on-hpc/
+# fancier: https://github.com/Snakemake-Profiles/slurm
 cluster: sbatch
 jobs: 100
 use-conda: true
-cluster: "sbatch -p short --mem={resources.mem_mb} -c {resources.cpus} -o logs_slurm/{rule}_{wildcards} -e logs_slurm/{rule}_{wildcards}"
-default-resources: [cpus=1, mem_mb=2000]
-resources: [cpus=100, mem_mb=200000]
+cluster: "sbatch 
+  -p short 
+  --mem={resources.mem_mb} 
+  -c {resources.cpus} 
+  -t {resources.time_min} 
+  -o logs_slurm/{rule}_{wildcards} 
+  -e logs_slurm/{rule}_{wildcards}"
+default-resources: [cpus=1, mem_mb=2000, time_min=60]
+resources: [cpus=100, mem_mb=200000] # no constraint on total time usage
+latency-wait: 30 # wait for distributed file system

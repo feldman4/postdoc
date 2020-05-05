@@ -34,7 +34,7 @@ if __name__ == '__main__':
         for f in files:
             with open(f, 'r') as fh:
                 pdb_wc.summarize_file(fh, 'mcrahoig')
-            row = {'file': f}
+            row = {'pdb': f}
             for line in output:
                 key, val = line.split(':')[:2]
                 row[key] = val.split()[0]
