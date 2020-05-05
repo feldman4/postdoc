@@ -2,6 +2,8 @@ python
 
 import glob
 import os
+import inspect
+
 home = os.path.join(os.environ['HOME'], 'drive', 'packages', 'postdoc')
 scripts_dir = os.path.join(home, 'scripts', 'pymol')
 pdbs_dir = os.path.join(home, 'resources/pdbs')
@@ -141,20 +143,32 @@ def label_termini(selection='all'):
         cmd.do(f'label {select_this} and resi {last[0]}, "C-term"')
         print(model, chain, first, last)
 
-python end 
+def list_commands():
+    descriptions = []
+    for name, f in commands:
+        arguments = str(inspect.signature(f))
+        descriptions += [name + arguments]
+    pretty_print('Available commands:', descriptions)
 
-cmd.extend('nowater', hide_water)
-cmd.extend('nohoh', hide_water)
-cmd.extend('noh', hide_hydrogens)
-cmd.extend('nononpolarh', show_polar_h_only)
-cmd.extend('chainbow', chainbow)
-cmd.extend('findpolar', find_polar)
-cmd.extend('cnc', color_not_carbon)
-cmd.extend('pmlrun', run_script)
-cmd.extend('pdbload', load_local_pdb)
-cmd.extend('grabligands', select_ligands)
-cmd.extend('labeltermini', label_termini)
+commands = [
+('nowater', hide_water),
+('nohoh', hide_water),
+('noh', hide_hydrogens),
+('nononpolarh', show_polar_h_only),
+('chainbow', chainbow),
+('findpolar', find_polar),
+('cnc', color_not_carbon),
+('pmlrun', run_script),
+('pdbload', load_local_pdb),
+('grabligands', select_ligands),
+('labeltermini', label_termini),
+('cml', list_commands)
+]
+
+for name, f in commands:
+    cmd.extend(name, f)
 
 load_external_scripts()
-
 cmd.extend('initialize_settings', initialize_settings)
+
+python end 
