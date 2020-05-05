@@ -14,7 +14,12 @@ def pdb_to_dssp(filename):
 
 if __name__ == '__main__':
     for f in sys.stdin:
-        print(pdb_to_dssp(f.rstrip()))
+        f = f.rstrip()
+        try:
+            dssp = pdb_to_dssp(f)
+        except:
+            dssp = '<--error-->'
+        print(f'{f}::{dssp}')
 
 
 
