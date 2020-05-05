@@ -25,7 +25,14 @@ def pdb_to_dssp(filename):
     
     pose = pose_from_pdb(filename)
     dssp = pyrosetta.rosetta.core.scoring.dssp.Dssp(pose)
-    return dssp.get_dssp_secstruct()
+    return dssp.get_dssp_secstruct(), pose.sequence()
+
+def try_pdb_to_dssp(f):
+    try:
+        return pdb_to_dssp(f)
+    except RuntimeError:
+        print('Rosetta error, writing blank DSSP:', f, file=sys.stderr)
+        return None, None
 
 
 rule all:
@@ -36,19 +43,16 @@ rule all:
     shell:
         'csvstack {input} > {output}'
 
-
 rule predict:
     output: 
-        temp('rcsb/{chunk}.csv')
+        temp('.snakemake/dssp_work/{chunk}.csv')
     resources: mem_mb=2000, cpus=1
     run:
-        def try_pdb_to_dssp(f):
-            try:
-                return pdb_to_dssp(f)
-            except RuntimeError:
-                print('Rosetta error, writing blank DSSP:', f, file=sys.stderr)
-                return
-        (pd.DataFrame({'pdb': chunks[wildcards.chunk]})
-         .assign(dssp=lambda x: x['pdb'].apply(try_pdb_to_dssp))
-         .to_csv(output[0], index=None)
-        )
+        
+        arr = []
+        for pdb in chunks[wildcards.chunk]:
+            dssp, seq = try_pdb_to_dssp(pdb)
+            arr.append({'dssp': dssp, 'seq': seq, 'pdb': pdb})
+
+        pd.DataFrame(arr).to_csv(output[0], index=None)
+        
