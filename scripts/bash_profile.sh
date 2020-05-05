@@ -25,7 +25,11 @@ alias rgf='rg --files | rg'
 export TERM=xterm-color
 
 export PYTHONPATH="$HOME/packages:$PYTHONPATH"
+export PATH="$HOME/packages/postdoc/scripts:$PATH"
 
 weather(){ curl wttr.in/seattle_wa; }
 cityonahill(){ curl wttr.in/san_francisco_ca; }
 mouthofhell(){ curl wttr.in/cambridge_ma; }
+
+alias sstatus='clusterstatus  | (head -n 33; grep $USER)'
+alias wstatus="watch 'clusterstatus  | (head -n 33; grep $USER)'"
