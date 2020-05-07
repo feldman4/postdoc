@@ -154,7 +154,7 @@ commands = [
 ('nowater', hide_water),
 ('nohoh', hide_water),
 ('noh', hide_hydrogens),
-('nononpolarh', show_polar_h_only),
+('justpolarh', show_polar_h_only),
 ('chainbow', chainbow),
 ('findpolar', find_polar),
 ('cnc', color_not_carbon),

@@ -1,4 +1,4 @@
-from postdoc.utils import tqdn, cast_cols
+from ..utils import tqdn, cast_cols
 
 import io
 import os
@@ -6,13 +6,14 @@ import numpy as np
 import pandas as pd
 import re
 import functools
+import pathlib
 
 import pyteomics.mass
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-resources = os.path.join(os.path.dirname(globals()['__file__']), 'resources')
+resources = pathlib.Path(__file__).parents[1] / 'resources'
 
 # barcode flags
 UNUSED = 0
@@ -165,6 +166,7 @@ def load_aa_from_pdb(f, header_rows):
      .sort_values('res_seq')
      ['res_name'].map(code_to_aa).pipe(''.join))
     
+
 # MASS SPEC
 
 
@@ -827,7 +829,6 @@ def add_ion_properties(df):
     return (df.assign(ion=ions, ion_mz=ion_mz))
 
 
-
 def plot_ion_usage(df_wide, barcode_ix, ion_bins):
     """Strip plot of ion usage by selected barcodes. Allows 
     comparison to unselected barcodes and all possible ion mz bins.
@@ -888,7 +889,6 @@ def peptides_to_ions(df_peptides, usable_ion_gate,
      .query('ion_mz_bin == ion_mz_bin')
      .assign(selection_flag=lambda x: 1 + x.eval(usable_ion_gate))
     )
-
 
 
 def snake_select_barcodes(df_peptides, METADATA):

@@ -1,4 +1,10 @@
 ._*
+*.DS_Store
+resources/._*
+resources/pdbs/
+scripts/external/
+external/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -129,8 +135,3 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-digs
-*.DS_Store
-resources/._*
-resources/pdbs/
-scripts/external/

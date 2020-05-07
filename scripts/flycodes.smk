@@ -1,4 +1,3 @@
-# from postdoc.imports import *
 sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
 
 GPU_MEM_FRACTION = 0.1
@@ -6,13 +5,12 @@ GPU_MEM_FRACTION = 0.1
 # IMPORTS
 
 import postdoc.flycodes as fly
-import postdoc.flycode_designs
+from postdoc.flycodes import designs
 from postdoc.utils import timestamp
 
 import pandas as pd
 import inspect
-METADATA = dict(inspect.getmembers(
-    postdoc.flycode_designs, inspect.isclass))[config['design']]
+METADATA = dict(inspect.getmembers(designs, inspect.isclass))[config['design']]
 
 RUN_NAME = timestamp(METADATA.name)
 
@@ -40,6 +38,7 @@ rule all:
             design=METADATA.name,
             bin_iRT=METADATA.iRT_bin_names.values(),
             bin_mz=METADATA.precursor_bin_names.values())
+
 
 rule generate_peptides:
     output:
@@ -124,7 +123,7 @@ rule filter_barcodes:
 
 qlogin -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10
 
-snakemake -k -s /home/dfeldman/packages/postdoc/scripts/Snakefile \
+snakemake -k -s /home/dfeldman/packages/postdoc/scripts/flycodes.smk \
  --config design=DESIGN_1 --resources gpu_mem_tenths=6
 
 """

@@ -1,6 +1,6 @@
 import numpy as np
-from .constants import *
-from . import flycodes
+from ..constants import *
+from .. import flycodes
 
 
 class DESIGN_0():

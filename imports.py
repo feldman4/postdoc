@@ -4,7 +4,8 @@ from postdoc.constants import *
 from postdoc.utils import *
 from postdoc import reporters
 from postdoc import flycodes as fly
-from postdoc.flycode_designs import *
+from postdoc.flycodes.designs import *
+import postdoc.flycodes.cloning
 
 from collections import Counter
 from glob import glob

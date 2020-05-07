@@ -15,7 +15,8 @@ PS1='\[\033[0;33m\]\u@\h \[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
 alias kol="column -s, -t"
 
 set bell-style none
-bind 'TAB: menu-complete'
+# can output a warning that messes with sftp
+bind 'TAB: menu-complete' >/dev/null 2>/dev/null 
 
 alias hist="sort | uniq -c | sort -r"
 alias tar='tar -zxvf'

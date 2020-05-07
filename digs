@@ -1,0 +1,14 @@
+https://my.ipd.uw.edu/kb/73
+
+qlogin -c 4 --mem=8g
+
+# alanine scanning via fastdesign
+/home/dbtcox/de_novo_dna_binder/scripts/
+/home/dbtcox/de_novo_dna_binder/flags/
+
+/software/rosetta/versions/v2019.45-dev61026/main/source/bin/rosetta_scripts @flags/benchmark_1.flags
+
+
+/home/dbtcox/de_novo_dna_binder/scripts/DNA_interface_design/benchmark_1/benchmark_1.xml
+
+

@@ -16,6 +16,7 @@ fakesys.stdout.write = capture_stdout
 pdb_wc.sys = fakesys
 
 columns = {
+'pdb':            'pdb',
 'No. models':     'num_models',
 'No. chains':     'num_chains',
 'No. residues':   'num_residues',
@@ -29,6 +30,8 @@ columns = {
 if __name__ == '__main__':
     stats = {}
     arr = []
+    header = ','.join(list(columns.values()))
+    print(header)
     for f in sys.stdin:
         files = f.rstrip().split('\t')
         for f in files:
@@ -39,8 +42,6 @@ if __name__ == '__main__':
                 key, val = line.split(':')[:2]
                 row[key] = val.split()[0]
             output = []
-            arr += [row]
-    (pd.DataFrame(arr).rename(columns=columns)
-     .to_csv(sys.stdout, index=None)
-    )
+            print(','.join(row.values()))
+    
 
