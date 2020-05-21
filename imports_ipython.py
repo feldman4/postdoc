@@ -18,3 +18,6 @@ with warnings.catch_warnings():
 
 from . import helpers
 df_aa, aa_legend = helpers.load_aa_legend()
+
+aa_3_1 = df_aa.set_index('res_name')['Letter'].to_dict()
+aa_1_3 = {v: k for k, v in aa_3_1.items()}

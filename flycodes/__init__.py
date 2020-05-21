@@ -416,9 +416,20 @@ def filter_by_spacing(values, min_spacing):
 
 
 def generate_peptides(length, num_peptides, rule_set, seed=0):
+    options = rule_set_to_options(rule_set, length)
+    rs = np.random.RandomState(seed)
+
+    arr = []
+    for opt in options:
+        arr += [rs.choice(options, size=num_peptides)]
+
+    return [''.join(x) for x in np.array(arr).T]
+
+
+def rule_set_to_options(rule_set, length):
 
     canonical = set('ACDEFGHIKLMNPQRSTVWY')
-    
+
     # these are not allowed in the middle of the peptide
     pos = 'KRH'
     # these might oxidize in storage
@@ -437,10 +448,7 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
         middle = canonical - set(pos + ox + same_as_L)
         n_term = middle - set(exclude_from_n_term)
 
-        options = ((n_term,) + (middle,)*(length - 2) + 
-                   (c_term,))
-
-    if rule_set in ('RJ_noHnoF_termR', 'RJ_noHnoF_termK'):
+    elif rule_set in ('RJ_noHnoF_termR', 'RJ_noHnoF_termK'):
         if rule_set == 'RJ_noH_termK':
             c_term = set('K')
         elif rule_set == 'RJ_noH_termR':
@@ -449,24 +457,32 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
         middle = canonical - set(pos + ox + same_as_L + bulky_hydrophobic)
         n_term = middle - set(exclude_from_n_term + bulky_hydrophobic)
 
-        options = ((n_term,) + (middle,)*(length - 2) + 
-                   (c_term,))
-
-    if rule_set == 'RJ_filter':
+    elif rule_set == 'RJ_filter':
         c_term = set('K')
         middle = canonical - set('RKMCI')
         n_term = middle - set('QP')
 
-        options = ((n_term,) + (middle,)*(length - 2) + 
-                   (c_term,))
+    elif rule_set == 'minimal':
+        n_term = canonical - set('RK') - set('QP')
+        middle = canonical - set('RK')
+        c_term = set('K')
 
-    rs = np.random.RandomState(seed)
+    else:
+        raise ValueError(f'{rule_set} not recognized')
 
-    arr = []
-    for opt in options:
-        arr += [rs.choice(list(opt), size=num_peptides)]
+    options = ((n_term,) + (middle,)*(length - 2) +
+            (c_term,))
+    
+    return list(options)
 
-    return [''.join(x) for x in np.array(arr).T]
+
+def follows_rule_set(peptide, rule_set):
+    length = len(peptide)
+    options = rule_set_to_options(rule_set, length)
+    for a, b in zip(peptide, options):
+        if a not in b:
+            return False
+    return True
 
 
 def rolling_window_sizes(values, window_size):

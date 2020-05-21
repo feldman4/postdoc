@@ -32,6 +32,9 @@ class Drive():
     def get_excel(self, name, dropna='all', **kwargs):
         """Keyword arguments are passed to `pd.read_excel`.
         """
+        if len(name.split('/')) == 2:
+            name, kwargs['sheet_name'] = name.split('/')
+            
         file_id = self.file_ids[name]
         request = self.service.files().export_media(
             fileId=file_id, mimeType=xlsx_mime)
@@ -40,6 +43,7 @@ class Drive():
         done = False
         while not done:
             status, done = downloader.next_chunk()
+            
         df = pd.read_excel(fh, **kwargs)
         if dropna:
             df = df.dropna(how=dropna)
