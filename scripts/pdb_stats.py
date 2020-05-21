@@ -33,7 +33,8 @@ if __name__ == '__main__':
     header = ','.join(list(columns.values()))
     print(header)
     for f in sys.stdin:
-        files = f.rstrip().split('\t')
+        # compatible with ls but not spaces in filenames
+        files = f.rstrip().split()
         for f in files:
             with open(f, 'r') as fh:
                 pdb_wc.summarize_file(fh, 'mcrahoig')

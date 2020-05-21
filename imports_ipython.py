@@ -1,4 +1,6 @@
 from .imports import *
+from .drive import Drive
+drive = Drive()
 
 import IPython
 IPython.get_ipython().run_line_magic('load_ext', 'autoreload')
@@ -14,5 +16,5 @@ with warnings.catch_warnings():
     import tqdm.notebook
     tqdm.notebook.tqdm.pandas()
 
-import postdoc.helpers
-df_aa, aa_legend = postdoc.helpers.load_aa_legend()
+from . import helpers
+df_aa, aa_legend = helpers.load_aa_legend()

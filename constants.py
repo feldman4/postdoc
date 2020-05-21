@@ -1,3 +1,7 @@
+import pathlib
+
+resources = pathlib.Path(__file__).parents[0] / 'resources'
+
 GO_TERM = 'GO_term'
 GO = 'GO ID'
 GO_SYNONYM = 'DB Object Synonym (|Synonym)'
