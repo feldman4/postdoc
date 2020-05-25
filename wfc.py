@@ -1,6 +1,8 @@
 from collections import defaultdict
 import datetime
+from itertools import product
 import numpy as np
+import Bio.pairwise2
 
 import tensorflow as tf
 from tensorflow.keras.layers import (
@@ -94,3 +96,38 @@ class instance_norm(Layer):
         mean, variance = tf.nn.moments(inputs, axes, keepdims=True)
         return tf.nn.batch_normalization(inputs, mean, variance, self.beta, self.gamma, 1e-6)
 
+
+def greedy_similarity(D):
+    """Return ordering of rows/columns such that d(n) = D[:n, :n].min() are small 
+    and ascending. 
+    """
+    # index in D that we are picking
+    order = [np.argsort(D.max(axis=1))[0]]
+    thresholds = [D[order[0], order[0]]]
+    n = D.shape[0]
+    while len(order) < n:
+        mask = np.bincount(order, minlength=n) > 0
+        D_ = D.copy()
+        D_[mask] = np.inf
+        D_[:, ~mask] = 0
+        order += [D_.max(axis=1).argmin()]
+        thresholds += [D_.max(axis=1).min()]
+    return order, thresholds
+
+
+def pairwise_identity(a, b):
+    a_, b_ = Bio.pairwise2.align.globalxx(a, b)[0][:2]
+    matches = sum([x == y for x, y in zip(a_, b_)])
+    return matches / len(a_)
+
+
+def pairwise_identities(seqs):
+    seqs = list(seqs)
+    n = len(seqs)
+    D = np.zeros((n, n))
+    for i, j in product(range(n), range(n)):
+        if i <= j:
+            continue
+        D[i, j] = pairwise_identity(seqs[i], seqs[j])
+    D += D.T
+    return D
