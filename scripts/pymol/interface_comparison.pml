@@ -1,3 +1,6 @@
+reinitialize
+initialize_settings
+
 fetch 1BXI
 
 fetch 2WPT
