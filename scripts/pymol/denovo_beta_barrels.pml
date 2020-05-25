@@ -1,3 +1,8 @@
+docstring = """
+De novo beta barrel BB1 from Dou et al 2018. Designed from a schematic
+representing strand pairing and glycine kinks. SSM data available.
+"""
+
 reinitialize
 initialize_settings
 
@@ -214,3 +219,5 @@ compare_sel( \
     )
 #compare_sel('6D0TA_inner', 'BB1_tr_inner')
 scene trRosetta4, store
+
+print(docstring)
