@@ -1,10 +1,10 @@
+reinitialize
+initialize_settings
+
 docstring = """
 De novo beta barrel BB1 from Dou et al 2018. Designed from a schematic
 representing strand pairing and glycine kinks. SSM data available.
 """
-
-reinitialize
-initialize_settings
 
 fetch 6D0TA
 pdb BB1.pdb
