@@ -1,3 +1,6 @@
+reinitialize
+initialize_settings
+
 set sphere_scale, 0.2
 set sphere_transparency, 0.4
 
