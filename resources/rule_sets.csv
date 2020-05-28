@@ -1,0 +1,22 @@
+Unnamed: 0_level_0,Unnamed: 1_level_0,pool0_termR,pool0_termR,pool0_termR,pool0_termK,pool0_termK,pool0_termK,RJ_noH_termR,RJ_noH_termR,RJ_noH_termR,RJ_noH_termK,RJ_noH_termK,RJ_noH_termK,RJ_no_H,RJ_no_H,RJ_no_H,RJ_noHnoF_termR,RJ_noHnoF_termR,RJ_noHnoF_termR,RJ_noHnoF_termK,RJ_noHnoF_termK,RJ_noHnoF_termK,RJ_filter,RJ_filter,RJ_filter,minimal,minimal,minimal
+aa,note,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm,Nterm,middle,Cterm
+E,,E,E,,E,E,,E,E,,E,E,,E,E,,E,E,,E,E,,E,E,,E,E,
+A,,A,A,,A,A,,A,A,,A,A,,A,A,,A,A,,A,A,,A,A,,A,A,
+L,,L,L,,L,L,,L,L,,L,L,,L,L,,L,L,,L,L,,L,L,,L,L,
+V,,V,V,,V,V,,V,V,,V,V,,V,V,,V,V,,V,V,,V,V,,V,V,
+Y,,Y,Y,,Y,Y,,Y,Y,,Y,Y,,Y,Y,,Y,Y,,Y,Y,,Y,Y,,Y,Y,
+G,,G,G,,G,G,,G,G,,G,G,,G,G,,G,G,,G,G,,G,G,,G,G,
+N,,N,N,,N,N,,N,N,,N,N,,N,N,,N,N,,N,N,,N,N,,N,N,
+S,,S,S,,S,S,,S,S,,S,S,,S,S,,S,S,,S,S,,S,S,,S,S,
+T,,T,T,,T,T,,T,T,,T,T,,T,T,,T,T,,T,T,,T,T,,T,T,
+D,,D,D,,D,D,,D,D,,D,D,,D,D,,D,D,,D,D,,D,D,,D,D,
+P,avoid next to cleavage site,,P,,,P,,,P,,,P,,,P,,,P,,,P,,,P,,,P,
+Q,avoid next to cleavage site,,Q,,,Q,,,Q,,,Q,,,Q,,,Q,,,Q,,,Q,,,Q,
+F,"bulky hydrophobic, may disrupt protein",,,,,,,F,F,,F,F,,F,F,,,,,,,,F,F,,F,F,
+W,"bulky hydrophobic, may disrupt protein",,,,,,,W,W,,W,W,,W,W,,W,W,,W,W,,W,W,,W,W,
+H,"avoid, may be charged",,,,,,,,,,,,,,,,,,,,,,H,H,,H,H,
+K,include 1 charge,,,,,,K,,,,,,K,,,K,,,,,,K,,,K,,,K
+R,include 1 charge,,,R,,,,,,R,,,,,,,,,R,,,,,,,,,
+I,identical on MS to L,,,,,,,,,,,,,,,,,,,,,,,,,I,I,
+C,"avoid, can oxidize in storage",,,,,,,,,,,,,,,,,,,,,,,,,C,C,
+M,"avoid, can oxidize in storage",,,,,,,,,,,,,,,,,,,,,,,,,M,M,
