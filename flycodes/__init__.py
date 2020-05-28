@@ -1,7 +1,7 @@
 from . import design, designs
 
 from .design import (
-    generate_precursors, 
+    generate_peptide_set, 
     bin_by_value, 
     load_prosit_models, 
     add_prosit,
@@ -9,4 +9,3 @@ from .design import (
     snake_select_barcodes, 
     plot_ion_usage
     )
-
