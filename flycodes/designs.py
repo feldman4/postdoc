@@ -1,9 +1,11 @@
 import numpy as np
 from ..constants import *
-from .. import flycodes
 
 
 class DESIGN_0():
+    """First large design, produces barcodes for every iRT,mz bin that can be
+    downsampled (e.g., to avoid isotope overlap) later.
+    """
     name = 'random-termK'
     rule_set = 'RJ_noH_termK'
     min_length = 10
@@ -47,10 +49,14 @@ class DESIGN_0():
 
 
 class DESIGN_1(DESIGN_0):
+    """C-term barcodes.
+    """
     name = 'random-termR'
     rule_set = 'RJ_noH_termR'
 
 class DESIGN_2():
+    """Based on permutations of known good peptides.
+    """
     name = 'RJ_76'
 
     precursor_bins = np.linspace(550, 850, 100)
@@ -66,7 +72,9 @@ class DESIGN_2():
         raise ValueError
 
 
-
+class DESIGN_3(DESIGN_0):
+    name = 'random-termK'
+    rule_set = '20200527'
 
 
 
