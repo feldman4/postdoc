@@ -1,6 +1,7 @@
 import pathlib
 
 resources = pathlib.Path(__file__).parents[0] / 'resources'
+RULE_SETS = resources / 'rule_sets.csv'
 
 GO_TERM = 'GO_term'
 GO = 'GO ID'
