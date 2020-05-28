@@ -1,5 +1,4 @@
 from ..utils import tqdn, cast_cols
-from ..sequence import translate_dna
 from ..constants import resources
 
 import io
@@ -73,6 +72,7 @@ def load_idt_order(f):
      'Genscript_BBB_CD98_Binders/'
      'Order-U0510EL090.txt')
     """
+    from ..sequence import translate_dna
 
     with open(f, 'r') as fh:
         txt = fh.read()
@@ -421,7 +421,7 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
 
     arr = []
     for opt in options:
-        arr += [rs.choice(options, size=num_peptides)]
+        arr += [rs.choice(opt, size=num_peptides)]
 
     return [''.join(x) for x in np.array(arr).T]
 
@@ -430,9 +430,9 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
 def rule_set_to_options(rule_set, length):
     from ..constants import RULE_SETS
     rules = pd.read_csv(RULE_SETS, header=[0, 1])[rule_set]
-    n_term =rules['Nterm'].dropna().pipe(set)
-    middle = rules['middle'].dropna().pipe(set)
-    c_term = rules['Cterm'].dropna().pipe(set)
+    n_term =rules['Nterm'].dropna().pipe(list)
+    middle = rules['middle'].dropna().pipe(list)
+    c_term = rules['Cterm'].dropna().pipe(list)
     return (n_term,) + (middle,) * (length - 2) + (c_term,)
 
 
@@ -800,6 +800,8 @@ def plot_ion_usage(df_wide, barcode_ix, ion_bins):
     ax.set_yticks([-1, 0, 1, 2])
     ax.set_yticklabels(['no input ions', 'unused', 'avoid', 'usable']);
     
+    fig.tight_layout()
+    
     return ax
 
 
@@ -868,4 +870,4 @@ def snake_select_barcodes(df_peptides, METADATA):
          [cols]
         )
 
-        return df_ions_selected, df_wide
+        return df_ions_selected, df_wide, barcode_ix

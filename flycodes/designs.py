@@ -54,6 +54,7 @@ class DESIGN_1(DESIGN_0):
     name = 'random-termR'
     rule_set = 'RJ_noH_termR'
 
+
 class DESIGN_2():
     """Based on permutations of known good peptides.
     """
@@ -73,10 +74,20 @@ class DESIGN_2():
 
 
 class DESIGN_3(DESIGN_0):
-    name = 'random-termK'
-    rule_set = '20200527'
+    name = 'pool0_termK'
+    rule_set = 'pool0_termK'
 
+    # num_to_generate = 5e5
+    # num_generation_runs = 10
 
+    # precursor_bins = np.arange(
+    #     DESIGN_0.precursor_mz_start, 
+    #     DESIGN_0.precursor_mz_max, 
+    #     MZ_DOUBLE_SPACING
+    #     )[100:102]
+    # precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
+    # iRT_bins = np.arange(-10, 110, 5)
+    # iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
 
 
