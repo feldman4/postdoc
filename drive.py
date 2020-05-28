@@ -49,6 +49,9 @@ class Drive():
             df = df.dropna(how=dropna)
         return df
 
+    def __call__(self, *args, **kwargs):
+        return self.get_excel(*args, **kwargs)
+
 
 def get_service():
     with open(token, 'rb') as fh:
@@ -65,4 +68,13 @@ def list_files(service):
         ).execute()
     items = results.get('files', [])
     return {x['name']: x['id'] for x in items}
+
+
+def update_resources():
+    from .constants import RULE_SETS
+
+    drive = Drive()
+    
+    df_rules = drive('mass spec barcoding/rule sets', header=[0, 1])
+    df_rules.fillna('').to_csv(RULE_SETS, index=None)
 

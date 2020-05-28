@@ -426,54 +426,14 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
     return [''.join(x) for x in np.array(arr).T]
 
 
+@functools.lru_cache(maxsize=None)
 def rule_set_to_options(rule_set, length):
-
-    canonical = set('ACDEFGHIKLMNPQRSTVWY')
-
-    # these are not allowed in the middle of the peptide
-    pos = 'KRH'
-    # these might oxidize in storage
-    ox = 'MC'
-    same_as_L = 'I'
-    exclude_from_n_term = 'QP'
-    # DB suggested to exclude
-    bulky_hydrophobic = 'F'
-
-    if rule_set in ('RJ_noH_termR', 'RJ_noH_termK', 'RJ_no_H'):
-        if rule_set in ('RJ_noH_termK', 'RJ_no_H'):
-            c_term = set('K')
-        elif rule_set == 'RJ_noH_termR':
-            c_term = set('R')
-
-        middle = canonical - set(pos + ox + same_as_L)
-        n_term = middle - set(exclude_from_n_term)
-
-    elif rule_set in ('RJ_noHnoF_termR', 'RJ_noHnoF_termK'):
-        if rule_set == 'RJ_noH_termK':
-            c_term = set('K')
-        elif rule_set == 'RJ_noH_termR':
-            c_term = set('R')
-
-        middle = canonical - set(pos + ox + same_as_L + bulky_hydrophobic)
-        n_term = middle - set(exclude_from_n_term + bulky_hydrophobic)
-
-    elif rule_set == 'RJ_filter':
-        c_term = set('K')
-        middle = canonical - set('RKMCI')
-        n_term = middle - set('QP')
-
-    elif rule_set == 'minimal':
-        n_term = canonical - set('RK') - set('QP')
-        middle = canonical - set('RK')
-        c_term = set('K')
-
-    else:
-        raise ValueError(f'{rule_set} not recognized')
-
-    options = ((n_term,) + (middle,)*(length - 2) +
-            (c_term,))
-    
-    return list(options)
+    from ..constants import RULE_SETS
+    rules = pd.read_csv(RULE_SETS, header=[0, 1])[rule_set]
+    n_term =rules['Nterm'].dropna().pipe(set)
+    middle = rules['middle'].dropna().pipe(set)
+    c_term = rules['Cterm'].dropna().pipe(set)
+    return (n_term,) + (middle,) * (length - 2) + (c_term,)
 
 
 def follows_rule_set(peptide, rule_set):
