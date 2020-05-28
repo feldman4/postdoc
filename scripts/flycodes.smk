@@ -34,10 +34,10 @@ rule all:
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
-            design=METADATA.name,
-            bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values())
+        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=METADATA.iRT_bin_names.values(),
+        #     bin_mz=METADATA.precursor_bin_names.values())
 
 
 rule generate_peptides:
@@ -84,7 +84,8 @@ rule predict_prosit:
             METADATA.pred_barcodes_per_mz_bin)
         
         df_predicted = (df_precursors
-         .sample(num_to_predict, random_state=0)
+         .sample(frac=1, replace=False, random_state=0)
+         .head(num_to_predict)
          .pipe(fly.add_prosit, d_spectra, d_irt, 
             METADATA.normalized_collision_energy)
          .assign(iRT_bin=lambda x: 
@@ -112,18 +113,21 @@ rule filter_barcodes:
         if len(df_peptides) == 0:
             pd.DataFrame().to_csv(output[0], index=None)
         else:
-            df_ions_selected, df_wide = fly.snake_select_barcodes(
+            df_ions_selected, df_wide, barcode_ix = fly.snake_select_barcodes(
                 df_peptides, METADATA)
-            df_ions.to_csv(output[0], index=None)
+            df_ions_selected.to_csv(output[0], index=None)
             ax = fly.plot_ion_usage(df_wide, barcode_ix, METADATA.ion_bins)
             ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)
 
 
 """
+# run from ~/flycodes/run_XXX
 
 qlogin -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10
 
+conda activate prosit5
+
 snakemake -k -s /home/dfeldman/packages/postdoc/scripts/flycodes.smk \
- --config design=DESIGN_1 --resources gpu_mem_tenths=6
+ --config design=DESIGN_1 --resources gpu_mem_tenths=6 --cores=10
 
 """
