@@ -34,10 +34,10 @@ rule all:
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
-        #     design=METADATA.name,
-        #     bin_iRT=METADATA.iRT_bin_names.values(),
-        #     bin_mz=METADATA.precursor_bin_names.values())
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values())
 
 
 rule generate_peptides:
@@ -45,9 +45,10 @@ rule generate_peptides:
         expand('process/{{design}}_{{run}}_{bin_mz}.peptides.csv', 
             bin_mz=METADATA.precursor_bin_names.values())
     run:
-        df_precursors_all = (fly.generate_precursors(
+        seed = hash(wildcards['run']) % 2**32
+        df_precursors_all = (fly.generate_peptide_set(
             METADATA.num_to_generate, METADATA.min_length, METADATA.max_length,
-            METADATA.rule_set)
+            METADATA.rule_set, seed=seed)
             .assign(mz_bin=lambda x: 
                 x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
                     METADATA.precursor_bin_width))

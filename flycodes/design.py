@@ -457,11 +457,11 @@ def rolling_window_sizes(values, window_size):
     return sizes
 
 
-def generate_precursors(num_to_generate, min_length, max_length, rule_set):
+def generate_peptide_set(num_to_generate, min_length, max_length, rule_set, seed=0):
     peptides = []
     for length in range(min_length, max_length + 1):
         num_peptides = int(num_to_generate / (max_length - min_length))
-        peptides += generate_peptides(length, num_peptides, rule_set)
+        peptides += generate_peptides(length, num_peptides, rule_set, seed=seed)
     peptides = set(peptides)
     mz_dict = {x: calc_mass(x, charge=2) for x in peptides}
     peptides = np.array(sorted(peptides, key=mz_dict.get))
@@ -801,7 +801,7 @@ def plot_ion_usage(df_wide, barcode_ix, ion_bins):
     ax.set_yticklabels(['no input ions', 'unused', 'avoid', 'usable']);
     
     fig.tight_layout()
-    
+
     return ax
 
 
