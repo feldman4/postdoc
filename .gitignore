@@ -4,7 +4,7 @@ resources/._*
 resources/pdbs/
 scripts/external/
 external/
-
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

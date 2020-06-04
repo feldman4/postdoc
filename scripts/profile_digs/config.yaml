@@ -4,7 +4,7 @@ cluster: sbatch
 jobs: 100
 use-conda: true
 cluster: "sbatch 
-  -p short 
+  -p {params.partition} 
   --mem={resources.mem_mb} 
   -c {resources.cpus} 
   -t {resources.time_min} 

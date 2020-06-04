@@ -122,13 +122,19 @@ rule filter_barcodes:
 
 
 """
-# run from ~/flycodes/run_XXX
+squeue --user=dfeldman
 
-qlogin -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 run_003.sh
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 run_004.sh
 
 conda activate prosit5
-
+cd /home/dfeldman/flycodes/run_003
 snakemake -k -s /home/dfeldman/packages/postdoc/scripts/flycodes.smk \
- --config design=DESIGN_1 --resources gpu_mem_tenths=6 --cores=10
+ --config design=DESIGN_3 --resources gpu_mem_tenths=6 --cores
+
+conda activate prosit5
+cd /home/dfeldman/flycodes/run_003
+snakemake -k -s /home/dfeldman/packages/postdoc/scripts/flycodes.smk \
+ --config design=DESIGN_4 --resources gpu_mem_tenths=6 --cores
 
 """

@@ -34,3 +34,4 @@ mouthofhell(){ curl wttr.in/cambridge_ma; }
 
 alias sstatus='clusterstatus  | (head -n 33; grep $USER)'
 alias wstatus="watch 'clusterstatus  | (head -n 33; grep $USER)'"
+alias sq='squeue --user `whoami`'

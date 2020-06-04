@@ -77,7 +77,12 @@ class DESIGN_3(DESIGN_0):
     name = 'pool0_termK'
     rule_set = 'pool0_termK'
 
-    # num_to_generate = 5e5
+class DESIGN_4(DESIGN_0):
+    name = 'pool0_termR'
+    rule_set = 'pool0_termR'
+
+
+    # num_to_generate = 1e4
     # num_generation_runs = 10
 
     # precursor_bins = np.arange(
@@ -87,7 +92,7 @@ class DESIGN_3(DESIGN_0):
     #     )[100:102]
     # precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
-    # iRT_bins = np.arange(-10, 110, 5)
+    # iRT_bins = np.arange(-10, 110, 5)[10:11]
     # iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
 
 
