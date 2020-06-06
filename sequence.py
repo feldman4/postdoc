@@ -1,6 +1,7 @@
 from glob import glob
 import os
 from natsort import natsorted
+import gzip
 
 import pandas as pd
 from Bio import SeqIO
@@ -19,8 +20,12 @@ watson_crick.update({k.lower(): v.lower()
 
 
 def read_fasta(f):
-    with open(f, 'r') as fh:
-        txt = fh.read()
+    if f.endswith('gz'):
+        fh = gzip.open(f)
+        txt = fh.read().decode()
+    else:
+        fh = open(f, 'r').read()
+    fh.close()
     return parse_fasta(txt)
 
 
