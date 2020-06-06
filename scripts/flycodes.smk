@@ -98,7 +98,6 @@ rule predict_prosit:
 
         for f, iRT_bin in zip(output, METADATA.iRT_bin_names.values()):
             (df_predicted.query('iRT_bin == @iRT_bin')
-                .head(METADATA.input_barcodes_per_iRT_mz_bin)
                 .to_csv(f, index=None)
                 )
 
@@ -109,7 +108,8 @@ rule filter_barcodes:
     output:
         'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv'        
     run:
-        df_peptides = pd.read_csv(input[0])
+        df_peptides = (pd.read_csv(input[0])
+         .head(METADATA.input_barcodes_per_iRT_mz_bin))
 
         if len(df_peptides) == 0:
             pd.DataFrame().to_csv(output[0], index=None)
@@ -124,8 +124,8 @@ rule filter_barcodes:
 """
 squeue --user=dfeldman
 
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 run_003.sh
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 run_004.sh
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 flycodes/run_003.sh
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 flycodes/run_004.sh
 
 conda activate prosit5
 cd /home/dfeldman/flycodes/run_003

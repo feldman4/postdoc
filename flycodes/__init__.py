@@ -7,5 +7,7 @@ from .design import (
     add_prosit,
     sort_by_spectral_efficiency, 
     snake_select_barcodes, 
-    plot_ion_usage
+    plot_ion_usage,
+    bin_by_value,
+    peptides_to_ions,
     )

@@ -153,7 +153,7 @@ def enumerate_ions(df_precursors, first_ion=2, last_ion=1):
 
     df_ions = (pd.concat([df_b_ions, df_y_ions])
             .assign(ion_mz=lambda x: 
-                    x['ion'].apply(calc_mass))
+                    x['ion'].apply(calc_mz))
               )
 
     # count the number of fragments with the same (mz, ion_mz)
@@ -190,10 +190,15 @@ def filter_distinct_ions(df_ions, num_fragments):
 amino_acids = 'RHKDESTNQCGPAVILMFYW'
 masses_c1 = {x: pyteomics.mass.calculate_mass(x) for x in amino_acids}
 @functools.lru_cache(maxsize=None)
-def calc_mass(s, charge=1):
+def calc_mz(s, charge=1):
     edges = 18.01056468370001
+    proton = 1.0072764667700085
     if charge == 1:
-        return sum([masses_c1[x] for x in s]) - (len(s) - 1) * edges
+        base = sum([masses_c1[x] for x in s]) - (len(s) - 1) * edges
+        return base + proton
+    elif charge == 2:
+        base = sum([masses_c1[x] for x in s]) - (len(s) - 1) * edges
+        return (base + 2*proton)/2
     else:
         return pyteomics.mass.calculate_mass(s, charge=charge)
 
@@ -351,7 +356,7 @@ def get_permutations(seq, num_permutations):
 def permute_precursors(precursors, num_permutations):
     arr = []
     for precursor in precursors:
-        mz = calc_mass(precursor, charge=2)
+        mz = calc_mz(precursor, charge=2)
         sequences = get_permutations(precursor, num_permutations)
         (pd.DataFrame({'mz': mz, 'orig_seq': precursor, 
                   'sequence': sequences})).pipe(arr.append)
@@ -463,7 +468,7 @@ def generate_peptide_set(num_to_generate, min_length, max_length, rule_set, seed
         num_peptides = int(num_to_generate / (max_length - min_length))
         peptides += generate_peptides(length, num_peptides, rule_set, seed=seed)
     peptides = set(peptides)
-    mz_dict = {x: calc_mass(x, charge=2) for x in peptides}
+    mz_dict = {x: calc_mz(x, charge=2) for x in peptides}
     peptides = np.array(sorted(peptides, key=mz_dict.get))
     mz_list = np.array([mz_dict[x] for x in peptides])
 
@@ -766,7 +771,7 @@ def add_ion_properties(df):
             ion = sequence[-length:]
         if ion_type == 'b':
             ion = sequence[:length]
-        arr.append([ion, calc_mass(ion, charge=charge)])
+        arr.append([ion, calc_mz(ion, charge=charge)])
     ions, ion_mz = zip(*arr)
     return (df.assign(ion=ions, ion_mz=ion_mz))
 
