@@ -89,7 +89,7 @@ def run_script(name=None):
     if script:
         print(f'Running {script}')
         cmd.run(script)
-        // print(f'Finished running {script}')
+        # print(f'Finished running {script}')
 
 def list_scripts():
     files = glob.glob(os.path.join(scripts_dir, '*pml'))
