@@ -77,7 +77,12 @@ class DESIGN_3(DESIGN_0):
     name = 'pool0_termK'
     rule_set = 'pool0_termK'
 
-class DESIGN_4(DESIGN_0):
+    iRT_bins = np.arange(-25, 150, 5)
+    iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
+    iRT_bin_width = 5
+
+
+class DESIGN_4(DESIGN_3):
     name = 'pool0_termR'
     rule_set = 'pool0_termR'
 
