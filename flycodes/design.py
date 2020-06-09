@@ -950,3 +950,17 @@ def e_coli_crap_mz(drive, metadata):
     bins = bin_by_value(mz_list, metadata.precursor_bins, metadata.precursor_bin_width)
     bad_bins = pd.Series(bins).dropna().drop_duplicates().pipe(sorted)
     return bad_bins
+
+
+def filter_by_spacing(xs, spacing):
+    xs = np.array(xs)
+    while True:
+        d = np.diff(xs)
+        try:
+            cut = np.where(d < spacing)[0][0]
+            cut += 1
+            xs = np.array(list(xs[:cut]) + list(xs[cut+1:]))
+        except IndexError:
+            break  
+    return xs
+
