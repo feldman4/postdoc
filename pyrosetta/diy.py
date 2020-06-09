@@ -5,7 +5,6 @@ import tempfile
 import os
 from glob import glob
 
-from natsort import natsorted
 import numpy as np
 import pandas as pd
 
@@ -230,12 +229,7 @@ def pdb_frame(files_or_search, col_file='file', progress=None):
     if progress is None:
         progress = lambda x: x
     
-    # def read_csv(f):
-    #     try:
-    #         return pd.read_csv(f, **kwargs)
-    #     except pd.errors.EmptyDataError:
-    #         return None
-    
+    from natsort import natsorted
     if isinstance(files_or_search, str):
         files = natsorted(glob(files_or_search))
     else:
