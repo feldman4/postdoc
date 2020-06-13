@@ -4,6 +4,7 @@ from collections import defaultdict
 import datetime
 from itertools import product
 import numpy as np
+import pandas as pd
 import Bio.pairwise2
 
 import tensorflow as tf
@@ -13,6 +14,8 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Model
 
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+
 
 log_dir = 'logs/fit/' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
@@ -133,3 +136,49 @@ def pairwise_identities(seqs):
         D[i, j] = pairwise_identity(seqs[i], seqs[j])
     D += D.T
     return D
+
+
+def mutation_rfr(df, X_regex, y_col, split_by_res=True, train_test_split=0.5, **kwargs):
+    
+    cut = df.filter(regex=X_regex).isnull().any(axis=1)
+    cut |= df[y_col].isnull()
+    df = df[~cut]
+
+    positions = list(set(df['position']))
+    n = len(positions)
+    rs = np.random.RandomState(0)
+    rs.shuffle(positions)
+    train = positions[:int(n*train_test_split)]
+
+    X_train = df.query('index == @train').filter(regex=X_regex)
+    y_train = df.query('index == @train')[y_col]
+
+    X_test = df.query('index != @train').filter(regex=X_regex)
+    y_test = df.query('index != @train')[y_col]
+
+    rfr = RandomForestRegressor(random_state=0, **kwargs)
+    rfr.fit(X_train, y_train)
+    y = rfr.predict(df.filter(regex=X_regex))
+    df_pred = pd.DataFrame({'y_true': y_test, 'y_pred': rfr.predict(X_test)})
+    r = df_pred.corr().loc['y_true', 'y_pred']
+    return r, df_pred
+
+
+def jax_ssm(native):
+    import jax_unirep
+    from .constants import CANONICAL_AA
+
+    mutants = []
+    for i, aa in enumerate(native):
+        for aa_ in CANONICAL_AA:
+            seq = native[:i] + aa_ + native[i + 1:]
+            if seq != native:
+                mutants += [(i, aa_, seq)]
+    mutants += [(-1, 'native', native)]
+    reps, _, _ = jax_unirep.get_reps([x[2] for x in mutants])
+
+    return (pd.DataFrame(mutants, columns=['index', 'aa', 'seq'])
+            .assign(wt=lambda x: x['index'].apply(native.__getitem__))
+            .assign(pos=lambda x: x['wt'] + (x['index'] + 1).astype(str))
+            .assign(name=lambda x: x['pos'] + x['aa'])
+            )

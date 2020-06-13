@@ -24,7 +24,8 @@ def read_fasta(f):
         fh = gzip.open(f)
         txt = fh.read().decode()
     else:
-        fh = open(f, 'r').read()
+        fh = open(f, 'r')
+        txt = fh.read()
     fh.close()
     return parse_fasta(txt)
 
@@ -89,4 +90,15 @@ def load_ab1(f):
         seq = str(records[0].seq)
     return seq
 
+
+def print_alignment(a, b, width=60):
+    """Levenshtein alignment.
+    """
+    import edlib
+    alignment = edlib.align(a, b, task='path')
+    d = edlib.getNiceAlignment(alignment, a, b)
+    for i in range(0, max(map(len, d.values())), width):
+        print(i)
+        for x in d.values():
+            print(x[i:i+width])
 

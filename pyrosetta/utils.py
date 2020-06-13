@@ -387,18 +387,6 @@ def select_sequence(pose, selector):
     return ''.join(seq[mask])
 
 
-def print_alignment(a, b, width=60):
-    """Levenshtein alignment.
-    """
-    import edlib
-    alignment = edlib.align(a, b, task='path')
-    d = edlib.getNiceAlignment(alignment, a, b)
-    for i in range(0, max(map(len, d.values())), width):
-        print(i)
-        for x in d.values():
-            print(x[i:i+width])
-
-
 def pymol_select_pose2pdb(x):
     res, chain = x.split()
     return f'chain {chain} and res {res}'

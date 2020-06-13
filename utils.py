@@ -25,16 +25,19 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return stamp
 
 
-def csv_frame(files_or_search, tqdn=False, **kwargs):
+def csv_frame(files_or_search, tqdn=False, add_file=None, sort=True, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
     """
     
     def read_csv(f):
         try:
-            return pd.read_csv(f, **kwargs)
+            df = pd.read_csv(f, **kwargs)
         except pd.errors.EmptyDataError:
             return None
+        if add_file is not None:
+            df[add_file] = f
+        return df
     
     if isinstance(files_or_search, str):
         files = natsorted(glob(files_or_search))
@@ -43,9 +46,10 @@ def csv_frame(files_or_search, tqdn=False, **kwargs):
 
     if tqdn:
         from tqdm import tqdm_notebook as tqdn
-        return pd.concat([read_csv(f) for f in tqdn(files)], sort=True)
+        return pd.concat([read_csv(f) for f in tqdn(files)], sort=sort)
     else:
-        return pd.concat([read_csv(f) for f in files], sort=True)
+        return pd.concat([read_csv(f) for f in files], sort=sort)
+
 
 
 def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
