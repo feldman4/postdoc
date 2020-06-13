@@ -6,7 +6,7 @@ GPU_MEM_FRACTION = 0.1
 
 import postdoc.flycodes as fly
 from postdoc.flycodes import designs
-from postdoc.utils import timestamp
+from postdoc.utils import timestamp, csv_frame
 
 import pandas as pd
 import inspect
@@ -26,18 +26,23 @@ RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_generation_runs)]
 
 rule all:
     input: 
-        expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
-            design=METADATA.name,
-            run=RUNS,
-            bin_mz=METADATA.precursor_bin_names.values()),
+        # expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
+        #     design=METADATA.name,
+        #     run=RUNS,
+        #     bin_mz=METADATA.precursor_bin_names.values()),
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
+        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=METADATA.iRT_bin_names.values(),
+        #     bin_mz=METADATA.precursor_bin_names.values())
+        expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
             design=METADATA.name,
-            bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values())
+            bin_iRT=list(METADATA.iRT_bin_names.values())[:1],
+            ms1_range=list(METADATA.ms1_selection_ranges.keys()))
+
 
 
 rule generate_peptides:
@@ -121,20 +126,43 @@ rule filter_barcodes:
             ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)
 
 
+def expand_ms1_range(wildcards):
+    return expand('process/{{design}}_iRT_{{bin_iRT}}_mz_{bin_mz}.precursors.csv', 
+        bin_mz=METADATA.ms1_selection_ranges[wildcards.ms1_range])
+
+rule filter_barcodes_ms1_range:
+    input:
+        expand_ms1_range
+    output:
+        'process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv'        
+    run:
+        print('input', input)
+        df_peptides = (csv_frame(input, sort=False)
+         .assign(iRT_dist=b'abs(iRT - iRT_bin)')
+         .sort_values('iRT_dist')
+         .drop('iRT_dist', axis=1)
+         .groupby('mz_bin')
+         .head(METADATA.ms1_selection_input_max)
+         .sort_values('mz_bin')
+        )
+        filter = fly.design.prepare_filter(df_peptides['mz_bin'])
+
+        if len(df_peptides) == 0:
+            pd.DataFrame().to_csv(output[0], index=None)
+        else:
+            df_ions_selected, df_wide, barcode_ix = fly.snake_select_barcodes(
+                df_peptides, METADATA, filter)
+            (df_ions_selected
+             .assign(ms1_range=wildcards.ms1_range)
+             .to_csv(output[0], index=None))
+
+
+
+
 """
 squeue --user=dfeldman
 
 sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 flycodes/run_003.sh
 sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 flycodes/run_004.sh
-
-conda activate prosit5
-cd /home/dfeldman/flycodes/run_003
-snakemake -k -s /home/dfeldman/packages/postdoc/scripts/flycodes.smk \
- --config design=DESIGN_3 --resources gpu_mem_tenths=6 --cores
-
-conda activate prosit5
-cd /home/dfeldman/flycodes/run_003
-snakemake -k -s /home/dfeldman/packages/postdoc/scripts/flycodes.smk \
- --config design=DESIGN_4 --resources gpu_mem_tenths=6 --cores
 
 """
