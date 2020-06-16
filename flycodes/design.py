@@ -963,17 +963,18 @@ class Ecoli:
                 .rename(columns={0: 'gene_symbol', 1: 'seq_aa'})
                 )
 
+    def get_crap_table(self, drive):
+        return (drive('mass spec barcoding/contaminants')
+            .pipe(lambda x:
+                    x.merge(self.get_peptide_sequences(
+                        x['gene_symbol'].dropna())))
+            [['gene_symbol', 'seq_aa']]
+            .drop_duplicates()
+            )
+
 
 def e_coli_crap_mz(drive, metadata):
-    ecoli = Ecoli()
-
-    df_crap = (drive('mass spec barcoding/contaminants')
-               .pipe(lambda x:
-                     x.merge(ecoli.get_peptide_sequences(
-                         x['gene_symbol'].dropna())))
-               [['gene_symbol', 'seq_aa']]
-               .drop_duplicates()
-               )
+    df_crap = Ecoli().get_crap_table(drive)
 
     peptides = set()
     for s in df_crap['seq_aa']:
