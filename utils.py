@@ -101,3 +101,10 @@ class SimpleBox:
 
     def __iter__(self):
         return iter(self._get_contents())
+
+
+def codify(df, **kwargs):
+    return df.assign(**{k: df[v].astype('category').cat.codes
+                        for k, v in kwargs.items()})
+
+
