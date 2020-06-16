@@ -74,6 +74,7 @@ class DESIGN_2():
 
 
 class DESIGN_3(DESIGN_0):
+    parent = DESIGN_0
     name = 'pool0_termK'
     rule_set = 'pool0_termK'
 

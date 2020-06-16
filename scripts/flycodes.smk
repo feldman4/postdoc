@@ -40,7 +40,7 @@ rule all:
         #     bin_mz=METADATA.precursor_bin_names.values())
         expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
             design=METADATA.name,
-            bin_iRT=list(METADATA.iRT_bin_names.values())[:1],
+            bin_iRT=list(METADATA.iRT_bin_names.values()),
             ms1_range=list(METADATA.ms1_selection_ranges.keys()))
 
 
@@ -162,7 +162,10 @@ rule filter_barcodes_ms1_range:
 """
 squeue --user=dfeldman
 
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 flycodes/run_003.sh
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 flycodes/run_004.sh
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/run_003.sh
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/run_004.sh
+
+sbatch -p medium --mem=80g -c 10 s/run_003.sh
+sbatch -p medium --mem=80g -c 10 s/run_004.sh
 
 """
