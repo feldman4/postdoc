@@ -1,8 +1,11 @@
 from .sequence import print_alignment
 from .sequence import read_fasta
 from .imports import *
-from .drive import Drive
-drive = Drive()
+try:
+    from .drive import Drive
+    drive = Drive()
+except ImportError:
+    print('Skipping .drive due to missing packages.')
 
 from scipy.spatial.distance import pdist
 
@@ -13,7 +16,9 @@ IPython.get_ipython().run_line_magic('autoreload', '2')
 
 # increase dpi without increasing displayed image size
 (IPython.get_ipython()
-    .run_line_magic('config', "InlineBackend.figure_format = 'retina'"))
+    .run_line_magic('config', "InlineBackend.figure_format = 'jpeg'")
+    # .run_line_magic('config', "InlineBackend.figure_format = 'retina'")
+)
 
 import warnings
 with warnings.catch_warnings():
