@@ -74,12 +74,30 @@ class DESIGN_2():
 
 
 class DESIGN_3(DESIGN_0):
+    parent = DESIGN_0
     name = 'pool0_termK'
     rule_set = 'pool0_termK'
 
     iRT_bins = np.arange(-25, 150, 5)
     iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
     iRT_bin_width = 5
+
+    # MS1 selection doesn't benefit much from re-runs
+    selection_seeds = [0]
+
+    # subdivide MS1 bins into N groups
+    ms1_selection_scans = 10
+    #  = ms1_selection_scans
+    n = int(np.ceil(len(parent.precursor_bin_names) / ms1_selection_scans))
+    ms1_selection_ranges = {}
+    for i in range(ms1_selection_scans):
+        bins = list(parent.precursor_bin_names.values())[i * n:(i + 1) * n]
+        key = bins[0] + '-' + bins[-1]
+        ms1_selection_ranges[key] = bins
+
+    # set high enough to ensure barcodes found for all precursor masses
+    ms1_selection_input_max = 200
+
 
 
 class DESIGN_4(DESIGN_3):
@@ -99,5 +117,4 @@ class DESIGN_4(DESIGN_3):
 
     # iRT_bins = np.arange(-10, 110, 5)[10:11]
     # iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
-
 

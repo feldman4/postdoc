@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-import pyrosettas
+import pyrosetta
 
 
 HOME = os.environ['HOME']
@@ -10,24 +10,3 @@ AA_PARAMS_DIR = (PYROSETTA_DIR / 'database' / 'chemical' /
 
 DEFAULT_VIEWER_WINDOW = (550, 450)
 DEFAULT_ZOOM = 1.2
-
-CANONICAL_RESIDUES = ['ARG',
- 'GLU',
- 'HIS',
- 'LYS',
- 'ILE',
- 'LEU',
- 'VAL',
- 'ALA',
- 'PHE',
- 'PRO',
- 'TRP',
- 'TYR',
- 'MET',
- 'CYS',
- 'GLY',
- 'GLN',
- 'ASN',
- 'SER',
- 'THR',
- 'ASP']
