@@ -1,10 +1,10 @@
 import os
-from postdoc.utils import DivPath
-import pyrosetta
+from pathlib import Path
+import pyrosettas
 
 
 HOME = os.environ['HOME']
-PYROSETTA_DIR = DivPath(os.path.dirname(pyrosetta.__file__))
+PYROSETTA_DIR = Path(os.path.dirname(pyrosetta.__file__))
 AA_PARAMS_DIR = (PYROSETTA_DIR / 'database' / 'chemical' / 
     'residue_type_sets' / 'fa_standard' / 'residue_types' / 'l-caa')
 
