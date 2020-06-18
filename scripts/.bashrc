@@ -27,6 +27,7 @@ export TERM=xterm-color
 
 export PYTHONPATH="$HOME/packages:$PYTHONPATH"
 export PATH="$HOME/packages/postdoc/scripts:$PATH"
+export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
 
 weather(){ curl wttr.in/seattle_wa; }
 cityonahill(){ curl wttr.in/san_francisco_ca; }
@@ -35,3 +36,7 @@ mouthofhell(){ curl wttr.in/cambridge_ma; }
 alias sstatus='clusterstatus  | (head -n 33; grep $USER)'
 alias wstatus="watch 'clusterstatus  | (head -n 33; grep $USER)'"
 alias sq='squeue --user `whoami`'
+
+nbless() {
+    ipython nbconvert --to markdown --stdout $1 | mdless
+}
