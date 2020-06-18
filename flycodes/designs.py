@@ -94,6 +94,7 @@ class DESIGN_3(DESIGN_0):
         bins = list(parent.precursor_bin_names.values())[i * n:(i + 1) * n]
         key = bins[0] + '-' + bins[-1]
         ms1_selection_ranges[key] = bins
+    del n, i, bins, key
 
     # set high enough to ensure barcodes found for all precursor masses
     ms1_selection_input_max = 200
