@@ -16,6 +16,12 @@ from tensorflow.keras.models import Model
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 
+# Ivan does the following
+# config = tf.ConfigProto(
+#     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.92)
+# )
+# sess = tf.Session(config=config)
+# sess.run(...)
 
 log_dir = 'logs/fit/' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
