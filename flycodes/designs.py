@@ -1,5 +1,6 @@
 import numpy as np
 from ..constants import *
+from .design import calc_mz
 
 
 class DESIGN_0():
@@ -47,6 +48,8 @@ class DESIGN_0():
     selection_seeds = np.arange(5)
     min_unique_ions = 2
 
+    exclude_regex = 'NG'
+
 
 class DESIGN_1(DESIGN_0):
     """C-term barcodes.
@@ -55,22 +58,43 @@ class DESIGN_1(DESIGN_0):
     rule_set = 'RJ_noH_termR'
 
 
-class DESIGN_2():
+class DESIGN_2(DESIGN_0):
     """Based on permutations of known good peptides.
     """
     name = 'RJ_76'
+    rule_set = 'RJ_76'
 
-    precursor_bins = np.linspace(550, 850, 100)
-    precursor_bin_width = np.diff(precursor_bins)[0] # no space between bins
-    precursor_bin_min_spacing = 0
-    precursors_per_bin = 200
+    num_generation_runs = 1
+    num_permutations = 1000
+    known_peptides = ['AGNLGGGVVTLER', 'ALLAAQYSGAQVR', 'ALQNAVTTFVNR', 
+    'APLLLATDVASR', 'AQFEGLVTDLLR', 'AQLFALTGVQPAR', 'AQLFANTVDNAR', 
+    'AQLLQPTLELNPR', 'ASGQAFELLLSPR', 'AVLGEVVLYSGAR', 'DAGQLSGLNVLR', 
+    'DAGTLAGLNVLR', 'DAGVLAGLNVLR', 'DAPEEEDHVLVLR', 'DAVVYPLLVEFTR', 
+    'DFSPSGLFGAFQR', 'DGETPDPEDPSR', 'DSALEFLTQLSR', 'DSAQTSVTQAQR', 
+    'DTQSGSLLFLGR', 'EDLTQSAQHALR', 'EVDLGLPDATGR', 'EVTLNQSLLAPLR', 
+    'EVYQQQQYGSGGR', 'FAAATGATPLAGR', 'FDDGAGGDNEVQR', 'FEELNADLFR', 
+    'FGSDQSENVDR', 'GATQQLLDEAER', 'GLTPSQLGVLLR', 'GPQVQQPPPSNR', 
+    'GQLEALQVDGGR', 'GVQVETLSPGDGR', 'LASGLGLAWLVGR', 'LATLLGLQAPPTR', 
+    'LDLDSPPLTAR', 'LDYLGVSYGLTPR', 'LEGDETSTEAATR', 'LFVTNDAATLLR', 
+    'LGEYGFQNALLVR', 'LLDTLGLSQPQWR', 'LLTSFLPAQLLR', 'LPGLLLAASAVR', 
+    'LPVGTTATLYFR', 'LPWFQYPLLYDLR', 'LQSSQEPEAPPPR', 'LQTQPGYANTLR', 
+    'LSGLLYEETR', 'LSVNSVTAGDYSR', 'LVALVDVLDQNR', 'LVDQNLFSFYLSR', 
+    'NLFPSNLVSAAFR', 'NPAVLSAASFDGR', 'NPQNSSQSADGLR', 'NVNSNLLTWNR', 
+    'SAYGGPVGAGLR', 'SELGNQSPSTSSR', 'SFPDFPTPGVVFR', 'SLGSVQAPSYGAR', 
+    'SNVSDAVAQSTR', 'SQLLQYVYNLVPR', 'TLSFGSDLNYATR', 'TNEAQALETAR', 
+    'TPFLLVGTQLDLR', 'TTPDVLFVFGFR', 'TYLNPFVSFLDQR', 'VALTGLTVAEYFR', 
+    'VEPGLGADNSVVR', 'VLANPGNSQVAR', 'VQLSPDSGGLPER', 'WSNLPFLTVPLSR',
+    'WVAVVVPSGQEQR','YGVNPGPLVGTTR', 'YNSQLLSFVR', 'YTLSQEAYDQR', 
+    'YYVTLLDAPGHR']
 
-    iRT_bins = np.linspace(-25, 190, 11) # wider than the random peptide iRT range
-    iRT_bin_width = np.diff(iRT_bins)[0] # no space between bins
-    iRT_bin_min_spacing = 0
-
-    if np.diff(precursor_bins).min() < precursor_bin_min_spacing:
-        raise ValueError
+    PARENT = DESIGN_0
+    mz = [calc_mz(x, 2) for x in known_peptides]
+    mask = (np.abs(PARENT.precursor_bins[:, None] - mz) 
+                   < PARENT.precursor_bin_width).any(axis=1)
+    precursor_bins = PARENT.precursor_bins[mask]
+    precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
+    # precursor_bins = DESIGN_0.precursor_bins[243:244]
+    # precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
 
 class DESIGN_3(DESIGN_0):

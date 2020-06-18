@@ -34,14 +34,14 @@ rule all:
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
-        #     design=METADATA.name,
-        #     bin_iRT=METADATA.iRT_bin_names.values(),
-        #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
             design=METADATA.name,
-            bin_iRT=list(METADATA.iRT_bin_names.values()),
-            ms1_range=list(METADATA.ms1_selection_ranges.keys()))
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values())
+        # expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=list(METADATA.iRT_bin_names.values()),
+        #     ms1_range=list(METADATA.ms1_selection_ranges.keys()))
 
 
 
@@ -50,21 +50,32 @@ rule generate_peptides:
         expand('process/{{design}}_{{run}}_{bin_mz}.peptides.csv', 
             bin_mz=METADATA.precursor_bin_names.values())
     run:
-        seed = hash(wildcards['run']) % 2**32
-        df_precursors_all = (fly.generate_peptide_set(
-            METADATA.num_to_generate, METADATA.min_length, METADATA.max_length,
-            METADATA.rule_set, seed=seed)
-            .assign(mz_bin=lambda x: 
-                x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
-                    METADATA.precursor_bin_width))
-             .query('mz_bin == mz_bin')
-             .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
-             .assign(run=RUN_NAME)
-        )
-
+        if METADATA.rule_set == 'RJ_76':
+            df_peptides = (fly.design.permute_precursors(METADATA.known_peptides, 
+                METADATA.num_permutations)
+                .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
+                .assign(mz_bin=lambda x: 
+                    x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
+                        METADATA.precursor_bin_width))
+                .query('mz_bin == mz_bin')
+                .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
+                .assign(run=RUN_NAME)
+            )
+        else:
+            df_peptides = (fly.generate_peptide_set(
+                METADATA.num_to_generate, METADATA.min_length, 
+                METADATA.max_length, METADATA.rule_set)
+                .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
+                .assign(mz_bin=lambda x: 
+                    x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
+                        METADATA.precursor_bin_width))
+                .query('mz_bin == mz_bin')
+                .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
+                .assign(run=RUN_NAME)
+            )
         # need to write empty csv files for empty bins
         for f, mz_bin in zip(output, METADATA.precursor_bin_names.values()):
-            (df_precursors_all.query('mz_bin == @mz_bin')
+            (df_peptides.query('mz_bin == @mz_bin')
                 .to_csv(f, index=None)
             )
 
@@ -81,17 +92,12 @@ rule predict_prosit:
     run:
         d_spectra, d_irt = fly.load_prosit_models(
             MODEL_IRT, MODEL_SPECTRA, gpu_mem_fraction=GPU_MEM_FRACTION)
-        df_precursors = (pd.concat([pd.read_csv(f) for f in input])
-            .rename(columns={'orig_seq': 'sequence'})
-            )
-
-        num_to_predict = min(
-            len(df_precursors), 
-            METADATA.pred_barcodes_per_mz_bin)
+        df_peptides = pd.concat([pd.read_csv(f) for f in input])
         
-        df_predicted = (df_precursors
+        df_predicted = (df_peptides
+         # shuffle
          .sample(frac=1, replace=False, random_state=0)
-         .head(num_to_predict)
+         .head(METADATA.pred_barcodes_per_mz_bin)
          .pipe(fly.add_prosit, d_spectra, d_irt, 
             METADATA.normalized_collision_energy)
          .assign(iRT_bin=lambda x: 
