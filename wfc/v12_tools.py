@@ -100,6 +100,7 @@ class MultiHeatmap():
         streams = (list(tap_streams.values()) 
                 + list(dtap_streams.values()) 
                 + list(hover_streams.values()))
+
         tap_dmap = hv.DynamicMap(self.make_multi_heatmap(), streams=streams)
 
         if self.cursor:
@@ -168,11 +169,7 @@ class MultiHeatmap():
                 self.cursor_pipe.send([new_x, new_y])
 
             self.state = kwargs, (new_x,new_y), active
-            return (to_curve('pred') * to_curve('design') * to_curve('alt')
-                    ).opts(legend_position='top')
+            
+            return (hv.Overlay([to_curve(k) for k in ds.data_vars])
+                    .opts(legend_position='top'))
         return multi_heatmap
-
-class PointerXYInt(hv.streams.PointerXY):
-    def transform(self):
-        postdoc.contents
-        return {k: int(np.round(v)) for k,v in self.contents.items()}
