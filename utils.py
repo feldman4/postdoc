@@ -108,3 +108,14 @@ def codify(df, **kwargs):
                         for k, v in kwargs.items()})
 
 
+def ls_df(search):
+    from string import Formatter
+    import parse
+    wc = ''
+    for subs, _, _, _ in Formatter().parse(search):
+        wc += subs + '*'
+    files = glob(wc)
+    return (pd.DataFrame([parse.parse(search, f).named 
+                          for f in files])
+     .assign(file=files)
+    )

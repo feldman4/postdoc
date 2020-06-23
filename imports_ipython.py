@@ -1,6 +1,8 @@
 from .sequence import print_alignment
 from .sequence import read_fasta
 from .imports import *
+from .utils import ls_df
+
 try:
     from .drive import Drive
     drive = Drive()
@@ -8,6 +10,7 @@ except ImportError:
     print('Skipping .drive due to missing packages.')
 
 from scipy.spatial.distance import pdist
+from math import ceil
 
 import IPython
 from IPython.display import display
