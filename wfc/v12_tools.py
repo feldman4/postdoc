@@ -1,11 +1,14 @@
+import sys
+from glob import glob
+    
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xray
-import holoviews as hv 
-hv.extension('bokeh')
+from scipy.stats import kurtosis, skew
 
-cb_vals = np.array([np.nan] + list(np.arange(2, 20, 0.5)))
+cb_vals_true = np.array([np.nan] + list(np.arange(2, 20, 0.5)))
 cb_vals = np.array([0] + list(np.arange(2, 20, 0.5)))
 
 import rtRosetta.v12_simple as v12
@@ -38,11 +41,14 @@ def cb(feat):
     """Get cb with labeled coordinates.
     """
     feat = np.squeeze(feat)
+    return xray_cb(v12.split_feat(feat)['cb'])
+
+
+def xray_cb(x):
     coords_ = coords
-    coords_['L1'] = np.arange(feat.shape[0])
-    coords_['L2'] = np.arange(feat.shape[1])
-    return xray.DataArray(v12.split_feat(feat)['cb'], 
-        coords_, dims=('L1', 'L2', 'cb'))
+    coords_['L1'] = np.arange(x.shape[0])
+    coords_['L2'] = np.arange(x.shape[1])    
+    return xray.DataArray(x, coords_, dims=('L1', 'L2', 'cb'))
 
 
 def cb_pred(feat):
@@ -55,121 +61,127 @@ def plot_D12_ij(D, D1, D2, i, j):
     f(D), f(D1), f(D2)
 
 
-# Define function to compute histogram based on tap location
-class MultiHeatmap():
-    """adapted from http://holoviews.org/reference/streams/bokeh/Tap.html
+
+def plot_ij_traces(ds, i, j, ax, i_=0, j_=0, fontsize=10, s=100):
+    y = ds['pred'][i, j].values.copy()
+    y /= y.max()
+    y += i_
+    x = np.arange(len(y)) + j_
+    ax.plot(x, y, color=(0.2, 0.2, 0.2), zorder=-1)
+    d0 = ds['min_RMSD'][i, j].argmax('cb')
+    d1 = ds['alt'][i, j].argmax('cb')
+    ax.scatter(d0+j_, y[d0], color='red', s=s)
+    ax.scatter(d1+j_, y[d1], color='orange', s=s)
+    s = float(ds["sarle"][i, j])
+    ax.text(x[0] + 2, y.max() - 0.5, 
+            f'L1={i}, L2={j}, sarle={s:.3g}',
+           fontsize=fontsize, zorder=-2, color='gray')
+    # deal with non-contact bin
+    if (d0 == 0) or (d1 == 0):
+        ls = 'dotted'
+    else:
+        ls = 'solid'
+    d0 = len(y) if d0 == 0 else d0 
+    d1 = len(y) if d1 == 0 else d1
+    ax.plot([d0+j_, d1+j_], [y.min(), y.min()], color='green', ls=ls)
+    return ax
+
+
+def describe_pred_minRMSD_alt(ds):
+    """Add various quantities to dataset with pred, design, alt
+    distograms. Also put contacts in a dataframe.
+    Confidence is defined as 1 - no_contact_bin.
     """
-    def __init__(self, ds):
-        self.ds = ds
 
-    def plot(self, active=False, legend=True, cursor=False, height=250):
-        # options for make_multi_heatmap
-        self.legend = legend
-        self.cursor = cursor
-        self.state = {}, (0, 0), active
-        ds = self.ds
-        
-        # Declare HeatMap
-        heatmaps = {}
-        for k in ds.data_vars:
-            # idxmax not yet in xarray release
-            da = ds[k]
-            da_ = xray.full_like(da[..., 0], 0).rename('CB distance')
-            da_.values = da.coords['cb'].values[da.argmax('cb')]
-            heatmaps[k] = hv.HeatMap(da_, group=k).opts(invert_yaxis=True) 
+    nonzero_raw = ds['pred'][:, :, 1:]
+    nonzero = nonzero_raw / nonzero_raw.max(axis=-1)
 
-        # Declare Tap stream with heatmap as source and initial values
-        tap_streams = {k: 
-            hv.streams.Tap(source=heatmaps[k], x=0, y=0)
-                .rename(x=f'tap_x_{k}', y=f'tap_y_{k}')
-            for k, v in heatmaps.items()}
+    def get_sarle(x):    
+        s = skew    (x, axis=-1)
+        k = kurtosis(x, axis=-1)
+        return (s**2 + 1 / (k + 3))
+    std = np.std(nonzero, axis=-1)
+    sarle = get_sarle(nonzero_raw)
+    confidence = (1 - ds['pred'][:, :, 0])
 
-        # allow clicks to enable/disable updates
-        dtap_streams = {k: 
-            hv.streams.DoubleTap(source=heatmaps[k], x=0, y=0)
-                .rename(x=f'dtap_x_{k}', y=f'dtap_y_{k}')
-            for k, v in heatmaps.items()}
+    d_1 = ds['min_RMSD'].argmax('cb')
+    d_2 = ds['alt'].argmax('cb')
+    delta = np.abs(d_1 - d_2)
+    delta.values[(d_1 == 0) | (d_2 == 0)] = 0
+    ds['delta'] = delta
+    ds['sarle'] = 1/(sarle) * (confidence > 0.3)
+    ds['sarle'] = 1/(sarle) * confidence**2
 
-        # allow clicks to enable/disable updates
-        hover_streams = {k: 
-            # PointerXYInt(source=heatmaps[k], x=0, y=0)
-            hv.streams.PointerXY(source=heatmaps[k], x=0, y=0)
-                .rename(x=f'hover_x_{k}', y=f'hover_y_{k}')
-            for k, v in heatmaps.items()}
+    d1 = np.diff(ds['pred'][:, :, 1:], n=1, axis=-1)
+    d2 = np.diff(ds['pred'][:, :, 1:], n=2, axis=-1)
+    d2[d2 < 0] = 0
+    d2 = (d2 > 0).sum(axis=-1)
+    d2[confidence < 0.5] = 0
 
-        streams = (list(tap_streams.values()) 
-                + list(dtap_streams.values()) 
-                + list(hover_streams.values()))
+    x = nonzero.values
+    a,b,c = x[..., ::3], x[..., 1::3], x[..., 2::3]
+    d2 = ((a > b) & (c > b)).sum(axis=-1)
 
-        tap_dmap = hv.DynamicMap(self.make_multi_heatmap(), streams=streams)
+    d2 = d1.std(axis=-1)
+    d2 = nonzero.std(axis=-1)
 
-        if self.cursor:
-            make_cursor = lambda: hv.Points([]).opts(color='red', marker='+', size=50)
-            self.cursor_pipe = hv.streams.Pipe(data=[])
-            cursor_dmap = hv.DynamicMap(lambda **x: make_cursor(), streams=[self.cursor_pipe])
-            for k in heatmaps:
-                heatmaps[k] = heatmaps[k] *  cursor_dmap 
+    ds['upcurve'] = xray.zeros_like(ds['sarle'])
+    ds['upcurve'].values = d2
 
-        return hv.Layout(list(heatmaps.values()) + [tap_dmap]).opts(
-            hv.opts.HeatMap(tools=['hover'], height=height, width=height, toolbar='above'),
-            hv.opts.Curve(height=height, width=height)
-            ).cols(2)
+    df_contacts = pd.DataFrame({
+        'delta': ds['delta'].values.flatten(),
+        'sarle': ds['sarle'].values.flatten(),
+        'cb_pred': cb_vals[nonzero.argmax(axis=-1)].flatten(),
+        'confidence': 1 - ds['pred'][:, :, 0].values.flatten(),
+        'design': d_1.values.flatten(),
+        'alt': d_2.values.flatten(),
+    })
+    
+    return ds, df_contacts
 
-    def make_multi_heatmap(self):
-        def multi_heatmap(**kwargs):
-            prev, (x,y), active = self.state
-            new_x, new_y = x, y
-            ds = self.ds
-            
-            # on double tap, toggle active state
-            for k in ds.data_vars:
-                kx, ky = f'dtap_x_{k}', f'dtap_y_{k}'
-                if kx not in prev:
-                    continue
-                if prev[kx] != kwargs[kx] or prev[ky] != kwargs[ky]:
-                    active = not active
-                    break
 
-            # if active, update on hover
-            if active: 
-                for k in ds.data_vars:
-                    kx, ky = f'hover_x_{k}', f'hover_y_{k}'
-                    if kx not in prev:
-                        continue
-                    if prev[kx] != kwargs[kx] or prev[ky] != kwargs[ky]:
-                        new_x = kwargs[kx]
-                        new_y = kwargs[ky]
-                        break
-            
-            # if not active, update on tap
-            if not active: 
-                for k in ds.data_vars:
-                    kx, ky = f'tap_x_{k}', f'tap_y_{k}'
-                    if kx not in prev:
-                        continue
-                    if prev[kx] != kwargs[kx] or prev[ky] != kwargs[ky]:
-                        new_x = kwargs[kx]
-                        new_y = kwargs[ky]
-                        break
-                        
-            def to_curve(name):
-                data = ds[name].isel(L1=new_x, L2=new_y)
-                data = ((data / data.max())
-                .rename('prediction (relative to max)')
-                .rename(cb=f'CB distance {new_x}, {new_y}')
-                )
-                if self.legend:
-                    return hv.Curve(data, label=name)
-                else:
-                    return hv.Curve(data)
+def heatmap_2D_entries(ds):
+    keys = [k for k in ds.data_vars if ds[k].ndim == 2]
+    rows = int(np.ceil(len(keys)/2))
+    fig, axs = plt.subplots(rows, 2, figsize=(14, 14))
+    axs = iter(axs.flatten())
+    for k in keys:
+        ax = axs.__next__()
+        sns.heatmap(ds[k].to_pandas(), square=True, ax=ax)
+        ax.set_title(k)
+    for ax in axs:
+        ax.set_visible(False)
+    return fig
 
-            new_x, new_y = int(np.round(new_x)), int(np.round(new_y))
-            change = (new_x != x) or (new_y != y)
-            if self.cursor and change:
-                self.cursor_pipe.send([new_x, new_y])
 
-            self.state = kwargs, (new_x,new_y), active
-            
-            return (hv.Overlay([to_curve(k) for k in ds.data_vars])
-                    .opts(legend_position='top'))
-        return multi_heatmap
+
+def load_cn_bw(identifier):
+    from postdoc.pyrosetta.imports import pose_from_pdb
+    CN = '/home/norn/DL/200519_negative_design/foldit_designs/'
+    sys.path.append(CN + 'scripts')
+    import utils as utilsCN
+
+    home = '/home/dfeldman/from/CN/'
+    f1 = f'from/CN/alt_state_pdbs/{identifier}_min_e_low_rmsd_state.pdb'
+    f2 = f'from/CN/alt_state_pdbs/{identifier}_alt_state.pdb'
+
+    pose1 = pose_from_pdb(f1)
+    pose2 = pose_from_pdb(f2)
+
+    pdb_6D_bins_1 = utilsCN.pose2bins(pose1)
+    pdb_6D_bins_2 = utilsCN.pose2bins(pose2)
+
+    pred_npz_file = glob(f'{CN}in/npz_predict/bk_{identifier}*npy')[0]
+    pred_npz = np.load(pred_npz_file,allow_pickle=True)[-1]
+    pred_npz['dist'] = pred_npz['cb']
+    
+    ds = xray.Dataset({'pred': xray_cb(pred_npz['cb'])})
+
+    tmp = xray.zeros_like(ds['pred'])
+    tmp.values = np.eye(37)[pdb_6D_bins_1['dist']]
+    ds['min_RMSD'] = tmp
+    tmp = xray.zeros_like(ds['pred'])
+    tmp.values = np.eye(37)[pdb_6D_bins_2['dist']]
+    ds['alt'] = tmp
+    
+    return ds
