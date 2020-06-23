@@ -3,6 +3,83 @@ import pyteomics.mzml
 import pandas as pd
 import numpy as np
 import os
+import gzip
+import re
+
+
+class Ecoli:
+    def __init__(self):
+        with gzip.open('flycodes/ecoli_ref/BL21.gff3', 'rb') as fh:
+            self.gff3 = fh.read().decode()
+
+    def download_ref():
+        base = ('ftp://ftp.ensemblgenomes.org/pub/bacteria/release-47/'
+                '{suffix}/bacteria_11_collection/escherichia_coli_bl21_de3_/')
+        base_gff3 = base.format(suffix='gff3')
+        base_fasta = base.format(suffix='fasta')
+        release = {
+            'gff3': f'{base_gff3}Escherichia_coli_bl21_de3_.ASM956v1.46.gff3.gz',
+            'pep.fa': f'{base_fasta}pep/Escherichia_coli_bl21_de3_.ASM956v1.pep.all.fa.gz'
+        }
+
+        for suffix, url in release.items():
+            local = f'flycodes/ecoli_ref/BL21.{suffix}.gz'
+            try:
+                os.remove(local)
+            except OSError:
+                pass
+            wget.download(url, local)
+
+    def find_gene_symbol(self, symbol):
+        pat = f'id=gene:(\w+);name={symbol.lower()}'
+        return re.findall(pat, self.gff3.lower())[0].upper()
+
+    def get_peptide_sequences(self, symbols):
+        from ..sequence import read_fasta
+
+        records = read_fasta('flycodes/ecoli_ref/BL21.pep.fa.gz')
+        gene_ids = {}
+        for s in symbols:
+            gene_ids[s] = self.find_gene_symbol(s)
+
+        sequences = []
+        for k, v in gene_ids.items():
+            for name, seq in records:
+                if v in name:
+                    sequences += [(k, seq)]
+
+        return (pd.DataFrame(sequences)
+                .rename(columns={0: 'gene_symbol', 1: 'seq_aa'})
+                )
+
+    def get_crap_table(self, drive):
+        return (drive('mass spec barcoding/contaminants')
+            .pipe(lambda x:
+                    x.merge(self.get_peptide_sequences(
+                        x['gene_symbol'].dropna())))
+            [['gene_symbol', 'seq_aa']]
+            .drop_duplicates()
+            )
+
+
+def e_coli_crap_mz(drive, metadata):
+    df_crap = Ecoli().get_crap_table(drive)
+
+    peptides = set()
+    for s in df_crap['seq_aa']:
+        s_ = s.replace('R', 'R.').replace('K', 'K.')
+        peptides |= set(s_.split('.'))
+    peptides -= {''}
+
+    mz_list = []
+    for p in peptides:
+        mz_list.append(calc_mz(p, charge=2))
+
+    bins = bin_by_value(mz_list, metadata.precursor_bins, metadata.precursor_bin_width)
+    bad_bins = pd.Series(bins).dropna().drop_duplicates().pipe(sorted)
+    return bad_bins
+
+
 
 def load_mzml_data(filename, progress=lambda x: x):
     mz = []
