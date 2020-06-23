@@ -29,7 +29,7 @@ class Drive():
         self.service = get_service()
         self.file_ids = list_files(self.service)
         
-    def get_excel(self, name, dropna='all', **kwargs):
+    def get_excel(self, name, dropna='all', normalize=True, fix_int=True, **kwargs):
         """Keyword arguments are passed to `pd.read_excel`.
         """
         if len(name.split('/')) == 2:
@@ -46,7 +46,17 @@ class Drive():
             
         df = pd.read_excel(fh, **kwargs)
         if dropna:
-            df = df.dropna(how=dropna)
+            df = df.dropna(how=dropna, axis=0)
+            df = df.dropna(how=dropna, axis=1)
+        if normalize:
+            df.columns = [normalize_col_name(x) for x in df.columns]
+        if fix_int:
+            for c in df.columns:
+                try:
+                    if (df[c] - df[c].astype(int)).sum() == 0:
+                        df[c] = df[c].astype(int)
+                except:
+                    pass
         return df
 
     def __call__(self, *args, **kwargs):
@@ -78,3 +88,9 @@ def update_resources():
     df_rules = drive('mass spec barcoding/rule sets', header=[0, 1])
     df_rules.fillna('').to_csv(RULE_SETS, index=None)
 
+
+def normalize_col_name(s):
+    s = s.replace('# of', 'num')
+    s = s.replace('\n', ' ')
+    s = s.replace(' ', '_')
+    return s
