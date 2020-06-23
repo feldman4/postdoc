@@ -2,6 +2,14 @@ import numpy as np
 from ..constants import *
 from .design import calc_mz
 
+# fail dnachisel constraints
+exclude_from_synthesis = [
+    'PWGVQQVVVSEAR',
+    'QSVVQAWGEVPVR',
+    'SAEQQWGVVVVPR',
+    'QVVPEVSAWGQVR',
+    'ESAQVQPWGVVVR'
+    ]
 
 class DESIGN_0():
     """First large design, produces barcodes for every iRT,mz bin that can be
@@ -93,8 +101,6 @@ class DESIGN_2(DESIGN_0):
                    < PARENT.precursor_bin_width).any(axis=1)
     precursor_bins = PARENT.precursor_bins[mask]
     precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
-    # precursor_bins = DESIGN_0.precursor_bins[243:244]
-    # precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
 
 class DESIGN_3(DESIGN_0):
@@ -124,7 +130,6 @@ class DESIGN_3(DESIGN_0):
     ms1_selection_input_max = 200
 
 
-
 class DESIGN_4(DESIGN_3):
     name = 'pool0_termR'
     rule_set = 'pool0_termR'
@@ -137,9 +142,17 @@ class DESIGN_4(DESIGN_3):
     #     DESIGN_0.precursor_mz_start, 
     #     DESIGN_0.precursor_mz_max, 
     #     MZ_DOUBLE_SPACING
-    #     )[100:102]
+    #     )[100:101]
     # precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
     # iRT_bins = np.arange(-10, 110, 5)[10:11]
     # iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
 
+
+runs = {
+    'run_001': DESIGN_0,
+    'run_002': DESIGN_1,
+    'run_003': DESIGN_3,
+    'run_004': DESIGN_4,
+    'run_005': DESIGN_2,
+    }
