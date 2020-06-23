@@ -2,14 +2,6 @@ import numpy as np
 from ..constants import *
 from .design import calc_mz
 
-# fail dnachisel constraints
-exclude_from_synthesis = [
-    'PWGVQQVVVSEAR',
-    'QSVVQAWGEVPVR',
-    'SAEQQWGVVVVPR',
-    'QVVPEVSAWGQVR',
-    'ESAQVQPWGVVVR'
-    ]
 
 class DESIGN_0():
     """First large design, produces barcodes for every iRT,mz bin that can be
@@ -156,3 +148,18 @@ runs = {
     'run_004': DESIGN_4,
     'run_005': DESIGN_2,
     }
+
+
+# fail dnachisel constraints
+exclude_from_synthesis = [
+    'PWGVQQVVVSEAR',
+    'QSVVQAWGEVPVR',
+    'SAEQQWGVVVVPR',
+    'QVVPEVSAWGQVR',
+    'ESAQVQPWGVVVR',
+    'DYFTSSTAGLLNR',
+    'STGSAFNLDYTLR',
+    'DYSFTGASLTLNR',
+    'STYGSFTDLNLAR',
+    'SFTLNSLDGAYTR',
+    ]
