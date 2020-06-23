@@ -34,14 +34,14 @@ rule all:
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
-            design=METADATA.name,
-            bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values())
-        # expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
+        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=METADATA.name,
-        #     bin_iRT=list(METADATA.iRT_bin_names.values()),
-        #     ms1_range=list(METADATA.ms1_selection_ranges.keys()))
+        #     bin_iRT=METADATA.iRT_bin_names.values(),
+        #     bin_mz=METADATA.precursor_bin_names.values())
+        expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
+            design=METADATA.name,
+            bin_iRT=list(METADATA.iRT_bin_names.values()),
+            ms1_range=list(METADATA.ms1_selection_ranges.keys()))
 
 
 
@@ -151,16 +151,16 @@ rule filter_barcodes_ms1_range:
          .head(METADATA.ms1_selection_input_max)
          .sort_values('mz_bin')
         )
-        filter = fly.design.prepare_filter(df_peptides['mz_bin'])
 
         if len(df_peptides) == 0:
             pd.DataFrame().to_csv(output[0], index=None)
         else:
             df_ions_selected, df_wide, barcode_ix = fly.snake_select_barcodes(
-                df_peptides, METADATA, filter)
+                df_peptides, METADATA, unique_col='mz_bin')
             (df_ions_selected
              .assign(ms1_range=wildcards.ms1_range)
-             .to_csv(output[0], index=None))
+             .to_csv(output[0], index=None)
+            )
 
 
 
