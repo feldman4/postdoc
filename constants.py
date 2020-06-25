@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
 
+HOME = Path(os.path.environ['HOME'])
 JOBLIB_CACHE = Path(os.environ['HOME']) / '.joblib'
 
 resources = Path(__file__).parents[0] / 'resources'
 RULE_SETS = resources / 'rule_sets.csv'
+PDB_DB = resources / 'pdb_db.csv'
 
 GO_TERM = 'GO_term'
 GO = 'GO ID'
@@ -45,4 +47,9 @@ pthr_columns = {
 
 MZ_DOUBLE_SPACING = 0.5001917279701898
 
-CANONICAL_AA = list('PGAVILMFWYSTNQHDERKC')
+AA_3 = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+           'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+AA_1 = list('ARNDCQEGHILKMFPSTWYV')
+CANONICAL_AA = AA_1
+AA_3_1 = dict(zip(AA_3, AA_1))
+AA_1_3 = dict(zip(AA_1, AA_3))

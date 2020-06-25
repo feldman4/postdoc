@@ -6,6 +6,7 @@ import os
 import gzip
 import re
 
+from ..constants import HOME
 
 class Ecoli:
     def __init__(self):
@@ -143,8 +144,7 @@ def grid_ms1_intensities(mz, intensity, time):
 
 def generate_msfragger_cmd(mzML, protein_fa):
     params_text = msfragger_params.format(protein_fa=protein_fa)
-    params = os.path.join(os.environ['HOME'], 
-                          'Downloads/fragger.test.params')
+    params = HOME / 'Downloads' / 'fragger.test.params'
     with open(params, 'w') as fh:
         fh.write(params_text)
     

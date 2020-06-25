@@ -7,6 +7,7 @@ from glob import glob
 
 import numpy as np
 import pandas as pd
+from ..constants import AA_3_1
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ def read_pdb(filename, add_info=True, reorder_cols=True):
             .sort_values('atom_serial')
             .assign(res_ix=lambda x: 
                 x['res_seq'].astype('category').cat.codes)
+            .assign(res_aa=lambda x: x['res_name'].map(AA_3_1))
             )
 
     return df

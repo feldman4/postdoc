@@ -149,10 +149,9 @@ def get_digs_path(accession):
 def download_rcsb_blast_cluster(blast_file):
     """ftp://resources.rcsb.org/sequence/clusters
     """
-    HOME = os.environ['HOME']
     remote = (f'ftp://resources.rcsb.org/sequence/clusters/'
               f'{blast_file}')
-    local = os.path.join(HOME, 'rcsb', blast_file)
+    local = HOME / 'rcsb' / blast_file
     cmd = f'wget {remote} -O {local}'
     get_ipython().system(cmd)
 
