@@ -1,6 +1,7 @@
 ._*
 *.DS_Store
 resources/._*
+resources/pdb_db.csv
 resources/pdbs/
 scripts/external/
 external/
