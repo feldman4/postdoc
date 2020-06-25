@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-HOME = Path(os.path.environ['HOME'])
+HOME = Path(os.environ['HOME'])
 JOBLIB_CACHE = Path(os.environ['HOME']) / '.joblib'
 
 resources = Path(__file__).parents[0] / 'resources'
