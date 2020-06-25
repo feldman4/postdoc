@@ -1,5 +1,14 @@
 from .wfc import *
-from .static import build_database, get_pdb_db, find_pdb, PDB_DB
+from .static import (
+    build_pdb_db, 
+    get_pdb_db, 
+    find_pdb, 
+    PDB_DB,
+    find_pred,
+    get_pred_db,
+    save_pred_result,
+    )
+
 
 def initialize_tf():
     """
@@ -13,5 +22,4 @@ def initialize_tf():
         physical_devices = tf.config.experimental.list_physical_devices('GPU')
         for physical_device in physical_devices:
             tf.config.experimental.set_memory_growth(physical_device, True)
-
 

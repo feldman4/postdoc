@@ -4,10 +4,12 @@ import pandas as pd
 import os
 from ..pyrosetta import diy
 from ..constants import PDB_DB, HOME
+import hashlib
 
+current_pdb_db_paths = None
+current_pdb_db = None
 
-current_db_paths = None
-current_db = None
+current_pred_db = None
 
 
 PDB_PATHS = {
@@ -20,20 +22,81 @@ PRED_DIR = HOME / 'wfc' / 'pred'
 
 
 def find_pred(identifier_or_sequence):
-    pass
+    df_pred_db = get_pred_db(check=False)
+    hit = df_pred_db.query('seq == @identifier_or_sequence')
+    if hit.shape[0] == 1:
+        return load_pred(hit['file'].iloc[0])
+    elif hit.shape[0] > 1:
+        raise ValueError(f'multiple predictions found for {identifier_or_sequence}')
+    else:
+        df_pdb_hits = (find_pdb('')
+         .loc[lambda x: x['name'].str.contains(identifier_or_sequence)])
+        
+        if len(df_pdb_hits) > 0:
+            seq = df_pdb_hits['sequence'].iloc[0]
+            return find_pred(seq)
+
+        else:
+            raise ValueError(f'not found: {identifier_or_sequence}')
+
+
+def load_pred(filename):
+    npz = np.load(filename)
+    d = {}
+    for key in npz:
+        value = npz[key]
+        if len(value.shape) == 0:
+            value = str(value)
+        d[key] = value
+    return d
+
+
+
+def build_pred_db():
+    files = glob(str(PRED_DIR / 'md5' / '*npz'))
+
+    arr = []
+    str_keys = 'seq', 'source'
+    arr_keys = 'xaa', 'xab', 'xac', 'xad', 'xae', 'avg'
+    for f in files:
+        npz = np.load(f)
+        d = {k: str(npz[k]) for k in str_keys}
+
+        keys = list(npz.keys())
+        d['arrays'] = ','.join([x for x in arr_keys if x in keys])
+        d['file'] = f
+        arr += [d]
+        
+    return pd.DataFrame(arr)
+
+
+def save_pred_result(result):
+    """Save results dictionary to md5 directory (unique names) and symlink to 
+    seq directory (sequence name).
+    """
+    seq = result['seq']
+    md5 = hashlib.md5()
+    md5.update(seq.encode())
+    f_hash = PRED_DIR / 'md5' / (md5.hexdigest() + '.npz')
+    f_seq = PRED_DIR / 'seq' / f'{seq}.npz'
+    np.savez(f_hash, **result)
+    if os.path.lexists(f_seq):
+        os.remove(f_seq)
+    os.symlink(f_hash, f_seq)
 
 
 def find_pdb(identifier_or_sequence):
     """Return matches or entire database if no argument is given.
     """
     find_hit = lambda x: (x['name'].str.contains(identifier_or_sequence)
-                          | x['sequence'].str.contains(identifier_or_sequence))
+                          | (x['sequence'] == identifier_or_sequence))
 
     df_db = get_pdb_db(check=False).loc[find_hit]
     if df_db.shape[0] == 0:
         df_db = get_pdb_db(check=True).loc[find_hit]
 
     return df_db
+
 
 def pdb_entry(filename):
     df_pdb = diy.read_pdb(filename)
@@ -54,7 +117,7 @@ def pdb_entry(filename):
     return pd.DataFrame(arr)
 
 
-def make_database(paths):
+def make_pdb_db(paths):
     arr = []
     for project, path in paths.items():
         files = glob(path)
@@ -62,11 +125,11 @@ def make_database(paths):
     return pd.concat(arr).reset_index(drop=True)
 
 
-def build_database(paths=PDB_PATHS):
-    df_db = make_database(paths)
+def build_pdb_db(paths=PDB_PATHS):
+    df_db = make_pdb_db(paths)
     df_db.to_csv(PDB_DB, index=None)
-    global current_db
-    current_db = df_db
+    global current_pdb_db
+    current_pdb_db = df_db
     return df_db
 
 
@@ -74,9 +137,9 @@ def get_pdb_db(check=True):
     """If the database has already been loaded and check is False, return database.
     Otherwise, check filesystem for changes. If any are found, rebuild database.
     """
-    global current_db
+    global current_pdb_db
     # not yet loaded
-    if current_db is None:
+    if current_pdb_db is None:
         check = True
     
     if check:
@@ -100,7 +163,22 @@ def get_pdb_db(check=True):
                     break
         if rebuild:
             print(rebuild)
-            df_db = build_database()
+            df_db = build_pdb_db()
         else:
-            current_db = df_db
-    return current_db
+            current_pdb_db = df_db
+    return current_pdb_db
+
+
+def get_pred_db(check=True):
+    """If the database has already been loaded and check is False, return database.
+    Otherwise, check filesystem for changes. If any are found, rebuild database.
+    """
+    global current_pred_db
+    # not yet loaded
+    if current_pred_db is None:
+        check = True
+    
+    if check:
+        current_pred_db = build_pred_db()
+
+    return current_pred_db
