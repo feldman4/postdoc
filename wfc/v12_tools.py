@@ -14,6 +14,8 @@ cb_vals = np.array([0] + list(np.arange(2, 20, 0.5)))
 import rtRosetta.v12_simple as v12
 
 coords = {'cb': cb_vals}
+TRROSETTA_TOKENS = ('xaa', 'xab', 'xac', 'xad', 'xae')
+
 
 def plot_cb(feat, ax=None, cbar=False):
     cb = cb_pred(feat)
@@ -29,6 +31,16 @@ def predict(model, seq):
     pssm = np.eye(20)[[v12.aa_1_N[x] for x in seq]]
     _, _, feat_pred, _ = model.predict([pssm[None], feat[None]])
     return feat_pred
+
+
+def predict_models(models, seq):
+    results = {}
+    for name, model in models.items():
+        results[name] = predict(model, seq)
+    results['avg'] = np.mean([x for x in results.values()], axis=0)
+    results['seq'] = seq
+    results['source'] = __name__
+    return results
 
 
 def load_pdb(f):
@@ -61,20 +73,20 @@ def plot_D12_ij(D, D1, D2, i, j):
     f(D), f(D1), f(D2)
 
 
-
-def plot_ij_traces(ds, i, j, ax, i_=0, j_=0, fontsize=10, s=100):
+def plot_ij_traces(ds, state_a, state_b, metric, i, j, ax, pred='pred', 
+        i_=0, j_=0, fontsize=10, s=100):
     y = ds['pred'][i, j].values.copy()
     y /= y.max()
     y += i_
     x = np.arange(len(y)) + j_
     ax.plot(x, y, color=(0.2, 0.2, 0.2), zorder=-1)
-    d0 = ds['min_RMSD'][i, j].argmax('cb')
-    d1 = ds['alt'][i, j].argmax('cb')
+    d0 = ds[state_a][i, j].argmax('cb')
+    d1 = ds[state_b][i, j].argmax('cb')
     ax.scatter(d0+j_, y[d0], color='red', s=s)
     ax.scatter(d1+j_, y[d1], color='orange', s=s)
-    s = float(ds["sarle"][i, j])
+    s = float(ds[metric][i, j])
     ax.text(x[0] + 2, y.max() - 0.5, 
-            f'L1={i}, L2={j}, sarle={s:.3g}',
+            f'L1={i}, L2={j}\n{metric}={s:.3g}',
            fontsize=fontsize, zorder=-2, color='gray')
     # deal with non-contact bin
     if (d0 == 0) or (d1 == 0):
