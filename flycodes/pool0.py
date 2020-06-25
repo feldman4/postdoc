@@ -5,10 +5,15 @@ import pandas as pd
 from ..sequence import reverse_complement
 from . import designs
 
+import dnachisel
+import joblib
+
+from ..constants import JOBLIB_CACHE
+
+memory = joblib.Memory(cachedir=JOBLIB_CACHE, verbose=False)
 
 def shifted_diagonals(df_ms):
     num_ms1, num_iRT = df_ms.shape
-    df_ms = df_ms.copy()
     i = np.arange(num_ms1)
     
     # first diagonal
@@ -28,7 +33,6 @@ def unshifted_diagonals(iRT, mz):
     df_ms = pd.DataFrame(index=mz, columns=iRT).fillna(False)
 
     num_ms1, num_iRT = df_ms.shape
-    df_ms = df_ms.copy()
     iRT = 0
     for ms1 in range(num_ms1):
         iRT = (iRT + 2) % num_iRT
@@ -69,7 +73,8 @@ def reverse_translate_barcode(seq_aa, gc_min=0.3, gc_max=0.7):
             dnachisel.EnforceGCContent(mini=gc_min, maxi=gc_max),
             dnachisel.EnforceTranslation(),
         ],
-        objectives=[dnachisel.CodonOptimize(species='e_coli')]
+        objectives=[dnachisel.CodonOptimize(species='e_coli')],
+        logger=None,
     )
 
     problem.resolve_constraints()
@@ -77,24 +82,22 @@ def reverse_translate_barcode(seq_aa, gc_min=0.3, gc_max=0.7):
     return problem.sequence
 
 
+RT_dictionary = 'flycodes/pool0/RT_dictionary.csv'
+
 def reverse_translate_barcodes(peptides, progress=lambda x: x):
-    f = 'flycodes/pool0/dnachisel_output.csv'
-
-    aa_to_dna = (pd.read_csv(f)
-     .set_index('sequence_aa')['sequence_dna']
-     .to_dict()            
-    )
-
+    aa_to_dna = pd.read_csv(RT_dictionary).set_index('aa')['dna'].to_dict()
     bad_aa = []
     for x in progress(peptides):
-        if x in aa_to_dna:
-            continue
         try:
-            aa_to_dna[x] = reverse_translate_barcode(x) 
-        except:
+            aa_to_dna[x] = reverse_translate_barcode(x)
+
+        except dnachisel.NoSolutionError:
             bad_aa += [x]
             
-    return aa_to_dna
+    pd.DataFrame({'aa': list(aa_to_dna.keys()),
+                  'dna': list(aa_to_dna.values())
+    }).to_csv(RT_dictionary, index=None)
+    return aa_to_dna, bad_aa
 
 
 def build_oligos(df_oligos, oligo_templates, dialout_adapters):
@@ -140,6 +143,7 @@ def select_pool0_peptides(df_layout):
 
         # apply mask to iRT,MS1 bins if provided
         if mask.endswith('csv'):
+            mask = mask.format(design=design)
             df_ms = pd.read_csv(mask, index_col=0)
             df_ms.index.name = 'iRT_bin'
             df_ms.columns = (pd.Index(df_ms.columns, name='mz_bin')
@@ -148,12 +152,12 @@ def select_pool0_peptides(df_layout):
 
             df_barcodes = df_barcodes.join(
                 masked_bins, on=['iRT_bin', 'mz_bin'], how='inner')
-
         # sort rows so that the first N/n barcodes belong in subpool 1 of n
         if selection == 'per iRT,MS1':
             df_barcodes = df_barcodes.pipe(
                 limit_and_order_peptides, 
                 num_barcodes, ['iRT_bin', mz_key])
+        
 
         total_required = df_layout_['num_barcodes'].sum()
         assert total_required <= len(df_barcodes)
@@ -163,28 +167,25 @@ def select_pool0_peptides(df_layout):
          .drop(['keep', 'bin_size', 'intensity_prosit'], axis=1, errors='ignore')
          .rename(columns={'run': 'snakemake_run'})
         )
-
         arr += [df_layout_.merge(df_barcodes)]
         
     df_oligos = (pd.concat(arr)
      .sort_values(['subpool', 'iRT_bin', 'mz_bin'])
     )
-    
     return df_oligos
     
 
-def build_ms():
-    DESIGN = designs.DESIGN_3
+def build_ms(DESIGN):
     df_ms = (unshifted_diagonals(
         DESIGN.iRT_bins[1::2],
         DESIGN.precursor_bins)
     .rename(columns=DESIGN.precursor_bin_names)
     .reindex(index=DESIGN.iRT_bins).fillna(False)
     )
-    df_ms.to_csv('flycodes/pool0/diagonal_iRT_MS1.csv')
+    df_ms.to_csv(f'flycodes/pool0/{DESIGN.name}_diagonal_iRT_MS1.csv')
 
 
-def design_pool(drive):
+def design_pool(drive, progress=lambda x: x):
     dialout_adapters = (drive('reagents/dialout_oligos')
      .dropna(subset=['dialout'])
      [['dialout', 'FWD_priming', 'REV_priming']]
@@ -198,9 +199,24 @@ def design_pool(drive):
 
     df_peptides = select_pool0_peptides(df_layout)
 
-    aa_to_dna = reverse_translate_barcodes(df_peptides['sequence'])
+    peptides = []
+    for design, sequence in df_peptides[['design', 'sequence']].values:
+        if design.endswith('termK') and sequence.endswith('K'):
+            peptides += [sequence[:-1]]
+        elif design.endswith('termR') and sequence.endswith('R'):
+            peptides += [sequence[:-1]]
+        else:
+            raise ValueError(design, sequence)
+    df_peptides['no_term'] = peptides
+
+    aa_to_dna, bad_aa = reverse_translate_barcodes(
+        df_peptides['no_term'], progress=progress)
+    if bad_aa:
+        print('Unable to reverse translate {len(bad_aa)} barcodes')
+        print(bad_aa)
+    
     df_oligos = (df_peptides
-    .assign(sequence_dna=lambda x: x['sequence'].map(aa_to_dna))
+    .assign(sequence_dna=lambda x: x['no_term'].map(aa_to_dna))
     .dropna(subset=['sequence_dna'])            
     .assign(oligo=lambda x: 
             x.pipe(build_oligos, oligo_templates, 
@@ -228,7 +244,10 @@ def plot_subpools_iRT_mz(df_oligos, progress=lambda x: x):
 
     for _, df in progress(df_oligos.groupby('subpool')):
         fg = plot(df)
-        ranges = df['ms1_range'].dropna().drop_duplicates()
+        try:
+            ranges = df['ms1_range'].dropna().drop_duplicates()
+        except KeyError:
+            ranges = []
         for i, ms1_range in enumerate(sorted(ranges)):
             left, right = ms1_range.split('-')
             left, right = float(left), float(right)

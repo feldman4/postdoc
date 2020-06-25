@@ -61,7 +61,7 @@ class DESIGN_1(DESIGN_0):
 class DESIGN_2(DESIGN_0):
     """Based on permutations of known good peptides.
     """
-    name = 'RJ_76'
+    name = 'RJ_76_termR'
     rule_set = 'RJ_76'
 
     num_generation_runs = 1
