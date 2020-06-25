@@ -25,7 +25,7 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return stamp
 
 
-def csv_frame(files_or_search, tqdn=False, add_file=None, sort=True, **kwargs):
+def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
     """
@@ -44,11 +44,7 @@ def csv_frame(files_or_search, tqdn=False, add_file=None, sort=True, **kwargs):
     else:
         files = files_or_search
 
-    if tqdn:
-        from tqdm import tqdm_notebook as tqdn
-        return pd.concat([read_csv(f) for f in tqdn(files)], sort=sort)
-    else:
-        return pd.concat([read_csv(f) for f in files], sort=sort)
+    return pd.concat([read_csv(f) for f in progress(files)], sort=sort)
 
 
 
