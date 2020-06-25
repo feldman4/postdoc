@@ -1,6 +1,9 @@
-import pathlib
+import os
+from pathlib import Path
 
-resources = pathlib.Path(__file__).parents[0] / 'resources'
+JOBLIB_CACHE = Path(os.environ['HOME']) / '.joblib'
+
+resources = Path(__file__).parents[0] / 'resources'
 RULE_SETS = resources / 'rule_sets.csv'
 
 GO_TERM = 'GO_term'
