@@ -99,7 +99,7 @@ def plot_ij_traces(ds, state_a, state_b, metric, i, j, ax, pred='pred',
     return ax
 
 
-def describe_pred_minRMSD_alt(ds):
+def describe_pred_minRMSD_alt(ds, cap=0.01):
     """Add various quantities to dataset with pred, design, alt
     distograms. Also put contacts in a dataframe.
     Confidence is defined as 1 - no_contact_bin.
@@ -140,13 +140,28 @@ def describe_pred_minRMSD_alt(ds):
     ds['upcurve'] = xray.zeros_like(ds['sarle'])
     ds['upcurve'].values = d2
 
+    L1, L2, _ = ds['pred'].shape
+    I, J = np.meshgrid(range(L1), range(L2))
+
+    bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
+    ds['bkgr_dist'] = xray.DataArray(bkgr_dist, dims=ds['pred'].dims)
+
+    ds['pred/bkgr_cap'] = ds['pred'] / (ds['bkgr_dist'] + cap)
+    ds['pred/bkgr_cap'] /= ds['pred/bkgr_cap'].sum('cb')
+    ds['pred/bkgr'] = ds['pred'] / ds['bkgr_dist']
+    ds['pred/bkgr'] /= ds['pred/bkgr'].sum('cb')
+
     df_contacts = pd.DataFrame({
+        'pred_bkgr': ds['pred/bkgr'].argmax('cb').values.flatten(),
+        'pred_bkgr_cap': ds['pred/bkgr_cap'].argmax('cb').values.flatten(),
         'delta': ds['delta'].values.flatten(),
         'sarle': ds['sarle'].values.flatten(),
         'cb_pred': cb_vals[nonzero.argmax(axis=-1)].flatten(),
         'confidence': 1 - ds['pred'][:, :, 0].values.flatten(),
         'design': d_1.values.flatten(),
         'alt': d_2.values.flatten(),
+        'i': I.flatten(),
+        'j': J.flatten(),
     })
     
     return ds, df_contacts
@@ -166,12 +181,13 @@ def heatmap_2D_entries(ds):
     return fig
 
 
-
 def load_cn_bw(identifier):
+    """Minor differences in converting PDB to one-hot bin encoding between 
+    `utilsCN.pose2bins` and Sergey's `prep_input` function.
+    """
     from postdoc.pyrosetta.imports import pose_from_pdb
     CN = '/home/norn/DL/200519_negative_design/foldit_designs/'
-    sys.path.append(CN + 'scripts')
-    import utils as utilsCN
+    from rtRosetta import utils_CN
 
     home = '/home/dfeldman/from/CN/'
     f1 = f'from/CN/alt_state_pdbs/{identifier}_min_e_low_rmsd_state.pdb'
@@ -180,9 +196,10 @@ def load_cn_bw(identifier):
     pose1 = pose_from_pdb(f1)
     pose2 = pose_from_pdb(f2)
 
-    pdb_6D_bins_1 = utilsCN.pose2bins(pose1)
-    pdb_6D_bins_2 = utilsCN.pose2bins(pose2)
+    pdb_6D_bins_1 = utils_CN.pose2bins(pose1)
+    pdb_6D_bins_2 = utils_CN.pose2bins(pose2)
 
+    # now have local equivalent
     pred_npz_file = glob(f'{CN}in/npz_predict/bk_{identifier}*npy')[0]
     pred_npz = np.load(pred_npz_file,allow_pickle=True)[-1]
     pred_npz['dist'] = pred_npz['cb']
