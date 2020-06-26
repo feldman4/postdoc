@@ -170,11 +170,15 @@ class MultiHeatmap():
             def to_curve(name):
                 data = self.ds[name].isel(L1=x, L2=y)
                 data = ((data / data.max())
-                .rename('prediction (relative to max)')
+                .rename('p')
                 .rename(cb=f'CB distance {x}, {y}')
                 )
+                legend_spacer = 1 + 0.3 * len(self.curve_vars)
+                p_dim = hv.Dimension('p', 
+                    label='prediction (relative to max)', 
+                    range=(0, legend_spacer if self.legend else 1))
                 if self.legend:
-                    return hv.Curve(data, label=name)
+                    return hv.Curve(data, label=name).redim(p=p_dim)
                 else:
                     return hv.Curve(data)
             
