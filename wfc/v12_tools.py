@@ -30,7 +30,7 @@ def predict(model, seq):
     feat = np.zeros((n, n, 100))
     pssm = np.eye(20)[[v12.aa_1_N[x] for x in seq]]
     _, _, feat_pred, _ = model.predict([pssm[None], feat[None]])
-    return feat_pred
+    return feat_pred[0]
 
 
 def predict_models(models, seq):
@@ -65,38 +65,12 @@ def xray_cb(x):
 
 def cb_pred(feat):
     x = cb(feat)
-    return x.cb[x.argmax('cb')]
+    return x.cb[x.argmax('cb')].drop('cb')
 
 
 def plot_D12_ij(D, D1, D2, i, j):
     f = lambda x: (x[i, j] / x[i, j].max()).plot()
     f(D), f(D1), f(D2)
-
-
-def plot_ij_traces(ds, state_a, state_b, metric, i, j, ax, pred='pred', 
-        i_=0, j_=0, fontsize=10, s=100):
-    y = ds['pred'][i, j].values.copy()
-    y /= y.max()
-    y += i_
-    x = np.arange(len(y)) + j_
-    ax.plot(x, y, color=(0.2, 0.2, 0.2), zorder=-1)
-    d0 = ds[state_a][i, j].argmax('cb')
-    d1 = ds[state_b][i, j].argmax('cb')
-    ax.scatter(d0+j_, y[d0], color='red', s=s)
-    ax.scatter(d1+j_, y[d1], color='orange', s=s)
-    s = float(ds[metric][i, j])
-    ax.text(x[0] + 2, y.max() - 0.5, 
-            f'L1={i}, L2={j}\n{metric}={s:.3g}',
-           fontsize=fontsize, zorder=-2, color='gray')
-    # deal with non-contact bin
-    if (d0 == 0) or (d1 == 0):
-        ls = 'dotted'
-    else:
-        ls = 'solid'
-    d0 = len(y) if d0 == 0 else d0 
-    d1 = len(y) if d1 == 0 else d1
-    ax.plot([d0+j_, d1+j_], [y.min(), y.min()], color='green', ls=ls)
-    return ax
 
 
 def describe_pred_minRMSD_alt(ds, cap=0.01):
@@ -105,6 +79,19 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
     Confidence is defined as 1 - no_contact_bin.
     """
 
+    # background distribution
+    L1, L2, _ = ds['pred'].shape
+    I, J = np.meshgrid(range(L1), range(L2))
+
+    bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
+    ds['bkgr_dist'] = xray.DataArray(bkgr_dist, dims=ds['pred'].dims)
+
+    ds['pred/bkgr_cap'] = ds['pred'] / (ds['bkgr_dist'] + cap)
+    ds['pred/bkgr_cap'] /= ds['pred/bkgr_cap'].sum('cb')
+    ds['pred/bkgr'] = ds['pred'] / ds['bkgr_dist']
+    ds['pred/bkgr'] /= ds['pred/bkgr'].sum('cb')
+
+    # bimodality coefficient
     nonzero_raw = ds['pred'][:, :, 1:]
     nonzero = nonzero_raw / nonzero_raw.max(axis=-1)
 
@@ -116,14 +103,15 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
     sarle = get_sarle(nonzero_raw)
     confidence = (1 - ds['pred'][:, :, 0])
 
+    ds['sarle'] = 1/(sarle) * confidence**2
+
     d_1 = ds['min_RMSD'].argmax('cb')
     d_2 = ds['alt'].argmax('cb')
     delta = np.abs(d_1 - d_2)
     delta.values[(d_1 == 0) | (d_2 == 0)] = 0
     ds['delta'] = delta
-    ds['sarle'] = 1/(sarle) * (confidence > 0.3)
-    ds['sarle'] = 1/(sarle) * confidence**2
-
+    
+    # something with derivative
     d1 = np.diff(ds['pred'][:, :, 1:], n=1, axis=-1)
     d2 = np.diff(ds['pred'][:, :, 1:], n=2, axis=-1)
     d2[d2 < 0] = 0
@@ -137,19 +125,8 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
     d2 = d1.std(axis=-1)
     d2 = nonzero.std(axis=-1)
 
-    ds['upcurve'] = xray.zeros_like(ds['sarle'])
-    ds['upcurve'].values = d2
+    ds['upcurve'] = xray.DataArray(d2, dims=ds['sarle'].dims)
 
-    L1, L2, _ = ds['pred'].shape
-    I, J = np.meshgrid(range(L1), range(L2))
-
-    bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
-    ds['bkgr_dist'] = xray.DataArray(bkgr_dist, dims=ds['pred'].dims)
-
-    ds['pred/bkgr_cap'] = ds['pred'] / (ds['bkgr_dist'] + cap)
-    ds['pred/bkgr_cap'] /= ds['pred/bkgr_cap'].sum('cb')
-    ds['pred/bkgr'] = ds['pred'] / ds['bkgr_dist']
-    ds['pred/bkgr'] /= ds['pred/bkgr'].sum('cb')
 
     df_contacts = pd.DataFrame({
         'pred_bkgr': ds['pred/bkgr'].argmax('cb').values.flatten(),
@@ -212,5 +189,134 @@ def load_cn_bw(identifier):
     tmp = xray.zeros_like(ds['pred'])
     tmp.values = np.eye(37)[pdb_6D_bins_2['dist']]
     ds['alt'] = tmp
+    
+    return ds
+
+
+def load_6D_bins(pdb_file):
+    feat_dict = v12.split_feat(v12.prep_input(pdb_file)['feat'])
+    feat_6D = {k: v.argmax(axis=-1) for k,v in feat_dict.items()}
+    feat_6D['dist'] = feat_6D['cb']
+    return feat_6D
+
+
+def bwicky_H_KL(pdb_6D_bins, pred_npz, dims='all'):
+    from rtRosetta import bwicky_utils
+    bkgr =  f'wfc/bkgr_models/'
+    # convert bin indices to distances
+    distances = cb_vals_true[pdb_6D_bins['dist']]
+    contact_M = ~np.isnan(distances)
+    return bwicky_utils.get_H_and_KL_matrix(
+        pdb_6D_bins, pred_npz, contact_M, bkgr, dims=dims)
+
+
+def load_6D_bins_CN(pdb_file):
+    """Uses loader from get_coords6D.py (Ivan)
+    """
+    import rtRosetta.utils_CN
+    from postdoc.pyrosetta.imports import pose_from_pdb
+    
+    pose = pose_from_pdb(pdb_file)
+    return rtRosetta.utils_CN.pose2bins(pose)
+
+
+def plot_ij_traces(ds, state_a, state_b, metric, i, j, ax, pred='pred', 
+        i_=0, j_=0, fontsize=10, s=100):
+
+
+    y = ds[pred][i, j].values.copy()
+    y /= y.max()
+    y += i_
+    x = np.arange(len(y)) + j_
+
+    d0 = int(ds[state_a][i, j].argmax('cb'))
+    d1 = int(ds[state_b][i, j].argmax('cb'))
+
+    y_0 = y[d0]
+    y_1 = y[d1]
+
+    y_min = min(y[d0], y[d1])
+    d0 = len(y) if d0 == 0 else d0 
+    d1 = len(y) if d1 == 0 else d1
+
+    ax.plot(x[1:], y[1:], color=(0.2, 0.2, 0.2), zorder=-1)
+
+    ax.plot([x[-1]]*2, [i_, y[0]], 
+        color=(0.2, 0.2, 0.2), zorder=-1)
+    # stem at the end
+    ax.scatter(x[-1], y[0], color='black', s=9)
+
+    ax.scatter(d0+j_-1-0.12, y_0, color='red', s=s, zorder=-1)
+    ax.scatter(d1+j_-1+0.12, y_1, color='orange', s=s, zorder=-1)
+
+    s = float(ds[metric][i, j])
+    ax.text(x[0] + 2, y.max() - 0.5, 
+            f'L1={i}, L2={j}\n{metric}={s:.3g}',
+           fontsize=fontsize, zorder=-2, color='gray')
+    # deal with non-contact bin
+    if (d0 == len(y)) or (d1 == len(y)):
+        ls = 'dotted'
+    else:
+        ls = 'solid'
+
+    ax.plot([d0+j_, d1+j_], [y_min, y_min], color='green', ls=ls)
+
+    return ax
+
+
+def plot_pred_alt_sarle_traces(ds, pred='pred/bkgr_cap'):
+    L1, L2 = ds[pred].shape[:2]
+    rows = 16
+    cols = 10
+    rs = np.random.RandomState(0)
+    fig, ax = plt.subplots(figsize=(14, 14))
+    ij = []
+    for n in range(rows * cols):
+        A = rs.choice(np.arange(L1))
+        B = rs.choice(np.arange(L2))
+        ij += [[A, B]]
+        # ij += [sorted([A, B])]
+    ij = sorted(ij, key=lambda x: -ds['sarle'][x[0], x[1]])
+
+    for n, (i, j) in enumerate(ij):
+        i_ = n % rows
+        j_ = int(n / rows)
+        plot_ij_traces(
+            ds, 'min_RMSD', 'alt', 'sarle', i, j, ax, 
+            pred=pred,
+            i_=-i_*1.05, j_=(j_ + 2)*40, fontsize=6, s=50)
+
+    ax.axis('off')
+    return ax
+
+
+def add_HKL_scores_min_alt(ds, f_min, f_alt, seq):
+    """Calculate per-contact HKL score between prediction and two alternate states
+    using `bwicky_utils.get_H_and_KL_matrix. Sequence is used to look up prediction.
+    """
+    ds = ds.copy()
+
+    from .static import find_pred
+    pred_npz = v12.split_feat(find_pred(seq)['avg'])
+    pred_npz['dist'] = pred_npz['cb']
+
+    # temporary fix
+    for k in pred_npz:
+        pred_npz[k] = np.squeeze(pred_npz[k])
+
+    feat_6D_1 = load_6D_bins(f_min)
+    feat_6D_2 = load_6D_bins(f_alt)
+
+    dims = ('dist', 'omega', 'theta', 'phi') 
+
+    for dim in dims:
+        _, bwm_1 = bwicky_H_KL(feat_6D_1, pred_npz, dims=[dim])
+        _, bwm_2 = bwicky_H_KL(feat_6D_2, pred_npz, dims=[dim])
+
+        bwm_1[bwm_1 == 0] = np.nan
+        bwm_2[bwm_2 == 0] = np.nan
+
+        ds[f'min_RMSD_HKL_{dim}'] = xray.DataArray(bwm_1, dims=ds['sarle'].dims)
+        ds[f'alt_HKL_{dim}'] = xray.DataArray(bwm_2, dims=ds['sarle'].dims)
     
     return ds
