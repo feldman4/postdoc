@@ -1,4 +1,6 @@
-from .wfc import *
+from .wfc import (
+    load_input,
+    )
 from .static import (
     build_pdb_db, 
     get_pdb_db, 
