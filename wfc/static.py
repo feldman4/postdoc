@@ -51,7 +51,6 @@ def load_pred(filename):
     return d
 
 
-
 def build_pred_db():
     files = glob(str(PRED_DIR / 'md5' / '*npz'))
 
@@ -95,7 +94,7 @@ def find_pdb(identifier_or_sequence):
     if df_db.shape[0] == 0:
         df_db = get_pdb_db(check=True).loc[find_hit]
 
-    return df_db
+    return df_db.sort_values(['project', 'file'])
 
 
 def pdb_entry(filename):
