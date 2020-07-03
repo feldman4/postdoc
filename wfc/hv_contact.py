@@ -14,7 +14,7 @@ class MultiHeatmap():
         # this could help reduce calls if memoization was active...
         # hv.streams.PointerXY.transform = IntXYStream.transform
 
-    def plot(self, active=False, legend=True, cursor=False, hover=True, 
+    def plot(self, active=False, legend=True, cursor=True, hover=True, 
             height=250, cols=2):
         # options for make_multi_heatmap
         self.legend = legend
@@ -55,7 +55,7 @@ class MultiHeatmap():
 
         if self.cursor:
             make_cursor = lambda data: (hv.Scatter([data])
-                .opts(color='red', marker='+', size=500, padding=0)
+                .opts(color='red', marker='+', size=5000, padding=0)
                 )
             self.cursor_pipe = hv.streams.Pipe(data=[0, 0])
             cursor_dmap = hv.DynamicMap(lambda data: make_cursor(data), streams=[self.cursor_pipe])
@@ -168,7 +168,7 @@ class MultiHeatmap():
                 self.cursor_pipe.send([x, y])
 
             def to_curve(name):
-                data = self.ds[name].isel(L1=x, L2=y)
+                data = self.ds[name].isel(L1=x, L2=y).fillna(0)
                 data = ((data / data.max())
                 .rename('p')
                 .rename(cb=f'CB distance {x}, {y}')
