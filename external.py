@@ -2,13 +2,18 @@ import tempfile
 import os
 import subprocess
 import sys
-import StringIO
+import io
 
+import numpy as np
 import pandas as pd
 
 
 predict_property = os.path.join(os.environ['HOME'], 'packages',
                                 'Predict_Property', 'Predict_Property.sh')
+
+
+TMALIGN = '/home/dfeldman/.conda/envs/hh-suite/bin/TMalign'
+HHMAKE = '/home/dfeldman/.conda/envs/hh-suite/bin/hhmake'
 
 
 def predict_properties(seq):
@@ -42,7 +47,21 @@ def get_acc_details(output):
         table += [line]
     table = '\n'.join(table)
 
-    df_acc = pd.read_csv(StringIO.StringIO(table), header=None, sep='\s+')
+    df_acc = pd.read_csv(io.StringIO(table), header=None, sep='\s+')
     df_acc.columns = 'resid', 'aa', 'ACC', 'ACC_0', 'ACC_1', 'ACC_2'
 
     return df_acc
+
+
+def tmalign(pdb1, pdb2):
+    """Actually aligned pdb is also output when -o is provided, just return that.
+    """
+    f_matrix = 'tmp/tmalign_matrix.txt'
+    f_align = 'tmp/tmalign.txt'
+    args = [TMALIGN, pdb1, pdb2, '-o', f_align, '-m', f_matrix]
+    subprocess.Popen(args).wait()
+
+    with open('tmp/tmalign_matrix.txt', 'r') as fh:
+        txt = fh.readlines()
+    R = np.array([[float(x) for x in line.split()[1:]] for line in txt[2:5]])
+    return R
