@@ -13,7 +13,7 @@ cb_vals = np.array([0] + list(np.arange(2, 20, 0.5)))
 
 import rtRosetta.v12_simple as v12
 
-coords = {'cb': cb_vals}
+coords = {'cb': cb_vals_true}
 TRROSETTA_TOKENS = ('xaa', 'xab', 'xac', 'xad', 'xae')
 
 
@@ -73,6 +73,26 @@ def plot_D12_ij(D, D1, D2, i, j):
     f(D), f(D1), f(D2)
 
 
+def correct_bkgr(pred, dim='dist', cap=0.01):
+    L1 = pred.shape[0]
+    bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
+    corrected = pred / (bkgr_dist + cap)
+    corrected /= corrected.sum(axis=-1)
+    return corrected
+
+
+def calculate_sarle(pred):
+    contact_bins = pred[:, :, 1:]
+    def get_sarle(x):    
+        s = skew    (x, axis=-1)
+        k = kurtosis(x, axis=-1)
+        return (s**2 + 1 / (k + 3))
+    sarle = get_sarle(contact_bins)
+    confidence = (1 - pred[:, :, 0])
+
+    return 1/(sarle) * confidence**2
+
+
 def describe_pred_minRMSD_alt(ds, cap=0.01):
     """Add various quantities to dataset with pred, design, alt
     distograms. Also put contacts in a dataframe.
@@ -99,7 +119,6 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
         s = skew    (x, axis=-1)
         k = kurtosis(x, axis=-1)
         return (s**2 + 1 / (k + 3))
-    std = np.std(nonzero, axis=-1)
     sarle = get_sarle(nonzero_raw)
     confidence = (1 - ds['pred'][:, :, 0])
 
