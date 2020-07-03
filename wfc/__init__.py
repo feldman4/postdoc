@@ -1,5 +1,8 @@
 from .wfc import (
-    load_input,
+    decode_oh,
+    encode_oh,
+    aa_code,
+    aa_code_gap,
     )
 from .static import (
     build_pdb_db, 

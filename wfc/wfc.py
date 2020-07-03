@@ -28,7 +28,8 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
 dssp_code = 'LHE'
-aa_code = 'ARNDCQEGHILKMFPSTWYV-'
+aa_code_gap = 'ARNDCQEGHILKMFPSTWYV-'
+aa_code = aa_code_gap[:-1]
 
 def dssp_resnet(depth=16, resnet_inner=5, resnet_outer=1, 
                dssp_code=dssp_code, aa_code=aa_code):
