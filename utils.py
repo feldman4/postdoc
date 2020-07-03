@@ -7,6 +7,7 @@ import re
 import sys
 import time
 
+import seaborn as sns
 import pandas as pd
 from natsort import natsorted
 import tqdm.notebook
@@ -115,3 +116,28 @@ def ls_df(search):
                           for f in files])
      .assign(file=files)
     )
+
+
+def melt_xarray(ds, data_vars=None):
+    if data_vars is None:
+        data_vars = list(ds.data_vars)
+    dims = list(ds.dims)
+    arr = []
+    for x in ds.data_vars:
+        (ds[x].stack(desired=dims)
+         .to_pandas().rename(x).pipe(arr.append))
+    return pd.concat(arr, axis=1).reset_index()
+
+
+def jointplot_groups(df, x, y, groupby, **kwargs):
+    g = sns.JointGrid(x, y, df)
+    for grp, df_ in df.groupby(groupby):
+        sns.kdeplot(df_[x], ax=g.ax_marg_x, legend=False)
+        sns.kdeplot(df_[y], ax=g.ax_marg_y, vertical=True, legend=False)
+        g.ax_joint.scatter(df_[x], df_[y], label=grp, **kwargs)
+        
+    leg = g.ax_joint.legend()
+    leg.set_title(groupby)
+    for lh in leg.legendHandles: 
+        lh.set_alpha(1)
+    return g
