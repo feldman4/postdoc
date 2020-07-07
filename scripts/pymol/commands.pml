@@ -70,13 +70,14 @@ def find_polar(selection='all', name=None):
     cmd.enable(name)
     cmd.delete(tmp)
 
-
-
 def hide_hydrogens(selection='all'):
     cmd.hide('({} and hydro)'.format(selection))
 
 def color_not_carbon(selection='all'):
     util.cnc(selection);
+
+def color_by_chain(selection='all'):
+    util.color_chains(selection);
 
 def run_script(name=None):
     files = list_scripts()
@@ -126,10 +127,8 @@ def show_polar_h_only(selection='all'):
     # hide nonpolar hydrogens
     cmd.do(f'hide (h. and (e. c extend 1)) and {selection}')
 
-
 def initialize_settings():
     cmd.run(os.path.join(scripts_dir, 'settings.pml'))
-
 
 def label_termini(selection='all'):
     from collections import defaultdict
@@ -150,6 +149,9 @@ def list_commands():
         descriptions += [name + arguments]
     pretty_print('Available commands:', descriptions)
 
+def rename_selection(name):
+    cmd.do(f'set_name sele, {name}')
+
 commands = [
 ('nowater', hide_water),
 ('nohoh', hide_water),
@@ -158,11 +160,13 @@ commands = [
 ('chainbow', chainbow),
 ('findpolar', find_polar),
 ('cnc', color_not_carbon),
+('cbc', color_by_chain),
 ('pmlrun', run_script),
 ('pdbload', load_local_pdb),
 ('grabligands', select_ligands),
 ('labeltermini', label_termini),
-('cml', list_commands)
+('rename', rename_selection),
+('cml', list_commands),
 ]
 
 for name, f in commands:
