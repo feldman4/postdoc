@@ -154,10 +154,10 @@ def list_commands():
 def rename_selection(name):
     cmd.do(f'set_name sele, {name}')
 
-def fetch_with_defaults(rcsb):
-    cmd.do(f'fetch {rcsb}')
+def fetch_with_defaults(rcsb, assembly=1):
+    cmd.do(f'fetch {rcsb}, type=pdb{assembly}')
     hide_water()
-    color_by_chain()
+    color_by_chain('not polymer.nucleic')
 
 
 commands = [
