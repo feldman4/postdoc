@@ -1,3 +1,4 @@
+set label_size, 22
 
 set cartoon_flat_sheets, 0
 set cartoon_smooth_loops, 0
