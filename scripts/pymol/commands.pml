@@ -119,12 +119,14 @@ def load_external_scripts():
     for f in files:
         cmd.do(f'run {f}')
 
-def show_polar_h_only(selection='all'):
+def show_polar_h(selection='all', representation='wire'):
     """https://pymolwiki.org/index.php/Show
     """
     #cmd.do(f'hide everything, ele h and {selection}')
     #cmd.do(f'show lines, ele h and neighbor (ele n+o) and {selection}')
     # hide nonpolar hydrogens
+    cmd.remove(f'{selection} & hydro')
+    cmd.h_add(f'{selection} & (don.|acc.)')
     cmd.do(f'hide (h. and (e. c extend 1)) and {selection}')
 
 def initialize_settings():
@@ -152,11 +154,17 @@ def list_commands():
 def rename_selection(name):
     cmd.do(f'set_name sele, {name}')
 
+def fetch_with_defaults(rcsb):
+    cmd.do(f'fetch {rcsb}')
+    hide_water()
+    color_by_chain()
+
+
 commands = [
 ('nowater', hide_water),
 ('nohoh', hide_water),
 ('noh', hide_hydrogens),
-('justpolarh', show_polar_h_only),
+('justpolarh', show_polar_h),
 ('chainbow', chainbow),
 ('findpolar', find_polar),
 ('cnc', color_not_carbon),
@@ -167,6 +175,7 @@ commands = [
 ('labeltermini', label_termini),
 ('rename', rename_selection),
 ('cml', list_commands),
+('rcsb', fetch_with_defaults)
 ]
 
 for name, f in commands:
