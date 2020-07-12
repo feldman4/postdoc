@@ -70,13 +70,14 @@ def find_polar(selection='all', name=None):
     cmd.enable(name)
     cmd.delete(tmp)
 
-
-
 def hide_hydrogens(selection='all'):
     cmd.hide('({} and hydro)'.format(selection))
 
 def color_not_carbon(selection='all'):
     util.cnc(selection);
+
+def color_by_chain(selection='all'):
+    util.color_chains(selection);
 
 def run_script(name=None):
     files = list_scripts()
@@ -118,18 +119,18 @@ def load_external_scripts():
     for f in files:
         cmd.do(f'run {f}')
 
-def show_polar_h_only(selection='all'):
+def show_polar_h(selection='all', representation='wire'):
     """https://pymolwiki.org/index.php/Show
     """
     #cmd.do(f'hide everything, ele h and {selection}')
     #cmd.do(f'show lines, ele h and neighbor (ele n+o) and {selection}')
     # hide nonpolar hydrogens
+    cmd.remove(f'{selection} & hydro')
+    cmd.h_add(f'{selection} & (don.|acc.)')
     cmd.do(f'hide (h. and (e. c extend 1)) and {selection}')
-
 
 def initialize_settings():
     cmd.run(os.path.join(scripts_dir, 'settings.pml'))
-
 
 def label_termini(selection='all'):
     from collections import defaultdict
@@ -150,19 +151,31 @@ def list_commands():
         descriptions += [name + arguments]
     pretty_print('Available commands:', descriptions)
 
+def rename_selection(name):
+    cmd.do(f'set_name sele, {name}')
+
+def fetch_with_defaults(rcsb, assembly=1):
+    cmd.do(f'fetch {rcsb}, type=pdb{assembly}')
+    hide_water()
+    color_by_chain('not polymer.nucleic')
+
+
 commands = [
 ('nowater', hide_water),
 ('nohoh', hide_water),
 ('noh', hide_hydrogens),
-('justpolarh', show_polar_h_only),
+('justpolarh', show_polar_h),
 ('chainbow', chainbow),
 ('findpolar', find_polar),
 ('cnc', color_not_carbon),
+('cbc', color_by_chain),
 ('pmlrun', run_script),
 ('pdbload', load_local_pdb),
 ('grabligands', select_ligands),
 ('labeltermini', label_termini),
-('cml', list_commands)
+('rename', rename_selection),
+('cml', list_commands),
+('rcsb', fetch_with_defaults)
 ]
 
 for name, f in commands:
