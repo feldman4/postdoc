@@ -1,5 +1,6 @@
 from rtRosetta.v12_simple import *
 from ..sequence import print_alignment
+from . import v12_tools
 
 MODEL_PATH = 'wfc/models/model_{token}.npy'
 
@@ -214,6 +215,8 @@ def design(model, pssm, desired_feat, opt_iter=50, opt_rate=2.0, opt_decay=2.0,
 
             history += [{'grad': np.squeeze(grad), 
                         'pssm': np.squeeze(pssm), 
+                        'loss': loss,
+                        'feat': feat,
                         }]
 
     return pssm, history
@@ -245,18 +248,74 @@ def design2(model, pssm, desired_feats, minimizer, verbose=False, mask=None,
     return pssm, history
 
 
-def dump_histories(histories, filename='misc/sequences.tif', grad_cutoff=0):
+def dump_history(history, filename='misc/history_{}.tif', grad_cutoff=0):
+    from ..utils import timestamp
+    filename = timestamp(filename)
     import sys
     sys.path.append('packages/OpticalPooledScreens/')
     from ops.io import save_stack, GLASBEY
     arr = []
-    for history in histories:
-        for h in history:
-            A = h['pssm'].argmax(-1)
-            B = -h['grad'].copy()
-            B[B < grad_cutoff] = 0
-            B = B.argmax(-1)
-            arr += [[A, B]]
+    for h in history:
+        A = h['pssm'].argmax(-1)
+        B = -h['grad'].copy()
+        B[B < grad_cutoff] = 0
+        B = B.argmax(-1)
+        arr += [[A, B]]
 
     s = np.array(arr).transpose([1, 0, 2])
-    save_stack(filename, s, luts=(GLASBEY, GLASBEY))
+    save_stack(filename.format('pssm_grad'), s, luts=(GLASBEY, GLASBEY))
+
+    feat_pred = np.array([v12_tools.cb_pred(h['feat'], bkgr=True).values
+                      for h in history])
+
+    save_stack(filename.format('feat_pred'), feat_pred[:, None])
+
+
+def setup_model2(num_models, make_loss, tokens=[], model_path=MODEL_PATH, clear=True):
+    if clear:
+        K.clear_session()
+
+    # inputs
+    I = Input(shape=(None, 20), dtype=tf.float32)
+    
+    # forward pass uses the argmax of PSSM representing search state
+    # I_hard = argmax_grad_bypass(I)
+    
+    # inserts zeros, batch,length,20 to batch,length,21
+    I_hard_gap = tf.pad(I, [[0, 0], [0, 0], [0, 1]])  # add gap
+
+    # load each model
+    avg_feat, avg_bb = [], []
+
+    if not tokens:
+        tokens = ["xaa", "xab", "xac", "xad", "xae"][:num_models]
+    for token in tokens:
+        print(f"loading model: {token}")
+        weights = load_weights(model_path.format(token=token), mode="TrRosetta")
+        feat, bb = RESNET(weights=weights)(I_hard_gap)
+        avg_feat.append(feat)
+        avg_bb.append(bb)
+
+    feat = tf.reduce_mean(avg_feat, 0)
+    bb = K.sum(tf.reduce_mean(avg_bb, 0)[..., 1:], -1)
+
+    extra_inputs, loss = make_loss(feat)
+    
+    # compute gradients given sum of loss
+    grad = Lambda(lambda x: tf.gradients(x[0], x[1])[0])([loss, I])
+
+    # define model
+    return Model([I] + extra_inputs, [grad, loss, feat, bb])
+
+
+FEAT_SIZE = 100
+def single_target_loss(feat):
+    """Creates extra inputs and plugs them into loss. Called inside setup_model2.
+    """
+    # loss is -0.25 * log likelihood of observing I_pdb (one-hot encoded)
+    # predicted features are positive-definite probabilities (softmax at each pixel)
+    I_pdb = Input(shape=(None, None, FEAT_SIZE), dtype=tf.float32)
+    extra_inputs = [I_pdb]
+    loss = -0.25 * K.mean(K.sum(I_pdb * K.log(feat + 1e-8), -1), axis=[-1, -2])
+    return extra_inputs, loss
+
