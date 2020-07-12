@@ -61,7 +61,7 @@ def dssp_resnet(depth=16, resnet_inner=5, resnet_outer=1,
 
     return Model(inputs, output)
 
-def encode_oh(value, code):
+def encode_oh(value, code=aa_code):
     if isinstance(value, str):
         value = np.array(list(value))
     n = len(code)
@@ -69,7 +69,7 @@ def encode_oh(value, code):
     index[:] = [code.index(v) for v in value.flat[:]]
     return np.eye(n)[index]
 
-def decode_oh(data, code):
+def decode_oh(data, code=aa_code):
     decoded = np.array(list(code))[data]
     return [''.join(x) for x in decoded]
 
