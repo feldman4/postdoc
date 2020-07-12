@@ -7,6 +7,7 @@ import re
 import sys
 import time
 
+import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from natsort import natsorted
@@ -141,3 +142,30 @@ def jointplot_groups(df, x, y, groupby, **kwargs):
     for lh in leg.legendHandles: 
         lh.set_alpha(1)
     return g
+
+
+def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
+    from postdoc.wfc import aa_code
+    from matplotlib import patheffects
+
+    assert df_or_array.shape[1] == len(aa_code)
+    if isinstance(df_or_array, pd.DataFrame):
+        df = df_or_array
+    else:
+        df = pd.DataFrame(df_or_array, columns=list(aa_code))
+    
+    height = 5
+    font_size = 12
+    inner, outer, stroke_width = 'black', 'white', 2.5
+
+    fig, ax = plt.subplots(figsize=(height*len(seq)/20, height))
+    sns.heatmap(df.T, ax=ax, square=True, **kwargs)
+    for x, s in enumerate(seq):
+        y = aa_code.index(s)
+        txt = ax.text(x+0.5, y+0.5, s, 
+            fontsize=font_size, color=inner, family='Monospace',
+            ha='center', va='center')
+        stroke = patheffects.withStroke(linewidth=stroke_width, foreground=outer)
+        txt.set_path_effects([stroke])
+
+    return ax
