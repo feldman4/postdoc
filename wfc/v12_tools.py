@@ -63,30 +63,41 @@ def xray_cb(x):
     return xray.DataArray(x, coords_, dims=('L1', 'L2', 'cb'))
 
 
-def cb_pred(feat):
+def cb_pred(feat, bkgr=False):
     x = cb(feat)
+    if bkgr:
+        x = correct_bkgr(x)
     return x.cb[x.argmax('cb')].drop('cb')
 
+def idxmax(da, dim):
+    return da.coords[dim][da.argmax(dim)].drop(dim)
 
 def plot_D12_ij(D, D1, D2, i, j):
     f = lambda x: (x[i, j] / x[i, j].max()).plot()
     f(D), f(D1), f(D2)
 
 
-def correct_bkgr(pred, dim='dist', cap=0.01):
+bkgr_models = {}
+def correct_bkgr(pred, dim='dist', constant=0.01):
+    """Divides by background + constant, then normalizes contact distributions.
+    """
     L1 = pred.shape[0]
-    bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
-    corrected = pred / (bkgr_dist + cap)
+    if L1 not in bkgr_models:
+        bkgr_models[L1] = bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
+    corrected = pred / (bkgr_models[L1] + constant)
     corrected /= corrected.sum(axis=-1)
     return corrected
 
 
-def calculate_sarle(pred):
+def calculate_sarle(pred, with_confidence=True, wrong=False):
     contact_bins = pred[:, :, 1:]
     def get_sarle(x):    
         s = skew    (x, axis=-1)
-        k = kurtosis(x, axis=-1)
-        return (s**2 + 1 / (k + 3))
+        k = kurtosis(x, axis=-1, fisher=False)
+        if wrong:
+            return s**2 + 1 /k
+        else:
+            return (s**2 + 1) / k
     sarle = get_sarle(contact_bins)
     confidence = (1 - pred[:, :, 0])
 
@@ -115,14 +126,10 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
     nonzero_raw = ds['pred'][:, :, 1:]
     nonzero = nonzero_raw / nonzero_raw.max(axis=-1)
 
-    def get_sarle(x):    
-        s = skew    (x, axis=-1)
-        k = kurtosis(x, axis=-1)
-        return (s**2 + 1 / (k + 3))
-    sarle = get_sarle(nonzero_raw)
+    sarle = calculate_sarle(ds['pred'])
     confidence = (1 - ds['pred'][:, :, 0])
 
-    ds['sarle'] = 1/(sarle) * confidence**2
+    ds['sarle'] = sarle
 
     d_1 = ds['min_RMSD'].argmax('cb')
     d_2 = ds['alt'].argmax('cb')
@@ -166,7 +173,7 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
 def heatmap_2D_entries(ds):
     keys = [k for k in ds.data_vars if ds[k].ndim == 2]
     rows = int(np.ceil(len(keys)/2))
-    fig, axs = plt.subplots(rows, 2, figsize=(14, 14))
+    fig, axs = plt.subplots(rows, 2, figsize=(14, 7*rows))
     axs = iter(axs.flatten())
     for k in keys:
         ax = axs.__next__()
