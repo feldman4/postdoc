@@ -13,7 +13,13 @@ from .static import (
     get_pred_db,
     save_pred_result,
     )
-
+from .v12_tools import (
+    load_pdb,
+)
+from .v12_dual import(
+    pssm_to_seq,
+    align_pssms,
+)
 
 def initialize_tf():
     """
