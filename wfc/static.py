@@ -1,10 +1,12 @@
 from glob import glob
+import hashlib
 import numpy as np
 import pandas as pd
 import os
+import time
+
 from ..pyrosetta import diy
 from ..constants import PDB_DB, HOME
-import hashlib
 
 current_pdb_db_paths = None
 current_pdb_db = None
@@ -24,20 +26,24 @@ PRED_DIR = HOME / 'wfc' / 'pred'
 def find_pred(identifier_or_sequence):
     df_pred_db = get_pred_db(check=False)
     hit = df_pred_db.query('seq == @identifier_or_sequence')
+    # check for exact match
     if hit.shape[0] == 1:
-        return load_pred(hit['file'].iloc[0])
+        filename = hit['file'].iloc[0]
+        entry = load_pred(filename)
+        entry['file'] = filename
+        return entry
     elif hit.shape[0] > 1:
         raise ValueError(f'multiple predictions found for {identifier_or_sequence}')
     else:
         df_pdb_hits = (find_pdb('')
          .loc[lambda x: x['name'].str.contains(identifier_or_sequence)])
         
-        if len(df_pdb_hits) > 0:
-            seq = df_pdb_hits['sequence'].iloc[0]
-            return find_pred(seq)
-
+        if len(df_pdb_hits) == 1:
+            return find_pred(df_pdb_hits.iloc[0]['sequence'])
+        elif len(df_pdb_hits) > 1:
+            raise ValueError(f'partial match to {len(df_pdb_hits)} npz files')
         else:
-            raise ValueError(f'not found: {identifier_or_sequence}')
+            raise ValueError(f'no matches for query: {identifier_or_sequence}')
 
 
 def load_pred(filename):
@@ -64,9 +70,10 @@ def build_pred_db():
         keys = list(npz.keys())
         d['arrays'] = ','.join([x for x in arr_keys if x in keys])
         d['file'] = f
+        d['mtime'] = pd.to_datetime(time.ctime(os.stat(f).st_mtime))
         arr += [d]
         
-    return pd.DataFrame(arr)
+    return pd.DataFrame(arr).sort_values('mtime', ascending=False)
 
 
 def save_pred_result(result):
