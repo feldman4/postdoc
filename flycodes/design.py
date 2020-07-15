@@ -1,4 +1,4 @@
-from ..utils import tqdn, cast_cols
+from ..utils import tqdm, cast_cols
 from ..constants import resources
 
 import io
@@ -368,7 +368,7 @@ def check_barcodes2(X, barcodes, min_ions):
 
 def search_for_barcodes(X, min_y_ions, attempts=1000):
     arr = []
-    for seed in tqdn(range(attempts), desc='attempts', leave=False):
+    for seed in tqdm(range(attempts), desc='attempts', leave=False):
         arr += [select_barcodes(X, min_y_ions, seed)]
     
     arr = sorted(arr, key=len)[::-1]
