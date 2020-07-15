@@ -5,10 +5,8 @@ from .wfc import (
     aa_code_gap,
     )
 from .static import (
-    build_pdb_db, 
     get_pdb_db, 
     find_pdb, 
-    PDB_DB,
     find_pred,
     get_pred_db,
     save_pred_result,
@@ -20,6 +18,10 @@ from .v12_dual import(
     pssm_to_seq,
     align_pssms,
 )
+
+from . import v12_tools, v4_tools
+
+from rtRosetta.v12_simple import split_feat
 
 def initialize_tf():
     """
