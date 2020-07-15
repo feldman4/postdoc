@@ -1,3 +1,5 @@
+# TODO: generalize input dataset coordinates/dimensions
+
 import numpy as np
 import holoviews as hv 
 import param
