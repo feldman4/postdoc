@@ -39,7 +39,6 @@ def predict_models(models, seq):
         results[name] = predict(model, seq)
     results['avg'] = np.mean([x for x in results.values()], axis=0)
     results['seq'] = seq
-    results['source'] = __name__
     return results
 
 
@@ -82,10 +81,23 @@ def correct_bkgr(pred, dim='dist', constant=0.01):
     """Divides by background + constant, then normalizes contact distributions.
     """
     L1 = pred.shape[0]
-    if L1 not in bkgr_models:
-        bkgr_models[L1] = bkgr_dist = np.load(f'wfc/bkgr_models/bkgr_{L1}.npz')['dist']
-    corrected = pred / (bkgr_models[L1] + constant)
-    corrected /= corrected.sum(axis=-1)
+    if (L1, dim) not in bkgr_models:
+        f = f'wfc/bkgr_models/bkgr_{L1}.npz'
+        bkgr_models[(L1, dim)] = bkgr_dist = np.load(f)[dim]
+    corrected = pred / (bkgr_models[(L1, dim)] + constant)
+    divisor = corrected.sum(axis=-1)
+    # compatibility with numpy and xarray
+    if isinstance(divisor, np.ndarray):
+        divisor = divisor[..., None]
+    return corrected / divisor
+
+
+def correct_bkgr_dict(pred, constant=0.01):
+    dims = ['dist', 'theta', 'omega', 'phi']
+    L1 = pred['dist'].shape[0]
+    corrected = {}
+    for dim in dims:
+        corrected[dim] = correct_bkgr(pred[dim], dim=dim, constant=constant)
     return corrected
 
 
