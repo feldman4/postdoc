@@ -51,9 +51,12 @@ def load_pred(filename):
     d = {}
     for key in npz:
         value = npz[key]
-        if len(value.shape) == 0:
-            value = str(value)
+        if value.ndim == 0:
+            value = value.item()
         d[key] = value
+    stat = os.stat(filename)
+    d['ctime'] = time.ctime(stat.st_ctime)
+    d['mtime'] = time.ctime(stat.st_mtime)
     return d
 
 
@@ -81,9 +84,8 @@ def save_pred_result(result):
     seq directory (sequence name).
     """
     seq = result['seq']
-    md5 = hashlib.md5()
-    md5.update(seq.encode())
-    f_hash = PRED_DIR / 'md5' / (md5.hexdigest() + '.npz')
+    hash_ = hash_seq(seq)
+    f_hash = PRED_DIR / 'md5' / (hash_ + '.npz')
     f_seq = PRED_DIR / 'seq' / f'{seq}.npz'
     np.savez(f_hash, **result)
     if os.path.lexists(f_seq):
@@ -91,7 +93,13 @@ def save_pred_result(result):
     os.symlink(f_hash, f_seq)
 
 
-def find_pdb(identifier_or_sequence):
+def hash_seq(seq):
+    md5 = hashlib.md5()
+    md5.update(seq.encode())
+    return md5.hexdigest()
+
+
+def find_pdb(identifier_or_sequence='', **search_terms):
     """Return matches or entire database if no argument is given.
     """
     find_hit = lambda x: (x['name'].str.contains(identifier_or_sequence)
@@ -100,6 +108,10 @@ def find_pdb(identifier_or_sequence):
     df_db = get_pdb_db(check=False).loc[find_hit]
     if df_db.shape[0] == 0:
         df_db = get_pdb_db(check=True).loc[find_hit]
+
+    for col, term in search_terms.items():
+        filt = df_db[col].str.contains(term)
+        df_db = df_db[filt]
 
     return df_db.sort_values(['project', 'file'])
 
