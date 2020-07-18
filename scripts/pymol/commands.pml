@@ -183,11 +183,11 @@ commands = [
 ('rename', rename_selection),
 ('cml', list_commands),
 ('rcsb', fetch_with_defaults),
-('globload' load_pdbs_as_states),
+('globload', load_pdbs_as_states),
 ]
 
-for name, f in commands:
-    cmd.extend(name, f)
+for name, func in commands:
+    cmd.extend(name, func)
 
 load_external_scripts()
 cmd.extend('initialize_settings', initialize_settings)
