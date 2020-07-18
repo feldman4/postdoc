@@ -29,6 +29,9 @@ with warnings.catch_warnings():
     import tqdm.notebook
     tqdm.notebook.tqdm.pandas()
 
+from tqdm.auto import tqdm
+
+
 from . import helpers
 df_aa, aa_legend = helpers.load_aa_legend()
 

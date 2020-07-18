@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from natsort import natsorted
-from m.auto import tqdm
+from tqdm.auto import tqdm
 
 
 def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
