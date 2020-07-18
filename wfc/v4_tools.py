@@ -3,6 +3,7 @@ from . import v12_tools
 import numpy as np
 import xarray as xr
 
+import rtRosetta.apis.v4 as v4_api
 
 def convert_feat(feat, corr=True):
     cb = v12_tools.cb(feat)
@@ -50,9 +51,6 @@ def feat_dict_to_ds(feat_dict):
         key + '_bins': (('L1', 'L2', key), feat_dict[key])
         for key in keys
     }).assign_coords(coordinates)
-
-
-
     return ds
 
 
@@ -84,7 +82,8 @@ def load_background(L):
 def correct_background(ds, eps=0.01):
     L = ds.dims['L1']
     bkg = load_background(L)
-    return ds/(bkg + eps)
+    ds = ds/(bkg + eps)
+    return ds / ds.sum(['dist', 'theta', 'omega', 'phi'])
 
 
 def loss_background(feat, eps=1e-8, variables=['dist_bins', 'theta_bins', 'omega_bins', 'phi_bins']):
