@@ -159,6 +159,13 @@ def fetch_with_defaults(rcsb, assembly=1):
     hide_water()
     color_by_chain('not polymer.nucleic')
 
+def load_pdbs_as_states(search, name=None):
+    files = glob.glob(search)
+    if name is None:
+        name = search
+    files = sorted(glob(search))
+    for file in files:
+        cmd.load(file,name)
 
 commands = [
 ('nowater', hide_water),
@@ -175,7 +182,8 @@ commands = [
 ('labeltermini', label_termini),
 ('rename', rename_selection),
 ('cml', list_commands),
-('rcsb', fetch_with_defaults)
+('rcsb', fetch_with_defaults),
+('globload' load_pdbs_as_states),
 ]
 
 for name, f in commands:
