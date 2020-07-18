@@ -182,10 +182,10 @@ def describe_pred_minRMSD_alt(ds, cap=0.01):
     return ds, df_contacts
 
 
-def heatmap_2D_entries(ds):
+def heatmap_2D_entries(ds, cols=3):
     keys = [k for k in ds.data_vars if ds[k].ndim == 2]
-    rows = int(np.ceil(len(keys)/2))
-    fig, axs = plt.subplots(rows, 2, figsize=(14, 7*rows))
+    rows = int(np.ceil(len(keys)/cols))
+    fig, axs = plt.subplots(rows, cols, figsize=(21, 7*rows))
     axs = iter(axs.flatten())
     for k in keys:
         ax = axs.__next__()
