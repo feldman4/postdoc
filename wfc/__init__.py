@@ -13,6 +13,7 @@ from .static import (
     )
 from .v12_tools import (
     load_pdb,
+    heatmap_2D_entries,
 )
 from .v12_dual import(
     pssm_to_seq,
