@@ -65,10 +65,13 @@ def build_pred_db():
 
     arr = []
     str_keys = 'seq', 'source'
+    opt_keys = 'group',
     arr_keys = 'xaa', 'xab', 'xac', 'xad', 'xae', 'avg'
     for f in files:
         npz = np.load(f)
         d = {k: str(npz[k]) for k in str_keys}
+        for k in opt_keys:
+            d[k] = npz.get(k, None)
 
         keys = list(npz.keys())
         d['arrays'] = ','.join([x for x in arr_keys if x in keys])
@@ -76,7 +79,9 @@ def build_pred_db():
         d['mtime'] = pd.to_datetime(time.ctime(os.stat(f).st_mtime))
         arr += [d]
         
-    return pd.DataFrame(arr).sort_values('mtime', ascending=False)
+    return (pd.DataFrame(arr)
+            .sort_values('mtime', ascending=False)
+            .reset_index(drop=True))
 
 
 def save_pred_result(result):
