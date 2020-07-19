@@ -5,6 +5,8 @@ import xarray as xr
 
 import rtRosetta.apis.v4 as v4_api
 
+DIMS = ['theta', 'phi', 'dist', 'omega']
+
 def convert_feat(feat, corr=True):
     cb = v12_tools.cb(feat)
     if corr:
@@ -37,7 +39,7 @@ def feat_dict_to_ds(feat_dict):
         feat_dict = feat_dict.copy()
         feat_dict['dist'] = feat_dict['cb']
     
-    keys = ['dist', 'theta', 'omega', 'phi']
+    keys = DIMS
     L = feat_dict[keys[0]].shape[0]
 
     coordinates = {'dist': np.linspace(2, 20, 37),
@@ -69,8 +71,7 @@ def split_feat(feat):
 
 
 def ds_to_feat_array(ds):
-    keys = ['theta', 'phi', 'dist', 'omega']
-    return np.concatenate([ds[key + '_bins'].values for key in keys], axis=-1)
+    return np.concatenate([ds[key + '_bins'].values for key in DIMS], axis=-1)
 
 
 def load_background(L):
@@ -80,11 +81,14 @@ def load_background(L):
 
 
 def correct_background(ds, eps=0.01):
+    variables = [x + '_bins' for x in DIMS]
     L = ds.dims['L1']
     bkg = load_background(L)
-    ds = ds/(bkg + eps)
-    return ds / ds.sum(['dist', 'theta', 'omega', 'phi'])
-
+    corrected = ds[variables]/(bkg[variables] + eps)
+    normalized = corrected / corrected.sum(DIMS)
+    
+    return xr.merge([normalized, ds], compat='override')
+    
 
 def loss_background(feat, eps=1e-8, variables=['dist_bins', 'theta_bins', 'omega_bins', 'phi_bins']):
     """Matches v4_api.loss_background.
@@ -107,13 +111,15 @@ def idxmax(da, dim):
     return da.coords[dim][da.argmax(dim)].drop(dim)
 
 
-def add_maxes(ds, inplace=False):
+def add_maxes(ds, inplace=False, argmax=False):
     if not inplace:
         ds = ds.copy(deep=True)
     for variable in ds:
         if variable.endswith('_bins'):
             dim = variable.split('_bins')[0]
             ds[dim + '_max'] = idxmax(ds[variable], dim)
+            if argmax:
+                ds[dim + '_argmax'] = ds[variable].argmax(dim)
     return ds
 
 
