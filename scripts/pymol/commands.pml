@@ -160,10 +160,10 @@ def fetch_with_defaults(rcsb, assembly=1):
     color_by_chain('not polymer.nucleic')
 
 def load_pdbs_as_states(search, name=None):
-    files = glob.glob(search)
+    files = sorted(glob.glob(search))
     if name is None:
         name = search
-    files = sorted(glob(search))
+    print(f'Loading {len(files)} files...')
     for file in files:
         cmd.load(file,name)
 
