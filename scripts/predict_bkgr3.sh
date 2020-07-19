@@ -1,7 +1,6 @@
 #!/bin/sh
 
-# eval "$(conda shell.bash hook)"
-conda activate tensorflow
+source activate /software/conda/envs/tensorflow
 
 PREDICT_BKGR3="python packages/rtRosetta/predict_bkgr3/__init__.py"
 for i in "$@"; do 
