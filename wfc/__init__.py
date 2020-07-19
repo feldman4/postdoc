@@ -22,7 +22,7 @@ from .v12_dual import(
 
 from . import v12_tools, v4_tools
 
-from rtRosetta.v12_simple import split_feat
+from rtRosetta.apis.v4 import split_feat, prep_input
 
 def initialize_tf():
     """
