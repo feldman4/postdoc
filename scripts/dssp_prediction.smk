@@ -62,15 +62,17 @@ rule all:
         expand('.snakemake/dssp_work/{chunk}.csv', chunk=chunks.keys())
     output:
         'rcsb/blast_cluster_30.dssp.csv'
+    params: partition='short'
     shell:
         'csvstack {input} > {output}'
+    
 
 rule predict:
     output: 
         temp('.snakemake/dssp_work/{chunk}.csv')
-    resources: mem_mb=2000, cpus=1
+    resources: mem_gb=2, cpus=1
+    params: partition='short'
     run:
-        
         arr = []
         for pdb in chunks[wildcards.chunk]:
             dssp, seq, first_res = pdb_to_dssp(pdb)
