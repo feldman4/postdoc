@@ -22,7 +22,7 @@ EXPERIMENTS = {
 }
 EXPERIMENTS = {k: f'{v} {GLOBAL_FLAGS}' for k,v in EXPERIMENTS.items()}
 
-TrR_v4="python /home/krypton/projects/TrR_for_design_v4/design.py"
+TrR_v4="python -u /home/krypton/projects/TrR_for_design_v4/design.py"
 
 rule all:
     input:
