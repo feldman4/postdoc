@@ -14,23 +14,11 @@ logger = logging.getLogger(__name__)
 
 def read_pdb(filename, add_info=True, reorder_cols=True):
     with open(filename, 'r') as fh:
-        df = read_pdb_string(fh.read())
-    
-    if reorder_cols:
-        df = df[pdb_useful_order]
-
-    if add_info:
-        df = (df
-            .sort_values('atom_serial')
-            .assign(res_ix=lambda x: 
-                x['res_seq'].astype('category').cat.codes)
-            .assign(res_aa=lambda x: x['res_name'].map(AA_3_1))
-            )
-
-    return df
+        txt = fh.read()
+    return read_pdb_string(txt, reorder_cols=reorder_cols, add_info=add_info)
 
 
-def read_pdb_string(pdb_string, reorder_cols=True):
+def read_pdb_string(pdb_string, reorder_cols=True, add_info=True):
     models = pdb_string.split('ENDMDL')
     if len(models) > 1:
         msg = f'{len(models)} models detected, loading the first one'
@@ -41,6 +29,14 @@ def read_pdb_string(pdb_string, reorder_cols=True):
 
     if reorder_cols:
         df = df[pdb_useful_order]
+
+    if add_info:
+        df = (df
+              .sort_values('atom_serial')
+              .assign(res_ix=lambda x:
+                      x['res_seq'].astype('category').cat.codes)
+              .assign(res_aa=lambda x: x['res_name'].map(AA_3_1))
+              )
 
     return df
 
