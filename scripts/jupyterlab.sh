@@ -6,8 +6,7 @@
 #SBATCH -o misc/jupyter_%A.out
 #SBATCH -e misc/jupyter_%A.out
 
-eval "$(conda shell.bash hook)"
-conda activate df
+source activate /home/dfeldman/.conda/envs/jupyter
 
 jupyter lab --no-browser --port=5555 --ip=0.0.0.0
 
