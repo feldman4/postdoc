@@ -156,6 +156,9 @@ def rename_selection(name):
 
 def fetch_with_defaults(rcsb, assembly=1):
     cmd.do(f'fetch {rcsb}, type=pdb{assembly}')
+    cmd.do(f'flatten_obj {rcsb}')
+    cmd.do(f'delete {rcsb}')
+    cmd.do(f'set_name flat, {rcsb}')
     hide_water()
     color_by_chain('not polymer.nucleic')
 
@@ -184,12 +187,12 @@ commands = [
 ('cml', list_commands),
 ('rcsb', fetch_with_defaults),
 ('globload', load_pdbs_as_states),
+('initialize_settings', initialize_settings),
 ]
 
 for name, func in commands:
     cmd.extend(name, func)
 
 load_external_scripts()
-cmd.extend('initialize_settings', initialize_settings)
 
 python end 
