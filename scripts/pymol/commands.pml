@@ -56,17 +56,25 @@ def hide_water():
 def chainbow(selection='all'):
     util.chainbow(selection)
 
-def find_polar(selection='all', name=None):
+def find_polar(selection='all', mode='all', name=None):
     tmp = 'temp123'
     cmd.select(tmp, selection)
 
     if name is None:
         name = '{}_polar_conts'.format('_'.join(selection.split()))
-    cmd.dist(
-        name,
-        '({}) and not (solvent)'.format(tmp),
-        '({}) and not (solvent)'.format(tmp),
-        quiet=1,mode=2,label=0,reset=1);
+    if mode == 'all':
+        cmd.dist(
+            name,
+            f'({tmp}) and not (solvent)',
+            f'({tmp}) and not (solvent)',
+            quiet=1,mode=2,label=0,reset=1);
+    if mode == 'nobb':
+        cmd.dist(
+            name,
+            f'({tmp}) and not (solvent) and not bb.',
+            f'({tmp}) and not (solvent)',
+            quiet=1,mode=2,label=0,reset=1);
+
     cmd.enable(name)
     cmd.delete(tmp)
 
