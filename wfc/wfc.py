@@ -61,6 +61,7 @@ def dssp_resnet(depth=16, resnet_inner=5, resnet_outer=1,
 
     return Model(inputs, output)
 
+
 def encode_oh(value, code=aa_code):
     if isinstance(value, str):
         value = np.array(list(value))
@@ -69,9 +70,17 @@ def encode_oh(value, code=aa_code):
     index[:] = [code.index(v) for v in value.flat[:]]
     return np.eye(n)[index]
 
+
 def decode_oh(data, code=aa_code):
-    decoded = np.array(list(code))[data]
-    return [''.join(x) for x in decoded]
+    ix = data.argmax(-1)
+    decoded = np.array(list(code))[ix]
+    if data.ndim == 2:
+        return ''.join(decoded)
+    elif data.ndim == 3:
+        return [''.join(x) for x in decoded]
+    else:
+        return decoded
+
 
 def load_input(f, chain='A'):
     d = prep_input(f, chain=chain)
@@ -81,6 +90,7 @@ def load_input(f, chain='A'):
             'seq_oh': d['seq'], 
             'dssp': ''.join(df['ss_code']),
             'seq': pose.sequence()}
+
 
 def group_by_len(X, Y):
     X, Y = np.array(X), np.array(Y)

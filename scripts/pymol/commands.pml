@@ -56,17 +56,25 @@ def hide_water():
 def chainbow(selection='all'):
     util.chainbow(selection)
 
-def find_polar(selection='all', name=None):
+def find_polar(selection='all', mode='all', name=None):
     tmp = 'temp123'
     cmd.select(tmp, selection)
 
     if name is None:
         name = '{}_polar_conts'.format('_'.join(selection.split()))
-    cmd.dist(
-        name,
-        '({}) and not (solvent)'.format(tmp),
-        '({}) and not (solvent)'.format(tmp),
-        quiet=1,mode=2,label=0,reset=1);
+    if mode == 'all':
+        cmd.dist(
+            name,
+            f'({tmp}) and not (solvent)',
+            f'({tmp}) and not (solvent)',
+            quiet=1,mode=2,label=0,reset=1);
+    if mode == 'nobb':
+        cmd.dist(
+            name,
+            f'({tmp}) and not (solvent) and not bb.',
+            f'({tmp}) and not (solvent)',
+            quiet=1,mode=2,label=0,reset=1);
+
     cmd.enable(name)
     cmd.delete(tmp)
 
@@ -156,6 +164,9 @@ def rename_selection(name):
 
 def fetch_with_defaults(rcsb, assembly=1):
     cmd.do(f'fetch {rcsb}, type=pdb{assembly}')
+    cmd.do(f'flatten_obj {rcsb}')
+    cmd.do(f'delete {rcsb}')
+    cmd.do(f'set_name flat, {rcsb}')
     hide_water()
     color_by_chain('not polymer.nucleic')
 
@@ -203,12 +214,12 @@ commands = [
 ('cml', list_commands),
 ('rcsb', fetch_with_defaults),
 ('globload', load_pdb_grid),
+('initialize_settings', initialize_settings),
 ]
 
 for name, func in commands:
     cmd.extend(name, func)
 
 load_external_scripts()
-cmd.extend('initialize_settings', initialize_settings)
 
 python end 

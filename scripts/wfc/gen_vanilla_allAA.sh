@@ -6,10 +6,10 @@
 #SBATCH -o logs/sbatch_%A.out
 #SBATCH -e logs/sbatch_%A.out
 
-NAME="sample_pssm"
+NAME="vanilla_allAA"
 
 L=100
 N=30
-FLAGS="--opt_sample --pssm_design --rm_aa=C,P"
+FLAGS=""
 
 source s/wfc/gen.sh

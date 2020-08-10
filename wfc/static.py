@@ -16,7 +16,8 @@ current_pred_db = None
 
 PDB_PATHS = {
     'CN_foldit_funnels': '/home/norn/DL/200519_negative_design/foldit_designs/alt_state_pdbs/*pdb',
-    'denovo_RCSB': '/home/dfeldman/rcsb/denovo/*pdb'
+    'denovo_RCSB': '/home/dfeldman/rcsb/denovo/*pdb',
+    'denovo_RCSB_clean': '/home/dfeldman/rcsb/denovo_clean/*pdb',
 }
 
 
