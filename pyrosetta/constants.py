@@ -10,3 +10,5 @@ AA_PARAMS_DIR = (PYROSETTA_DIR / 'database' / 'chemical' /
 
 DEFAULT_VIEWER_WINDOW = (550, 450)
 DEFAULT_ZOOM = 1.2
+
+ATOMS_BB = ['N', 'C', 'CA', 'O']
