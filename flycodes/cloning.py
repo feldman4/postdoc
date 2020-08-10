@@ -7,7 +7,7 @@ tev_tag_0 = 'MGSHHHHHHENLYFQGWS'
 tev_tag_1 = 'MGHHHHHHGWSENLYFQGS'
 
 bsai_tail = 'CTTACGCACTTACTCATGGTCTCc'
-gg_protein_fwd = bsai_tail + 'AGGA'
+gg_protein_fwd = bsai_tail + 'AAGAGC'
 gg_protein_rev = bsai_tail + 'GTTA'
 
 def translate(s):
