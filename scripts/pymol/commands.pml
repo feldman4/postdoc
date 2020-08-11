@@ -170,13 +170,32 @@ def fetch_with_defaults(rcsb, assembly=1):
     hide_water()
     color_by_chain('not polymer.nucleic')
 
-def load_pdbs_as_states(search, name=None):
-    files = sorted(glob.glob(search))
-    if name is None:
-        name = search
+def load_pdb_grid(search, max_to_grid=20):
+    from natsort import natsorted
+    files = natsorted(glob.glob(search))
+
+    cmd.do('set scene_animation_duration, 0')
     print(f'Loading {len(files)} files...')
-    for file in files:
-        cmd.load(file,name)
+    first_name = None
+    for i, file in enumerate(files):
+        name = os.path.basename(file)
+        cmd.load(file, name)
+        cmd.do(f'set grid_slot, {i+1}, {name}')
+        if i % max_to_grid == max_to_grid - 1:
+            cmd.do(f'scene {i}, store')
+            cmd.do('disable all')
+        if i == 0:
+            first_name = name
+        else:
+            cmd.do(f'tmalign {name}, {first_name}')
+    if i % max_to_grid != max_to_grid - 1:
+        cmd.do(f'scene {i}, store')
+        cmd.do('disable all')
+    if i >= max_to_grid:
+        cmd.do(f'scene {max_to_grid - 1}, recall')
+    cmd.do('set grid_mode, 1')
+    cmd.do('zoom, buffer=-10')
+
 
 def skeleton(selection='all'):
     cmd.do(f'hide all, {selection}')
@@ -205,7 +224,7 @@ commands = [
 ('rename', rename_selection),
 ('cml', list_commands),
 ('rcsb', fetch_with_defaults),
-('globload', load_pdbs_as_states),
+('globload', load_pdb_grid),
 ('initialize_settings', initialize_settings),
 ('skeleton', skeleton),
 ]
