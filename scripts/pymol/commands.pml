@@ -178,6 +178,17 @@ def load_pdbs_as_states(search, name=None):
     for file in files:
         cmd.load(file,name)
 
+def skeleton(selection='all'):
+    cmd.do(f'hide all, {selection}')
+    cmd.do(f'show cartoon, {selection}')
+    cmd.do(f'show ribbon, {selection}')
+    cmd.do(f'show spheres, {selection} and name CA')
+    cmd.do(f'show wire, {selection} and (name CA or name CB)')
+
+    cmd.do(f'set line_width, 0.8, {selection}')
+    cmd.do(f'set cartoon_transparency, 0.45, {selection}')
+    cmd.do(f'set sphere_scale, 0.2, {selection}')
+
 commands = [
 ('nowater', hide_water),
 ('nohoh', hide_water),
@@ -196,6 +207,7 @@ commands = [
 ('rcsb', fetch_with_defaults),
 ('globload', load_pdbs_as_states),
 ('initialize_settings', initialize_settings),
+('skeleton', skeleton),
 ]
 
 for name, func in commands:
