@@ -9,6 +9,7 @@ import time
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 import pandas as pd
 from natsort import natsorted
 from tqdm.auto import tqdm
@@ -49,11 +50,14 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, *
 
 
 
-def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
+def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(), 
+              cat_cols=tuple(), uint16_cols=tuple()):
     return (df
            .assign(**{c: df[c].astype(int) for c in int_cols})
+           .assign(**{c: df[c].astype(np.uint16) for c in uint16_cols})
            .assign(**{c: df[c].astype(float) for c in float_cols})
            .assign(**{c: df[c].astype(str) for c in str_cols})
+           .assign(**{c: df[c].astype('category') for c in cat_cols})
            )
 
 
@@ -168,3 +172,15 @@ def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
         txt.set_path_effects([stroke])
 
     return ax
+
+
+def flatten_col(df, col):
+    """
+    From https://stackoverflow.com/questions/27263805/pandas-column-of-lists-create-a-row-for-each-list-element
+    
+    Expand a list-like column.
+    """
+    return pd.DataFrame({
+          col_: np.repeat(df[col_].values, df[col].str.len())
+          for col_ in df.columns.drop(col)}
+        ).assign(**{col: np.concatenate(df[col].values)})[df.columns]
