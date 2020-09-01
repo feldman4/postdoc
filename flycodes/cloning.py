@@ -10,6 +10,9 @@ bsai_tail = 'CTTACGCACTTACTCATGGTCTCc'
 gg_protein_fwd = bsai_tail + 'AAGAGC'
 gg_protein_rev = bsai_tail + 'GTTA'
 
+patterns = {'pTL12': 'AGTCGC(.*)AAGAGC',
+            'pTL10': 'AGTCGC(.*)AAGACG'}
+
 def translate(s):
     return str(Seq(s, generic_dna).translate())
 
