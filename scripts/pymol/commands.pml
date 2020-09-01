@@ -56,17 +56,25 @@ def hide_water():
 def chainbow(selection='all'):
     util.chainbow(selection)
 
-def find_polar(selection='all', name=None):
+def find_polar(selection='all', mode='all', name=None):
     tmp = 'temp123'
     cmd.select(tmp, selection)
 
     if name is None:
         name = '{}_polar_conts'.format('_'.join(selection.split()))
-    cmd.dist(
-        name,
-        '({}) and not (solvent)'.format(tmp),
-        '({}) and not (solvent)'.format(tmp),
-        quiet=1,mode=2,label=0,reset=1);
+    if mode == 'all':
+        cmd.dist(
+            name,
+            f'({tmp}) and not (solvent)',
+            f'({tmp}) and not (solvent)',
+            quiet=1,mode=2,label=0,reset=1);
+    if mode == 'nobb':
+        cmd.dist(
+            name,
+            f'({tmp}) and not (solvent) and not bb.',
+            f'({tmp}) and not (solvent)',
+            quiet=1,mode=2,label=0,reset=1);
+
     cmd.enable(name)
     cmd.delete(tmp)
 
@@ -156,16 +164,49 @@ def rename_selection(name):
 
 def fetch_with_defaults(rcsb, assembly=1):
     cmd.do(f'fetch {rcsb}, type=pdb{assembly}')
+    cmd.do(f'flatten_obj {rcsb}')
+    cmd.do(f'delete {rcsb}')
+    cmd.do(f'set_name flat, {rcsb}')
     hide_water()
     color_by_chain('not polymer.nucleic')
 
-def load_pdbs_as_states(search, name=None):
-    files = sorted(glob.glob(search))
-    if name is None:
-        name = search
+def load_pdb_grid(search, max_to_grid=20):
+    from natsort import natsorted
+    files = natsorted(glob.glob(search))
+
+    cmd.do('set scene_animation_duration, 0')
     print(f'Loading {len(files)} files...')
-    for file in files:
-        cmd.load(file,name)
+    first_name = None
+    for i, file in enumerate(files):
+        name = os.path.basename(file)
+        cmd.load(file, name)
+        cmd.do(f'set grid_slot, {i+1}, {name}')
+        if i % max_to_grid == max_to_grid - 1:
+            cmd.do(f'scene {i}, store')
+            cmd.do('disable all')
+        if i == 0:
+            first_name = name
+        else:
+            cmd.do(f'tmalign {name}, {first_name}')
+    if i % max_to_grid != max_to_grid - 1:
+        cmd.do(f'scene {i}, store')
+        cmd.do('disable all')
+    if i >= max_to_grid:
+        cmd.do(f'scene {max_to_grid - 1}, recall')
+    cmd.do('set grid_mode, 1')
+    cmd.do('zoom, buffer=-10')
+
+
+def skeleton(selection='all'):
+    cmd.do(f'hide all, {selection}')
+    cmd.do(f'show cartoon, {selection}')
+    cmd.do(f'show ribbon, {selection}')
+    cmd.do(f'show spheres, {selection} and name CA')
+    cmd.do(f'show wire, {selection} and (name CA or name CB)')
+
+    cmd.do(f'set line_width, 0.8, {selection}')
+    cmd.do(f'set cartoon_transparency, 0.45, {selection}')
+    cmd.do(f'set sphere_scale, 0.2, {selection}')
 
 commands = [
 ('nowater', hide_water),
@@ -183,13 +224,14 @@ commands = [
 ('rename', rename_selection),
 ('cml', list_commands),
 ('rcsb', fetch_with_defaults),
-('globload', load_pdbs_as_states),
+('globload', load_pdb_grid),
+('initialize_settings', initialize_settings),
+('skeleton', skeleton),
 ]
 
 for name, func in commands:
     cmd.extend(name, func)
 
 load_external_scripts()
-cmd.extend('initialize_settings', initialize_settings)
 
 python end 
