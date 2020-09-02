@@ -1,3 +1,4 @@
+import os
 import wget
 
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ import seaborn as sns
 
 from postdoc.utils import memoize, add_row_col, csv_frame, add_pat_extract
 import postdoc.sequence
+import postdoc.flycodes.design
 
 pat_truseq = '(?P<index_plate>T[1234])_(?P<index_well>.\d\d)_S\d'
 
@@ -95,10 +97,7 @@ def load_pepxml(f):
         info['scan_ix'] = x['start_scan'] - 1
         arr += [info]
 
-    return (pd.DataFrame(arr)
-            .sort_values('score', ascending=False)
-            .drop_duplicates('sequence')
-            )
+    return pd.DataFrame(arr)
 
 
 def add_library_info(df):
@@ -322,24 +321,63 @@ def load_mzxml_data(filename, progress=lambda x: x):
     return mz, intensity, df_info
 
 
-def plot_ion_scan(df_frags, df_ions_all, mz_all, intensity_all, i):
-    row = df_frags.iloc[i]
-    scan = row['scan_ix']
-    barcode = row['sequence']
-    df_ions = df_ions_all.query(
-        'sequence == @barcode & ion_type == "y"').copy()
-    # sometimes the b ion was highest
-    c = 'intensity_prosit'
-    df_ions[c] = df_ions[c] / df_ions[c].max()
+def plot_ion_scan(row_frags, df_ions_all, df_ms2_data):
+    scan_ix = row_frags['scan_ix']
+    barcode = row_frags['sequence']
+    df_ions = df_ions_all.query('sequence == @barcode & ion_type == "y"')
 
     fig, ax = plt.subplots(figsize=(14, 3))
-    y = intensity_all[scan]
+    x, y = (df_ms2_data
+     .query('scan_ix == @scan_ix')
+     [['ion_mz', 'intensity']].values.T)
     top = y.max()
-    ax.stem(mz_all[scan], y, use_line_collection=True)
+    ax.stem(x, y, use_line_collection=True)
 
-    x, y = df_ions['ion_mz_bin'], df_ions['intensity_prosit']
+    x, y = df_ions['ion_mz_bin'], df_ions['intensity_prosit_y_only']
     ax.stem(x, y * top, 'red', markerfmt='C1x', use_line_collection=True)
-    ax.set_title(
-        f"{row[['RTime', 'sequence', 'num_ions', 'score', 'scan_ix']].to_dict()}")
+    keys = 'sequence', 'score', 'num_ions', 'RTime', 'scan_ix'
+    title = ', '.join([f'{k}: {row_frags[k]}' for k in keys])
+    ax.set_title(title)
 
     return ax
+
+
+def add_intensity_y_only(df_ions_all):
+    df_ions_all['dummy'] = df_ions_all.eval('intensity_prosit * (ion_type == "y")')
+    df_ions_all['max_y'] = df_ions_all.groupby('sequence')['dummy'].transform('max')
+    df_ions_all['intensity_prosit_y_only'] = df_ions_all.eval('intensity_prosit / max_y')
+    df_ions_all = df_ions_all.drop(['dummy', 'max_y'], axis=1)
+    return df_ions_all
+
+
+def add_ion_mz_ms2(df_ions):
+    """Left out of all_ions table
+    """
+    arr = []
+    for x, y in df_ions[['ion', 'ion_name']].values:
+        arr += [postdoc.flycodes.design.calc_mz(x, charge=int(y[-2]))]
+    return df_ions.assign(ion_mz_ms2=arr).sort_values('ion_mz_ms2')
+
+
+def export_ion_scans(df_frags, df_ions, df_ms2_data, home, ms_run_name, 
+                     score_threshold, progress=lambda x: x):
+    exported = []
+    for _, row_frags in progress(list(df_frags.iterrows())):
+        ax = plot_ion_scan(row_frags, df_ions, df_ms2_data)
+
+        if row_frags['score'] < score_threshold:
+            subdir = 'low_score'
+        elif row_frags['expected']:
+            subdir = 'ok'
+        else:
+            subdir = 'cross'
+        
+        f = f'{home}/figures/scans/{{sample}}_{ms_run_name}_{subdir}/{{sequence}}_{{scan_ix}}_RT_{{RTime:.3f}}.png'
+        f = f.format(**row_frags)
+
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        ax.figure.savefig(f)
+        exported += [f]
+        plt.close(ax.figure)
+
+    return exported
