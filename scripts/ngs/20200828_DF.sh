@@ -11,7 +11,10 @@ THREADS=4
 
 bcl2fastq \
     --runfolder-dir NGS/miseq/200828_M00777_0134_000000000-D9H23/ \
-    --output-dir NGS/20200828_DF/fastq \
-    --sample-sheet NGS/SampleSheet_DF.csv \
+    --output-dir NGS/20200828_DF/fastq_12 \
+    --sample-sheet NGS/SampleSheet_20200829_DF_AB.csv \
     -p $THREADS \
-    --no-lane-splitting
+    --no-lane-splitting \
+    --create-fastq-for-index-reads \
+    --barcode-mismatches 1,2\
+    --use-bases-mask Y100,I8,I8,Y50 \
