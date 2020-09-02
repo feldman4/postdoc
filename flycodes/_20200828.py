@@ -318,7 +318,14 @@ def load_mzxml_data(filename, progress=lambda x: x):
     intensity = np.array(intensity)
     df_info = pd.DataFrame(info)
 
-    return mz, intensity, df_info
+    scan_lengths = [x.shape[0] for x in mz]
+    df_ms2_data = pd.DataFrame({
+        'scan_ix': np.repeat(np.arange(mz.shape[0]), scan_lengths),
+        'ion_mz': np.hstack(mz),
+        'intensity': np.hstack(intensity),
+    })
+
+    return mz, intensity, df_info, df_ms2_data
 
 
 def plot_ion_scan(row_frags, df_ions_all, df_ms2_data):
@@ -381,3 +388,73 @@ def export_ion_scans(df_frags, df_ions, df_ms2_data, home, ms_run_name,
         plt.close(ax.figure)
 
     return exported
+
+def match_scans(df_frags, df_ms2_data, df_ions, df_scan_info):
+
+    df_ms2 = df_frags[['sequence', 'scan_ix']].merge(df_ms2_data, how='inner').sort_values(['ion_mz'])
+    scan_info = (df_scan_info
+    .dropna()
+    .assign(scan_ix=lambda x: x['num'].astype(int) - 1)
+    .set_index('scan_ix')
+    [['totIonCurrent', 'precursorIntensity']]
+    )
+
+    cols = ['sequence', 'subpool', 'expected', 'scan_ix', 'RTime',  'score', 'num_ions']
+
+    return (df_frags[cols]
+    .join(df_ions.set_index('sequence'), on='sequence')
+    .sort_values('ion_mz_ms2')
+    .drop('ms1_range', axis=1)
+    .pipe(pd.merge_asof, df_ms2,
+        left_on='ion_mz_ms2', right_on='ion_mz',
+        by=['sequence', 'scan_ix'],
+        tolerance=0.01, direction='nearest')
+    .dropna()
+    .join(scan_info, on='scan_ix')
+    .sort_values(['sequence', 'intensity'], ascending=[True, False])
+    .drop('num_ions', axis=1)
+    )
+
+def load_all_ions(search, sequences):
+    """Only ions in design are kept. Slow because MS2 all_ions tables are huge.
+    """
+    return (pd.concat([
+        pd.read_hdf(f).loc[lambda x: x['sequence'].isin(sequences)]
+        for f in glob(search)])
+    .drop_duplicates(['sequence', 'ion_name'])
+    .assign(ion_type=lambda x: x['ion_name'].str[0])
+    .pipe(add_intensity_y_only)
+    # ~300 ions are messed up (b only)              
+    .query('ion == ion')
+    .pipe(add_ion_mz_ms2)
+    )
+
+
+def process_run(file_mzxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
+                progress=lambda x: x):
+    run_samples = df_ms_runs.set_index('file')['sample'].to_dict()
+    run_names = df_ms_runs.set_index('file')['short_name'].to_dict()
+    ms_sample = run_samples[file_mzxml]
+    ms_run_name = run_names[file_mzxml]
+
+    barcode_to_subpool = (df_pool0
+     .drop_duplicates('sequence').set_index('sequence')['subpool'])
+    expected_subpools = (df_sample_info
+     .query('name == @ms_sample')['subpool'].pipe(list))
+
+    file_pepxml = file_mzxml.replace('.mzXML', '.pepXML')
+    _, _, df_scan_info, df_ms2_data = load_mzxml_data(file_mzxml, progress)
+
+    df_frags = (load_pepxml(file_pepxml)
+     # only keep top-scoring hit for each peptide
+     .sort_values('score', ascending=False)
+     .drop_duplicates('sequence')
+     .assign(run=file_mzxml, sample=ms_sample)
+     .assign(subpool=lambda x: x['sequence'].map(barcode_to_subpool))
+     .assign(expected=lambda x: x['subpool'].isin(expected_subpools))
+    )
+
+    df_frag_ions = match_scans(df_frags, df_ms2_data, df_ions, df_scan_info)
+
+    return df_frags, df_frag_ions, df_ms2_data
+    
