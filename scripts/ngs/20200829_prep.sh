@@ -1,5 +1,6 @@
 HOME="NGS/20200829_DF_AB"
-PAT="AGTCGC(.*)AAGA[CG][CG]"
+PAT_NTERM="AGTCGC(.*)AAGA[CG][CG]"
+PAT_CTERM_DIALOUT="TCTCCCAAA(.*)"
 
 cd $HOME
 
@@ -11,7 +12,13 @@ cd $HOME
 cd fastq_T1
 for f in *fastq
     do
-    rg -o $PAT $f --replace '$1' > ../match_T1/$f.match
+    rg -o $PAT_NTERM $f --replace '$1' > ../match_T1/$f.match_NTERM
 done
+
+for f in *fastq
+    do
+    rg -o $PAT_CTERM_DIALOUT $f --replace '$1' > ../match_T1/$f.match_CTERM
+done
+
 
 # wc -l fastq_T1/*fastq > T1.wc
