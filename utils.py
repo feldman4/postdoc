@@ -7,6 +7,7 @@ import re
 import sys
 import time
 
+import decorator
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -184,3 +185,63 @@ def flatten_col(df, col):
           col_: np.repeat(df[col_].values, df[col].str.len())
           for col_ in df.columns.drop(col)}
         ).assign(**{col: np.concatenate(df[col].values)})[df.columns]
+
+
+def add_row_col(df, well_col):
+    return (df
+            .assign(row=lambda x: x[well_col].str[0])
+            .assign(col=lambda x: x[well_col].str[1:].astype(int))
+            )
+
+
+def add_pat_extract(df, input_col, pattern):
+    return pd.concat([df,
+                      df[input_col].str.extract(pattern)], axis=1)
+
+
+def memoize(active=True, copy_numpy=True):
+    """The memoized function has attributes `cache`, `keys`, and `reset`. 
+    
+    @memoize(active=False)
+    def f(...):
+        ...
+    
+    f.keys['active'] = True  # activate memoization
+    f.cache  # the cache itself
+    f.reset()  # reset the cache
+    """
+    def inner(f):
+        f_ = decorator.decorate(f, _memoize)
+
+        keys = dict(active=active, copy_numpy=copy_numpy)
+        f.keys = keys
+        f_.keys = keys
+
+        def reset():
+            cache = {}
+            f.cache = cache
+            f_.cache = cache
+
+        reset()
+        f_.reset = reset
+
+        return f_
+    return inner
+
+
+def _memoize(f, *args, **kwargs):
+    if not f.keys['active']:
+        return f(*args, **kwargs)
+
+    key = str(args) + str(kwargs)
+    if key not in f.cache:
+        f.cache[key] = f(*args, **kwargs)
+
+    # copy numpy arrays unless disabled by copy_numpy=False
+    if isinstance(f.cache[key], np.ndarray):
+        if f.keys['copy_numpy']:
+            return f.cache[key].copy()
+        else:
+            return f.cache[key]
+
+    return f.cache[key]
