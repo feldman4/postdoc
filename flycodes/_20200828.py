@@ -76,18 +76,27 @@ def write_peptide_fa(filename, sequences):
 
 
 def load_pepxml(f):
-    peptides = [x for x in pyteomics.pepxml.PepXML(f)]
-
     keys = 'assumed_charge',
     arr = []
-    for x in peptides:
+    for x in pyteomics.pepxml.PepXML(f):
+        if 'search_hit' not in x:
+            continue
         hit = x['search_hit'][0]
         info = {'time': x['retention_time_sec'],
                 'RTime': x['retention_time_sec'] / 60,
                 'sequence': hit['peptide'],
                 'num_ions': hit['num_matched_ions'],
-                'score': hit['search_score']['hyperscore'],
                 }
+        
+        if 'hyperscore' in hit['search_score']:
+            # MSFragger
+            info['score'] = hit['search_score']['hyperscore']
+        elif 'spscore' in hit['search_score']:
+            # Comet
+            info['score'] = hit['search_score']['spscore']
+        else:
+            raise ValueError(f'score not recognized {hit["search_score"]}')
+
         info.update({k: x[k] for k in keys})
         info['mass_error'] = hit['massdiff'] / hit['calc_neutral_pep_mass']
         info['abs_mass_error'] = abs(info['mass_error'])
@@ -316,16 +325,16 @@ def load_mzxml_data(filename, progress=lambda x: x):
 
     mz = np.array(mz)
     intensity = np.array(intensity)
-    df_info = pd.DataFrame(info)
+    df_scan_info = pd.DataFrame(info)
 
     scan_lengths = [x.shape[0] for x in mz]
-    df_ms2_data = pd.DataFrame({
+    df_scan_data = pd.DataFrame({
         'scan_ix': np.repeat(np.arange(mz.shape[0]), scan_lengths),
         'ion_mz': np.hstack(mz),
         'intensity': np.hstack(intensity),
     })
 
-    return mz, intensity, df_info, df_ms2_data
+    return df_scan_info, df_scan_data
 
 
 def plot_ion_scan(row_frags, df_ions_all, df_ms2_data):
@@ -443,7 +452,7 @@ def process_run(file_mzxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
      .query('name == @ms_sample')['subpool'].pipe(list))
 
     file_pepxml = file_mzxml.replace('.mzXML', '.pepXML')
-    _, _, df_scan_info, df_ms2_data = load_mzxml_data(file_mzxml, progress)
+    df_scan_info, df_ms2_data = load_mzxml_data(file_mzxml, progress)
 
     df_frags = (load_pepxml(file_pepxml)
      # only keep top-scoring hit for each peptide
@@ -458,3 +467,54 @@ def process_run(file_mzxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
 
     return df_frags, df_frag_ions, df_ms2_data
     
+
+def plot_sample_heatmap(df_plot, value_col, annot_format, ax):
+
+    def column_label_reformat(x):
+        a, b = x.get_text().split('-')
+        return f'{int(float(a))}\n({b})'
+
+    (df_plot
+     .pivot_table(index=['short_name', 'sample', 'wash'], columns=['subpool', 'ms_class'], values=value_col)
+     .fillna(0)
+     .pipe(sns.heatmap, ax=ax, annot=True, fmt=annot_format, cbar=False)
+    )
+
+    ax.set_xlabel('Cloned subpool')
+    ax.set_ylabel('MS run name-Sample ID-Wash protocol')
+    ax.set_xticklabels([column_label_reformat(x) for x in ax.get_xticklabels()])
+    plt.xticks(rotation=0)
+    return ax
+
+
+def format_for_sample_heatmap(df_ms_runs, df_sample_info):
+    return (df_ms_runs
+         .query('date == "2020-08-24"')
+         .join(df_sample_info.set_index('name')[['subpool', 'fraction']], on='sample')
+         .assign(wash=lambda x: x['notes'].str[:6])
+         .assign(ms_class=lambda x: x['sample_notes'].str.extract('(MS\d)'))
+    )
+
+def get_short_name(df, col='file'):
+    return df[col].str.extract('RJ_(\d+_\d+)')[0].pipe(list)
+    
+def prepare_search_hits(df_frag_ions, df_sample_info, df_ms_runs):
+
+    ms_classes = (df_sample_info
+    .assign(ms_class=lambda x: x['notes'].str.extract('(MS\d)'))
+    .set_index('subpool')['ms_class']
+    )
+
+    sample_info = (df_ms_runs
+    .assign(wash=lambda x: x['notes'].str[:6])
+    .set_index('short_name')[['sample', 'wash']]
+    )
+
+    return (df_frag_ions
+    .assign(short_name=get_short_name)
+    .drop_duplicates(['short_name', 'sequence'])
+    .groupby(['short_name', 'subpool'])
+    .size().rename('search_hits').reset_index()
+    .join(ms_classes, on='subpool')
+    .join(sample_info, on='short_name')                    
+    )
