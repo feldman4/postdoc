@@ -159,8 +159,15 @@ def list_commands():
         descriptions += [name + arguments]
     pretty_print('Available commands:', descriptions)
 
-def rename_selection(name):
-    cmd.do(f'set_name sele, {name}')
+def rename_selection(first, second=None):
+    if second is None:
+        old = 'sele'
+        new = first
+    else:
+        old = first
+        new = second
+
+    cmd.do(f'set_name {old}, {new}')
 
 def fetch_with_defaults(rcsb, assembly=1):
     cmd.do(f'fetch {rcsb}, type=pdb{assembly}')
