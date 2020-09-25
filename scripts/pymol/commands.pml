@@ -4,7 +4,7 @@ import glob
 import os
 import inspect
 
-home = os.path.join(os.environ['HOME'], 'drive', 'packages', 'postdoc')
+home = os.path.join(os.environ['HOME'], 'packages', 'postdoc')
 scripts_dir = os.path.join(home, 'scripts', 'pymol')
 pdbs_dir = os.path.join(home, 'resources/pdbs')
 
@@ -196,24 +196,72 @@ def load_pdb_grid(search, max_to_grid=20):
     cmd.do('set grid_mode, 1')
     cmd.do('zoom, buffer=-10')
 
+def color_by_residue_type(selection='all'):
+    acid = 'oxygen'
+    basic = 'neptunium'
+    nonpolar = 'vanadium'
+    polar = 'thulium'
+    cysteine = 'paleyellow'
+    glycine = 'palecyan'
+
+    colormap = {
+        'asp': acid,
+        'glu': acid,
+        'arg': basic,
+        'lys': basic,
+        'his': basic,
+        'met': nonpolar,
+        'phe': nonpolar,
+        'pro': nonpolar,
+        'trp': nonpolar,
+        'val': nonpolar,
+        'leu': nonpolar,
+        'ile': nonpolar,
+        'ala': nonpolar,
+        'ser': polar,
+        'thr': polar,
+        'asn': polar,
+        'gln': polar,
+        'tyr': polar,
+        'cys': cysteine,
+        'gly': glycine,
+    }
+
+    for res, color in colormap.items():
+        cmd.do(f'color {color}, backbone and resn {res}')
+
+def glycine_ca_spheres(selection='all'):
+    selector = f'name CA and {selection} and resn gly'
+    cmd.do(f'show spheres, {selector}')
+    cmd.do(f'set sphere_scale, 0.4, {selector}')
+    # cmd.do(f'color palecyan, {selector}')
+    
 
 commands = [
+# aliases
+('rename', rename_selection),
+# visibility
 ('nowater', hide_water),
 ('nohoh', hide_water),
 ('noh', hide_hydrogens),
 ('justpolarh', show_polar_h),
+# coloring
 ('chainbow', chainbow),
-('findpolar', find_polar),
 ('cnc', color_not_carbon),
 ('cbc', color_by_chain),
-('pmlrun', run_script),
-('pdbload', load_local_pdb),
+('crt', color_by_residue_type),
+('glyballs', glycine_ca_spheres),
+# selecting/labeling
+('findpolar', find_polar),
 ('grabligands', select_ligands),
 ('labeltermini', label_termini),
-('rename', rename_selection),
-('cml', list_commands),
+# loading
 ('rcsb', fetch_with_defaults),
+('pdbload', load_local_pdb),
 ('globload', load_pdb_grid),
+# script management
+('pmlrun', run_script),
+('cml', list_commands),
 ('initialize_settings', initialize_settings),
 ]
 
