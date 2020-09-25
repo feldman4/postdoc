@@ -147,7 +147,7 @@ def write_pdb(df, filename, pipe=True):
 
 def dataframe_to_pdbstring(df):
     lines = []
-    for row in df.T.to_dict().values():
+    for row in df.reset_index().T.to_dict().values():
         lines.append(atom_record(**row))
     pdbstring = '\n'.join(lines)
     return pdbstring

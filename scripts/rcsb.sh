@@ -1,3 +1,4 @@
+#!/bin/bash
 case $1 in
     # calculate pdb_stats for TrRosetta training set
     PDB30-20FEB17)
@@ -11,6 +12,13 @@ case $1 in
         # calculate pdb_stats for blast clustered pdbs from RCSB
         ls rcsb/blast_cluster_30/*pdb | pdb_stats.py > rcsb/blast_cluster_30.csv
         ;;
+
+    denovo)
+        # calculate pdb_stats for denovo designs
+        ls rcsb/denovo_clean/*pdb | pdb_stats.py > rcsb/denovo_clean.csv
+        ;;
+
+    # option didn't match
     *)
         echo cases: PDB30-20FEB17, blast_cluster_30
         ;;

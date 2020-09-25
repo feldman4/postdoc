@@ -237,6 +237,17 @@ def glycine_ca_spheres(selection='all'):
     # cmd.do(f'color palecyan, {selector}')
     
 
+def skeleton(selection='all'):
+    cmd.do(f'hide all, {selection}')
+    cmd.do(f'show cartoon, {selection}')
+    cmd.do(f'show ribbon, {selection}')
+    cmd.do(f'show spheres, {selection} and name CA')
+    cmd.do(f'show wire, {selection} and (name CA or name CB)')
+
+    cmd.do(f'set line_width, 0.8, {selection}')
+    cmd.do(f'set cartoon_transparency, 0.45, {selection}')
+    cmd.do(f'set sphere_scale, 0.2, {selection}')
+
 commands = [
 # aliases
 ('rename', rename_selection),
@@ -263,6 +274,7 @@ commands = [
 ('pmlrun', run_script),
 ('cml', list_commands),
 ('initialize_settings', initialize_settings),
+('skeleton', skeleton),
 ]
 
 for name, func in commands:

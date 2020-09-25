@@ -91,14 +91,21 @@ def load_ab1(f):
     return seq
 
 
-def print_alignment(a, b, width=60):
+def print_alignment(a, b, width=60, as_string=False):
     """Levenshtein alignment.
     """
     import edlib
     alignment = edlib.align(a, b, task='path')
     d = edlib.getNiceAlignment(alignment, a, b)
+    lines = []
     for i in range(0, max(map(len, d.values())), width):
-        print(i)
+        lines += [str(i)]
         for x in d.values():
-            print(x[i:i+width])
+            lines += [x[i:i+width]]
+
+    txt = '\n'.join(lines)
+    if as_string:
+        return txt
+    else:
+        print(txt)
 
