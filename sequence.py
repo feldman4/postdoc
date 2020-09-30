@@ -19,6 +19,9 @@ watson_crick.update({k.lower(): v.lower()
                      for k, v in watson_crick.items()})
 
 
+codon_maps = {} 
+
+
 def read_fasta(f):
     if f.endswith('gz'):
         fh = gzip.open(f)
@@ -108,4 +111,15 @@ def print_alignment(a, b, width=60, as_string=False):
         return txt
     else:
         print(txt)
+
+
+def reverse_translate_max(aa_seq, organism='ecoli'):
+    if organism not in codon_maps:
+        codon_maps['ecoli'] = (load_e_coli_codons()
+        .sort_values('relative_frequency', ascending=False)
+        .drop_duplicates('amino_acid')
+        .set_index('amino_acid')['codon_dna'].to_dict()
+        ) 
+    codon_map = codon_maps[organism]
+    return ''.join([codon_map[x] for x in aa_seq])
 
