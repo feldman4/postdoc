@@ -28,7 +28,8 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return stamp
 
 
-def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, **kwargs):
+def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, 
+              include_cols=None, exclude_cols=None, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
     """
@@ -40,6 +41,12 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, *
             return None
         if add_file is not None:
             df[add_file] = f
+        if include_cols is not None:
+            keep = [x for x in df.columns if re.match(include_cols, x)]
+            df = df[keep]
+        if exclude_cols is not None:
+            keep = [x for x in df.columns if not re.match(exclude_cols, x)]
+            df = df[keep]
         return df
     
     if isinstance(files_or_search, str):
@@ -48,7 +55,6 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, *
         files = files_or_search
 
     return pd.concat([read_csv(f) for f in progress(files)], sort=sort)
-
 
 
 def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(), 
@@ -245,3 +251,18 @@ def _memoize(f, *args, **kwargs):
             return f.cache[key]
 
     return f.cache[key]
+
+
+def predict_ransac(df, x, y, y_pred, dupe_cols=None):
+    """
+    Example:
+        (df_frag_ions
+         .groupby('file')
+         .apply(predict_ransac, 'iRT', 'RTime', 'RTime_pred', ['sequence'])
+         .reset_index(drop=True)
+        )
+    """
+    from sklearn.linear_model import RANSACRegressor
+    df_ = df.drop_duplicates(dupe_cols) if dupe_cols else df
+    model = RANSACRegressor().fit(df_[[x]], df_[y])
+    return df.assign(**{y_pred: model.predict(df[[x]])})
