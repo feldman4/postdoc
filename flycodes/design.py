@@ -938,3 +938,25 @@ def filter_by_spacing(xs, spacing):
             break  
     return xs
 
+
+def bin_by_resolution(xs, resolution):
+    """Bin values such that each bin width is 1/(left edge).
+    Corresponds to mz resolving power.
+    """
+    current = xs.min()
+    end = xs.max()
+    edges = [current]
+    while current < end:
+        current += current / resolution
+        edges.append(current)
+    edges.append(current)
+    edges = np.array(edges)
+    centers = np.convolve(edges, [0.5, 0.5], mode='valid')
+    return np.digitize(xs, edges), centers, edges
+
+
+def add_mz_resolution_bins(df_barcodes, resolution):
+    bins, centers, edges = bin_by_resolution(df_barcodes['mz'], resolution)
+    return (df_barcodes.assign(
+            mz_res_bin_center=centers[bins],
+            mz_res_bin_even=(bins % 2) == 0))
