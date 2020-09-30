@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pyteomics.mzxml
 import pyteomics.pepxml
-
 import seaborn as sns
+from sklearn.linear_model import RANSACRegressor
 
 from postdoc.utils import memoize, add_row_col, csv_frame, add_pat_extract
 import postdoc.sequence
@@ -76,6 +76,8 @@ def write_peptide_fa(filename, sequences):
 
 
 def load_pepxml(f):
+    """Load MS2 scans from pepxml.
+    """
     keys = 'assumed_charge',
     arr = []
     for x in pyteomics.pepxml.PepXML(f):
@@ -281,9 +283,6 @@ def plot_one_sample(df_hist, name):
     return fig
 
 
-from sklearn.linear_model import RANSACRegressor
-
-
 def scatter_with_ransac(data, color, x, y, x0=-25, x1=150, offset=5, **kwargs):
     """Used for iRT_vs_RTime_per_sample FacetGrid
     """
@@ -398,6 +397,7 @@ def export_ion_scans(df_frags, df_ions, df_ms2_data, home, ms_run_name,
 
     return exported
 
+
 def match_scans(df_frags, df_ms2_data, df_ions, df_scan_info):
 
     df_ms2 = df_frags[['sequence', 'scan_ix']].merge(df_ms2_data, how='inner').sort_values(['ion_mz'])
@@ -424,6 +424,7 @@ def match_scans(df_frags, df_ms2_data, df_ions, df_scan_info):
     .drop('num_ions', axis=1)
     )
 
+
 def load_all_ions(search, sequences):
     """Only ions in design are kept. Slow because MS2 all_ions tables are huge.
     """
@@ -439,8 +440,10 @@ def load_all_ions(search, sequences):
     )
 
 
-def process_run(file_mzxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
+def process_run(file_mzxml, file_pepxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
                 progress=lambda x: x):
+    """Match pepXML hits to expected barcodes, one row per ion.
+    """    
     run_samples = df_ms_runs.set_index('file')['sample'].to_dict()
     run_names = df_ms_runs.set_index('file')['short_name'].to_dict()
     ms_sample = run_samples[file_mzxml]
@@ -451,7 +454,6 @@ def process_run(file_mzxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
     expected_subpools = (df_sample_info
      .query('name == @ms_sample')['subpool'].pipe(list))
 
-    file_pepxml = file_mzxml.replace('.mzXML', '.pepXML')
     df_scan_info, df_ms2_data = load_mzxml_data(file_mzxml, progress)
 
     df_frags = (load_pepxml(file_pepxml)
@@ -468,7 +470,7 @@ def process_run(file_mzxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
     return df_frags, df_frag_ions, df_ms2_data
     
 
-def plot_sample_heatmap(df_plot, value_col, annot_format, ax):
+def plot_sample_heatmap(df_plot, value_col, annot_format, ax, **kwargs):
 
     def column_label_reformat(x):
         a, b = x.get_text().split('-')
@@ -477,7 +479,7 @@ def plot_sample_heatmap(df_plot, value_col, annot_format, ax):
     (df_plot
      .pivot_table(index=['short_name', 'sample', 'wash'], columns=['subpool', 'ms_class'], values=value_col)
      .fillna(0)
-     .pipe(sns.heatmap, ax=ax, annot=True, fmt=annot_format, cbar=False)
+     .pipe(sns.heatmap, ax=ax, annot=True, fmt=annot_format, cbar=False, **kwargs)
     )
 
     ax.set_xlabel('Cloned subpool')
@@ -495,9 +497,11 @@ def format_for_sample_heatmap(df_ms_runs, df_sample_info):
          .assign(ms_class=lambda x: x['sample_notes'].str.extract('(MS\d)'))
     )
 
+
 def get_short_name(df, col='file'):
     return df[col].str.extract('RJ_(\d+_\d+)')[0].pipe(list)
-    
+
+
 def prepare_search_hits(df_frag_ions, df_sample_info, df_ms_runs):
 
     ms_classes = (df_sample_info
@@ -518,3 +522,31 @@ def prepare_search_hits(df_frag_ions, df_sample_info, df_ms_runs):
     .join(ms_classes, on='subpool')
     .join(sample_info, on='short_name')                    
     )
+
+
+def prepare_ngs_hits(df_ngs, df_sample_info, df_ms_runs):
+    subpools = df_sample_info['subpool'].pipe(list)
+
+    wash_info = (df_ms_runs
+     .assign(wash=lambda x: x['notes'].str[:6])
+     [['short_name', 'wash']].drop_duplicates()
+    )
+
+    ms_classes = (df_sample_info
+     .assign(ms_class=lambda x: x['notes'].str.extract('(MS\d)'))
+     [['subpool', 'ms_class']].drop_duplicates()
+    )
+
+    return (df_sample_info
+     [['name', 'library']]
+     .set_index('library')
+     .join(df_ngs.set_index('expression'), on='library')
+     .rename(columns={'name': 'sample'})
+     .drop_duplicates(['sample', 'sequence'])
+     .groupby(['sample', 'subpool'])
+      .size().rename('NGS_over_threshold').reset_index()
+     .query('subpool == @subpools')
+     .merge(df_ms_runs[['sample', 'short_name']], how='right')
+     .merge(wash_info)
+     .merge(ms_classes))
+    
