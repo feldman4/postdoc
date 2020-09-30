@@ -81,7 +81,6 @@ def e_coli_crap_mz(drive, metadata):
     return bad_bins
 
 
-
 def load_mzml_data(filename, progress=lambda x: x):
     mz = []
     intensity = []
@@ -103,6 +102,7 @@ def load_mzml_data(filename, progress=lambda x: x):
     df_info = pd.DataFrame(info)
     return mz, intensity, df_info
 
+
 def load_ms1_data(filename, progress=lambda x: x):
     mz = []
     intensity = []
@@ -120,6 +120,7 @@ def load_ms1_data(filename, progress=lambda x: x):
     intensity = np.array(intensity)
     df_info = pd.DataFrame(info)
     return mz, intensity, df_info
+
 
 def grid_ms1_intensities(mz, intensity, time):
     """Rounds down mz and time. Multiply input and divide output to increase precision.
