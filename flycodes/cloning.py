@@ -7,8 +7,12 @@ tev_tag_0 = 'MGSHHHHHHENLYFQGWS'
 tev_tag_1 = 'MGHHHHHHGWSENLYFQGS'
 
 bsai_tail = 'CTTACGCACTTACTCATGGTCTCc'
-gg_protein_fwd = bsai_tail + 'AAGAGC'
-gg_protein_rev = bsai_tail + 'GTTA'
+pT10_fwd = bsai_tail + 'AAGAGC'
+pT10_rev = bsai_tail + 'GTTA'
+
+pT11_fwd = bsai_tail + 'TACC' + 'ATG'
+pT11_rev = bsai_tail + 'TTTG' + 'CTGCC'
+
 
 patterns = {'pTL12': 'AGTCGC(.*)AAGAGC',
             'pTL10': 'AGTCGC(.*)AAGACG'}
