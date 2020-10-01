@@ -1,0 +1,38 @@
+# navigate to analysis directory and run after tasks submitted by 1_run_digs.sh are finished
+
+ANALYSIS_DIR=`pwd`
+
+source activate /home/dfeldman/.conda/envs/df-pyr-tf
+IMAGE_STATS="/home/dfeldman/s/for/JD/image_stats.py"
+
+DATASET_INFO_CSV="dataset_info.csv"
+DATASET_GATE_CSV="dataset_info_gated.csv"
+PIXEL_STATS_CSV="pixel_stats.csv"
+PEAK_STATS_PY_CSV="peak_stats_py.csv"
+PEAK_STATS_IJ_CSV="peak_stats_ij.csv"
+
+
+echo "Combining output from digs task array"
+csvstack digs/*pixel_stats.csv > pixel_stats.csv
+csvstack digs/*peak_stats_py.csv > peak_stats_py.csv
+csvstack digs/*peak_stats_ij.csv > peak_stats_ij.csv
+
+
+echo "Plotting well summaries"
+$IMAGE_STATS plot_wells $DATASET_GATE_CSV $PEAK_STATS_PY_CSV --progress --out=figures/wells_py/
+$IMAGE_STATS plot_wells $DATASET_GATE_CSV $PEAK_STATS_IJ_CSV --progress --out=figures/wells_ij/
+
+
+echo "Plotting plate pixel statistics"
+PLOT="$IMAGE_STATS plot_plate $DATASET_INFO_CSV"
+$PLOT $PIXEL_STATS_CSV median first --out=figures/plate/pixel_
+
+
+echo "Plotting plate peak statistics"
+$PLOT $PEAK_STATS_PY_CSV --log --out=figures/plate/py_peak_ intensity_bsub median 
+$PLOT $PEAK_STATS_PY_CSV --log --out=figures/plate/py_peak_ intensity_bsub mean 
+$PLOT $PEAK_STATS_PY_CSV --log --out=figures/plate/py_peak_ peaks count 
+
+$PLOT $PEAK_STATS_IJ_CSV --log --out=figures/plate/ij_peak_ intensity_bsub median 
+$PLOT $PEAK_STATS_IJ_CSV --log --out=figures/plate/ij_peak_ intensity_bsub mean 
+$PLOT $PEAK_STATS_IJ_CSV --log --out=figures/plate/ij_peak_ peaks count 
