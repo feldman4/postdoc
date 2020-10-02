@@ -14,7 +14,7 @@ DSSP_TARGETS=/home/dfeldman/for/dssp/dssp_targets_$M.fa
 
 source activate /home/dfeldman/.conda/envs/df-pyr-tf
 
-python /home/dfeldman/s/app.py dssp_design \
+python /home/dfeldman/s/dssp/app.py dssp_design \
     initialize --num_models=$NUM_MODELS - \
     design --out_dir=$OUT_DIR --dssp_target=$DSSP_TARGETS --N=$N
 
