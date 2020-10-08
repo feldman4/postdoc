@@ -171,8 +171,11 @@ def fetch_with_defaults(rcsb, assembly=1):
     color_by_chain('not polymer.nucleic')
 
 def load_pdb_grid(search, max_to_grid=20):
-    from natsort import natsorted
-    files = natsorted(glob.glob(search))
+    try:
+        from natsort import natsorted
+        files = natsorted(glob.glob(search))
+    except ModuleNotFoundError:
+        files = sorted(glob.glob(search))
 
     cmd.do('set scene_animation_duration, 0')
     print(f'Loading {len(files)} files...')
@@ -205,7 +208,7 @@ def skeleton(selection='all'):
     cmd.do(f'show wire, {selection} and (name CA or name CB)')
 
     cmd.do(f'set line_width, 0.8, {selection}')
-    cmd.do(f'set cartoon_transparency, 0.45, {selection}')
+    cmd.do(f'set cartoon_transparency, 0.3, {selection}')
     cmd.do(f'set sphere_scale, 0.2, {selection}')
 
 commands = [
