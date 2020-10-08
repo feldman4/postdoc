@@ -27,7 +27,7 @@ log_dir = 'logs/fit/' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
-dssp_code = 'LHE'
+dssp_code = 'HEL'
 aa_code_gap = 'ARNDCQEGHILKMFPSTWYV-'
 aa_code = aa_code_gap[:-1]
 

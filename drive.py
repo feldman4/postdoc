@@ -29,7 +29,8 @@ class Drive():
         self.service = get_service()
         self.file_ids = list_files(self.service)
         
-    def get_excel(self, name, dropna='all', normalize=True, fix_int=True, **kwargs):
+    def get_excel(self, name, dropna='all', normalize=True, fix_int=True, 
+                  drop_unnamed=True, **kwargs):
         """Keyword arguments are passed to `pd.read_excel`.
         """
         if len(name.split('/')) == 2:
@@ -57,6 +58,9 @@ class Drive():
                         df[c] = df[c].astype(int)
                 except:
                     pass
+        if drop_unnamed:
+            cols_drop = [c for c in df.columns if c.startswith('Unnamed:')]
+            df = df.drop(cols_drop, axis=1)
         return df
 
     def __call__(self, *args, **kwargs):
@@ -90,7 +94,10 @@ def update_resources():
 
 
 def normalize_col_name(s):
-    s = s.replace('# of', 'num')
-    s = s.replace('\n', ' ')
-    s = s.replace(' ', '_')
+    try:
+        s = s.replace('# of', 'num')
+        s = s.replace('\n', ' ')
+        s = s.replace(' ', '_')
+    except AttributeError: # not a string
+        pass
     return s

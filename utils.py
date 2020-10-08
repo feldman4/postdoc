@@ -7,8 +7,10 @@ import re
 import sys
 import time
 
+import decorator
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 import pandas as pd
 from natsort import natsorted
 from tqdm.auto import tqdm
@@ -26,7 +28,8 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return stamp
 
 
-def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, **kwargs):
+def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, 
+              include_cols=None, exclude_cols=None, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
     """
@@ -38,6 +41,12 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, *
             return None
         if add_file is not None:
             df[add_file] = f
+        if include_cols is not None:
+            keep = [x for x in df.columns if re.match(include_cols, x)]
+            df = df[keep]
+        if exclude_cols is not None:
+            keep = [x for x in df.columns if not re.match(exclude_cols, x)]
+            df = df[keep]
         return df
     
     if isinstance(files_or_search, str):
@@ -48,12 +57,14 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, *
     return pd.concat([read_csv(f) for f in progress(files)], sort=sort)
 
 
-
-def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple()):
+def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(), 
+              cat_cols=tuple(), uint16_cols=tuple()):
     return (df
            .assign(**{c: df[c].astype(int) for c in int_cols})
+           .assign(**{c: df[c].astype(np.uint16) for c in uint16_cols})
            .assign(**{c: df[c].astype(float) for c in float_cols})
            .assign(**{c: df[c].astype(str) for c in str_cols})
+           .assign(**{c: df[c].astype('category') for c in cat_cols})
            )
 
 
@@ -168,3 +179,90 @@ def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
         txt.set_path_effects([stroke])
 
     return ax
+
+
+def flatten_col(df, col):
+    """
+    From https://stackoverflow.com/questions/27263805/pandas-column-of-lists-create-a-row-for-each-list-element
+    
+    Expand a list-like column.
+    """
+    return pd.DataFrame({
+          col_: np.repeat(df[col_].values, df[col].str.len())
+          for col_ in df.columns.drop(col)}
+        ).assign(**{col: np.concatenate(df[col].values)})[df.columns]
+
+
+def add_row_col(df, well_col):
+    return (df
+            .assign(row=lambda x: x[well_col].str[0])
+            .assign(col=lambda x: x[well_col].str[1:].astype(int))
+            )
+
+
+def add_pat_extract(df, input_col, pattern):
+    return pd.concat([df,
+                      df[input_col].str.extract(pattern)], axis=1)
+
+
+def memoize(active=True, copy_numpy=True):
+    """The memoized function has attributes `cache`, `keys`, and `reset`. 
+    
+    @memoize(active=False)
+    def f(...):
+        ...
+    
+    f.keys['active'] = True  # activate memoization
+    f.cache  # the cache itself
+    f.reset()  # reset the cache
+    """
+    def inner(f):
+        f_ = decorator.decorate(f, _memoize)
+
+        keys = dict(active=active, copy_numpy=copy_numpy)
+        f.keys = keys
+        f_.keys = keys
+
+        def reset():
+            cache = {}
+            f.cache = cache
+            f_.cache = cache
+
+        reset()
+        f_.reset = reset
+
+        return f_
+    return inner
+
+
+def _memoize(f, *args, **kwargs):
+    if not f.keys['active']:
+        return f(*args, **kwargs)
+
+    key = str(args) + str(kwargs)
+    if key not in f.cache:
+        f.cache[key] = f(*args, **kwargs)
+
+    # copy numpy arrays unless disabled by copy_numpy=False
+    if isinstance(f.cache[key], np.ndarray):
+        if f.keys['copy_numpy']:
+            return f.cache[key].copy()
+        else:
+            return f.cache[key]
+
+    return f.cache[key]
+
+
+def predict_ransac(df, x, y, y_pred, dupe_cols=None):
+    """
+    Example:
+        (df_frag_ions
+         .groupby('file')
+         .apply(predict_ransac, 'iRT', 'RTime', 'RTime_pred', ['sequence'])
+         .reset_index(drop=True)
+        )
+    """
+    from sklearn.linear_model import RANSACRegressor
+    df_ = df.drop_duplicates(dupe_cols) if dupe_cols else df
+    model = RANSACRegressor().fit(df_[[x]], df_[y])
+    return df.assign(**{y_pred: model.predict(df[[x]])})

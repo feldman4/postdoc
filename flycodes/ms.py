@@ -81,7 +81,6 @@ def e_coli_crap_mz(drive, metadata):
     return bad_bins
 
 
-
 def load_mzml_data(filename, progress=lambda x: x):
     mz = []
     intensity = []
@@ -103,6 +102,7 @@ def load_mzml_data(filename, progress=lambda x: x):
     df_info = pd.DataFrame(info)
     return mz, intensity, df_info
 
+
 def load_ms1_data(filename, progress=lambda x: x):
     mz = []
     intensity = []
@@ -120,6 +120,7 @@ def load_ms1_data(filename, progress=lambda x: x):
     intensity = np.array(intensity)
     df_info = pd.DataFrame(info)
     return mz, intensity, df_info
+
 
 def grid_ms1_intensities(mz, intensity, time):
     """Rounds down mz and time. Multiply input and divide output to increase precision.
@@ -142,8 +143,12 @@ def grid_ms1_intensities(mz, intensity, time):
     return df_int
 
 
-def generate_msfragger_cmd(mzML, protein_fa):
-    params_text = msfragger_params.format(protein_fa=protein_fa)
+def generate_msfragger_cmd(mzML, protein_fa, output_format='pepXML'):
+    """
+    output_format can be tsv or pepXML
+    """
+    params_text = msfragger_params.format(
+        protein_fa=protein_fa, output_format=output_format)
     params = HOME / 'Downloads' / 'fragger.test.params'
     with open(params, 'w') as fh:
         fh.write(params_text)
@@ -203,8 +208,8 @@ max_variable_mods_per_mod = 3
 max_variable_mods_per_peptide = 3			# maximum 5
 max_variable_mods_combinations = 5000			# maximum 65534, limits number of modified peptides generated from sequence
 
-output_file_extension = pepXML
-output_format = pepXML
+output_file_extension = {output_format}         # pepXML or tsv
+output_format = {output_format}
 output_report_topN = 1
 output_max_expect = 50
 report_alternative_proteins = 0			# 0=no, 1=yes
@@ -225,7 +230,7 @@ add_topN_complementary = 0
 
 # spectral processing
 
-minimum_peaks = 15			# required minimum number of peaks in spectrum to search (default 10)
+minimum_peaks = 10			# required minimum number of peaks in spectrum to search (default 10)
 use_topN_peaks = 100
 min_fragments_modelling = 2
 min_matched_fragments = 4

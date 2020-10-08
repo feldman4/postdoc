@@ -226,8 +226,9 @@ def extract_rcsb_30p(max_cluster_id=None, overwrite=False, progress=None):
     return df_accessions
 
 
-def start_pyrosetta(flags='-constant_seed'):
-    pyrosetta.init(flags, set_logging_handler='logging', silent=True)
+def start_pyrosetta(flags='-constant_seed', rotamer_flags='-ex1 -ex2aro'):
+    options = f'{flags} {rotamer_flags}'
+    pyrosetta.init(options, set_logging_handler='logging', silent=True)
 
     # pyrosetta throws away rosetta log levels, patch restores them
     # allows filtering, e.g.: logging.root.handlers[0].setLevel(logging.INFO)

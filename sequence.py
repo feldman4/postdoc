@@ -19,6 +19,9 @@ watson_crick.update({k.lower(): v.lower()
                      for k, v in watson_crick.items()})
 
 
+codon_maps = {} 
+
+
 def read_fasta(f):
     if f.endswith('gz'):
         fh = gzip.open(f)
@@ -91,14 +94,32 @@ def load_ab1(f):
     return seq
 
 
-def print_alignment(a, b, width=60):
+def print_alignment(a, b, width=60, as_string=False):
     """Levenshtein alignment.
     """
     import edlib
     alignment = edlib.align(a, b, task='path')
     d = edlib.getNiceAlignment(alignment, a, b)
+    lines = []
     for i in range(0, max(map(len, d.values())), width):
-        print(i)
+        lines += [str(i)]
         for x in d.values():
-            print(x[i:i+width])
+            lines += [x[i:i+width]]
+
+    txt = '\n'.join(lines)
+    if as_string:
+        return txt
+    else:
+        print(txt)
+
+
+def reverse_translate_max(aa_seq, organism='ecoli'):
+    if organism not in codon_maps:
+        codon_maps['ecoli'] = (load_e_coli_codons()
+        .sort_values('relative_frequency', ascending=False)
+        .drop_duplicates('amino_acid')
+        .set_index('amino_acid')['codon_dna'].to_dict()
+        ) 
+    codon_map = codon_maps[organism]
+    return ''.join([codon_map[x] for x in aa_seq])
 
