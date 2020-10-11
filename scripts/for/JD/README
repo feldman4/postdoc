@@ -1,0 +1,29 @@
+README for INCarta GFP particle analysis
+
+Image analysis uses functions in `image_stats.py`. These can be called from the command line using an interface automatically made by google fire (python package). The bash scripts call subcommands of `image_stats.py` to do the actual analysis.
+
+To run the analysis, call `1_run_digs.sh` with the input INCarta directory (contains tif files) and the output directory as arguments. This will output `dataset_info.csv` with one row per tif file to analyze, and then automatically submit a task array to digs using script `3_process_digs.sh`. When the digs jobs are finished, the output will be in the digs/ sub-directory and logs will be written to the logs/ sub-directory. Plots of individual image fields will be written to figures/fields*.
+
+To plot well and plate-level statistics, call `2_plot_digs.sh` with the output directory as the argument. Before plotting, the results in digs/ are combined to create pixel_stats.csv and peaks_stats*.csv. This data is used to create figures which are written to figures/wells* and figures/plate. 
+
+Analysis parameters (arguments to `image_stats.py` commands) can be changed in the script files. For example, `1_run_digs.sh` contains a bash variable IJ_MAXIMA_THRESHOLD that sets the tolerance of the ImageJ Find Maxima command.
+
+Example:
+
+# Start by making a directory for the analysis and changing directory
+# for example
+# mkdir ~/INCarta_analysis_example
+# cd ~/INCarta_analysis_example
+
+sh /home/dfeldman/s/for/JD/1_run_digs.sh output/ "/net/expdata/MICROSCOPE/INCarta/Josh/20200730/JD Particle 071219/JD Particle 071219_FullplateNewSamples_1/"
+
+# wait for jobs to finish, go to output
+# cd ~/INCarta_analysis_example/output
+
+sh /home/dfeldman/s/for/JD/2_plot_digs.sh "/net/expdata/MICROSCOPE/INCarta/Josh/20200730/JD Particle 071219/JD Particle 071219_FullplateNewSamples_1/"
+
+Example output:
+
+/home/dfeldman/for/JD/20200730_image_stats_digs/
+/home/dfeldman/for/JD/20200916_image_stats_digs/
+

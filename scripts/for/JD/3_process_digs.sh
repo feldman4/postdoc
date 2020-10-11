@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH -J process_INCarta
+#SBATCH -J INCarta_process
 #SBATCH -p short 
 #SBATCH --mem=6g 
-#SBATCH -o logs/incarta_%A.%a.out
-#SBATCH -e logs/incarta_%A.%a.out
+#SBATCH -o logs/process_%A.%a.out
+#SBATCH -e logs/process_%A.%a.out
 
 # called by 1_run_digs.sh
 # several variables are exported by the calling script
@@ -23,7 +23,9 @@ STOP=$(($START + $LINES_PER_TASK))
 $IMAGE_STATS pixel_stats $DATASET_GATE_CSV --start $START --stop $STOP --progress > $PIXEL_STATS_CSV
 
 $IMAGE_STATS peak_stats_py $DATASET_GATE_CSV --start $START --stop $STOP --progress > $PEAK_STATS_PY_CSV
-$IMAGE_STATS plot_fields $DATASET_GATE_CSV $PEAK_STATS_PY_CSV --verbose --progress --out=figures/fields_py/
+$IMAGE_STATS plot_fields $DATASET_GATE_CSV $PEAK_STATS_PY_CSV \
+    --plate_dataset_info_csv=$DATASET_INFO_CSV --out=figures/fields_py/ \
+    --verbose --progress
 
 $IMAGE_STATS peak_stats_ij $DATASET_GATE_CSV $IJ_MAXIMA_THRESHOLD --start $START --stop $STOP --verbose > $PEAK_STATS_IJ_CSV
 $IMAGE_STATS plot_fields $DATASET_GATE_CSV $PEAK_STATS_IJ_CSV \

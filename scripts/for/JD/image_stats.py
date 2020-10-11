@@ -290,7 +290,7 @@ def draw_plate_location(df_info, filename, ax1):
 
 
 def plot_field_overview(filename, df_peaks, df_info, montage=4, thumbnail_size=80,
-                        max_color_percentile=95, dilate=3, bin_params=(0, 10000, 100),
+                        max_color_percentile=95, dilate=2, bin_params=(0, 10000, 100),
                         montage_by_percentile=False):
     """Overview of peaks detected in a single image field.
     :param filename: field to plot
@@ -424,7 +424,7 @@ def plot_fields(dataset_info_csv, peak_stats_csv, out='figures/fields/',
                 plate_dataset_info_csv=None,
                 start=0, stop=None, progress=False, verbose=False, 
                 montage=4, thumbnail_size=80,
-                max_color_percentile=95, dilate=3, bin_params=(0, 10000, 100),
+                max_color_percentile=95, dilate=2, bin_params=(0, 10000, 100),
                 montage_by_percentile=False):
     """Overview of peaks detected in a single image field.
     :param dataset_info_csv: table with columns "path" and "filename"
@@ -798,18 +798,5 @@ if __name__ == '__main__':
         'plot_fields': plot_fields,
         'plot_wells': plot_wells,
         'plot_plate': plot_plate,
-
-        # 'query': print_dataframe(query)
-        
-
-        # 'global_stats': global_stats_stream,
-        # 'extract_xdce': extract_xdce_stream,
-        # 'plot_global_stats': plot_global_stats,
-
-        # 'extract_peaks': extract_peaks_stream,
-
-        # 'parse': parse_filename,
-        # 'get_global_stats': get_global_stats,
-        
     }
     fire.Fire(commands)

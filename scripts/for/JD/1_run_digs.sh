@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
 
-# example analysis of INCarta particle data
-
-INCARTA_HOME="/net/expdata/MICROSCOPE/INCarta"
-
-# set ANALYSIS_DIR and DATASET for image dataset to be analyzed
-
-ANALYSIS_DIR="/home/dfeldman/for/JD/20200730_image_stats_digs"
-DATASET=$INCARTA_HOME/"Josh/20200730/JD Particle 071219/JD Particle 071219_FullplateNewSamples_1/"
-
-# ANALYSIS_DIR="/home/dfeldman/for/JD/20200916_image_stats_digs"
-# DATASET=$INCARTA_HOME/"Justin/20200916GFPtest/JD Particle 071219/JD Particle 071219_Sampleplate_1_1/"
+# Analyze INCarta particle data
+#
+# arguments:
+# $1=ANALYSIS_DIR (where the analysis files are saved)
+# $2=DATASET (full path to INCarta dataset)
+#
+# example:
+# sh 2_plot_digs.sh output/ "/net/expdata/MICROSCOPE/INCarta/Josh/20200730/JD Particle 071219/JD Particle 071219_FullplateNewSamples_1/"
 
 export IJ_MAXIMA_THRESHOLD=400
 export TASKS=100 # number of array tasks to submit
 
+ANALYSIS_DIR=$1
+DATASET=$2
 
 
 source activate /home/dfeldman/.conda/envs/df-pyr-tf
