@@ -6,8 +6,8 @@ export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
 
 ######################### ALIASES #############################
 
-alias   l='ls -l --all --no-group --color=auto --classify -v'
-alias   rsyncr='rsync -Rr --progress --update'
+alias l='ls -l --all --human-readable --no-group --color=auto --classify -v'
+alias rsyncr='rsync -Rr --progress --update'
 alias hist="sort | uniq -c | sort -r"
 alias tar='tar -zxvf'
 alias less='less -S'
