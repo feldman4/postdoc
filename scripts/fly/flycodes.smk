@@ -1,6 +1,7 @@
-sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
-
-GPU_MEM_FRACTION = 0.1
+"""
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/fly/run.sh run_003
+sbatch -p medium --mem=80g -c 10 s/fly/run.sh run_003
+"""
 
 # IMPORTS
 
@@ -10,17 +11,21 @@ from postdoc.utils import timestamp, csv_frame
 
 import pandas as pd
 import inspect
-METADATA = dict(inspect.getmembers(designs, inspect.isclass))[config['design']]
 
-RUN_NAME = timestamp(METADATA.name)
+sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
 
+# CONSTANTS
+
+GPU_MEM_FRACTION = 0.1
 MODEL_IRT = ('/home/dfeldman/flycodes/prosit_models/'
          'model_irt_prediction/')
 MODEL_SPECTRA = ('/home/dfeldman/flycodes/prosit_models/'
                  'model_fragmentation_prediction/')
 
-# RULES
+# CONFIG
 
+METADATA = designs.runs[config['run']]
+RUN_NAME = timestamp(METADATA.name) # unique name for this snakemake run
 RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_generation_runs)]
 
 
@@ -51,28 +56,23 @@ rule generate_peptides:
             bin_mz=METADATA.precursor_bin_names.values())
     run:
         if METADATA.rule_set == 'RJ_76':
-            df_peptides = (fly.design.permute_precursors(METADATA.known_peptides, 
+            df_peptides = fly.design.permute_precursors(METADATA.known_peptides, 
                 METADATA.num_permutations)
-                .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
-                .assign(mz_bin=lambda x: 
-                    x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
-                        METADATA.precursor_bin_width))
-                .query('mz_bin == mz_bin')
-                .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
-                .assign(run=RUN_NAME)
-            )
         else:
-            df_peptides = (fly.generate_peptide_set(
+            df_peptides = fly.generate_peptide_set(
                 METADATA.num_to_generate, METADATA.min_length, 
                 METADATA.max_length, METADATA.rule_set)
-                .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
-                .assign(mz_bin=lambda x: 
-                    x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
-                        METADATA.precursor_bin_width))
-                .query('mz_bin == mz_bin')
-                .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
-                .assign(run=RUN_NAME)
-            )
+
+        df_peptides = (df_peptides
+            .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
+            .assign(mz_bin=lambda x: 
+                x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
+                    METADATA.precursor_bin_width))
+            .query('mz_bin == mz_bin')
+            .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
+            .assign(run=RUN_NAME)
+        )
+        
         # need to write empty csv files for empty bins
         for f, mz_bin in zip(output, METADATA.precursor_bin_names.values()):
             (df_peptides.query('mz_bin == @mz_bin')
@@ -162,16 +162,3 @@ rule filter_barcodes_ms1_range:
              .to_csv(output[0], index=None)
             )
 
-
-
-
-"""
-squeue --user=dfeldman
-
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/run_003.sh
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/run_004.sh
-
-sbatch -p medium --mem=80g -c 10 s/run_003.sh
-sbatch -p medium --mem=80g -c 10 s/run_004.sh
-
-"""
