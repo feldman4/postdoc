@@ -90,26 +90,33 @@ def read_pdb_records(pdb_string):
 
 # name in spec, name, width, format
 pdb_spec = [
-    ('Record name','record_name',    6, '{ <6}'),
-    ('serial',     'atom_serial',    5, '{ >5}'),
+    # this is spec, but some code writes atom_serial over 100,000...
+    # ('Record name','record_name',    6, '{ <6}'),
+    # ('serial',     'atom_serial',    5, '{ >5}'),
+    
+    ('Record name','record_name',    5, '{ <5}'),
+    ('serial',     'atom_serial',    6, '{ >6}'),
+
     ('unused',     '',               1, ' '),
     ('name',       'atom_name',      4, '{ <4}'),
     ('altLoc',     'altLoc',         1, '{ <1}'),
-    ('resName',    'res_name',       3, '{ <3}'),
+    ('resName',    'res_name',       3, '{ >3}'),
     ('unused',     '',               1, ' '),
     ('chainID',    'chain',          1, '{ <1}'),
     ('resSeq',     'res_seq',        4, '{ >4}'),
     ('iCode',      'iCode',          1, '{ <1}'),
     ('unused',     '',               3, '   '),
-    ('x',          'x',              8, '{>8.6g}'),
-    ('y',          'y',              8, '{>8.6g}'),
-    ('z',          'z',              8, '{>8.6g}'),
-    ('occupancy',  'occupancy',      6, '{>6.4}'),
-    ('tempFactor', 'temp_factor',    6, '{>6.4g}'),
-    ('unused',     '',              10, '          '),
+    ('x',          'x',              8, 'fw6'),
+    ('y',          'y',              8, 'fw6'),
+    ('z',          'z',              8, 'fw6'),
+    ('occupancy',  'occupancy',      6, 'fw4'),
+    ('tempFactor', 'temp_factor',    6, 'fw4'),
+    ('unused',     '',               6, ' '*6),
+    ('segmentID',  '',               4, ' '*4),
     ('element',    'element',        2, '{>2}'),
     ('charge',     'charge',         2, '{>2}'),
     ]
+
 
 
 pdb_useful_order = [
@@ -130,10 +137,17 @@ def atom_record(record_name, atom_name, atom_serial,
     
     fields = []
     for pdb_name, name, width, fmt in pdb_spec:
-        if name:
-            fmt = fmt[0] + name + ':' + fmt[1:]
-        fields.append(fmt.format(**locals()))
-
+        if name == '':
+            fields.append(fmt)
+        elif fmt.startswith('fw'):
+            fmt_width = int(fmt[2])
+            pad = ' ' * (width - fmt_width)
+            number = to_fixed_width(locals()[name], fmt_width)
+            fields.append(pad + number)
+        else:
+            fmt_py = fmt[0] + name + ':' + fmt[1:]
+            fields.append(fmt_py.format(**locals()))
+        
     return ''.join(fields)
 
 
@@ -300,3 +314,24 @@ def read_rosetta_params(filename):
             results[table] = df
         
     return results
+
+
+def to_fixed_width(n, max_width, allow_overflow=False, do_round=True):
+    """https://stackoverflow.com/questions/24960235/python-how-do-i-format-numbers-for-a-fixed-width
+    """
+    if do_round:
+        for i in range(max_width - 2, -1, -1):
+            str0 = '{:.{}f}'.format(n, i)
+            if len(str0) <= max_width:
+                break
+    else:
+        str0 = '{:.42f}'.format(n)
+        int_part_len = str0.index('.')
+        if int_part_len <= max_width - 2:
+            str0 = str0[:max_width]
+        else:
+            str0 = str0[:int_part_len]
+    if (not allow_overflow) and (len(str0) > max_width):
+        raise OverflowError(
+            "Impossible to represent in fixed-width non-scientific format")
+    return str0
