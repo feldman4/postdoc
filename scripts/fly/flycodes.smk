@@ -35,19 +35,18 @@ rule all:
         #     design=METADATA.name,
         #     run=RUNS,
         #     bin_mz=METADATA.precursor_bin_names.values()),
-        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
-        #     design=METADATA.name,
-        #     bin_iRT=METADATA.iRT_bin_names.values(),
-        #     bin_mz=METADATA.precursor_bin_names.values())
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values())
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
-            design=METADATA.name,
-            bin_iRT=list(METADATA.iRT_bin_names.values()),
-            ms1_range=list(METADATA.ms1_selection_ranges.keys()))
-
+        # expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=list(METADATA.iRT_bin_names.values()),
+        #     ms1_range=list(METADATA.ms1_selection_ranges.keys()))
 
 
 rule generate_peptides:
@@ -61,7 +60,7 @@ rule generate_peptides:
         else:
             df_peptides = fly.generate_peptide_set(
                 METADATA.num_to_generate, METADATA.min_length, 
-                METADATA.max_length, METADATA.rule_set)
+                METADATA.max_length, METADATA.rule_set, seed=int(wildcards.run))
 
         df_peptides = (df_peptides
             .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
@@ -72,7 +71,7 @@ rule generate_peptides:
             .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
             .assign(run=RUN_NAME)
         )
-        
+
         # need to write empty csv files for empty bins
         for f, mz_bin in zip(output, METADATA.precursor_bin_names.values()):
             (df_peptides.query('mz_bin == @mz_bin')
