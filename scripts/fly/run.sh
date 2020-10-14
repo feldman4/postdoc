@@ -1,6 +1,6 @@
 #!/bin/sh
 
-source activate /software/conda/envs/prosit5
+source activate /home/dfeldman/.conda/envs/prosit5
 
 RUN=$1
 cd /home/dfeldman/flycodes/$RUN
