@@ -3,7 +3,8 @@
 import pandas as pd
 from ..sequence import reverse_complement as rc
 
-past_orders = {
+
+orders = {
     'Agilent_070820_WeiYang':
         {
             'oligo_file': ('/home/wyang12/Documents/FolR1/'
@@ -14,8 +15,33 @@ past_orders = {
                 'inner_forward': 19,
                 'outer_reverse': 18,
             },
-        }
+        },
+    'Agilent_121020_WeiYang_test':
+        {
+            'oligo_file': ('/home/dfeldman/flycodes/wei_binders/1_realrun/final_order_large_pool.list'),
+            'primers': {
+                'outer_forward': 18,
+                'inner_reverse': 19,
+                'inner_forward': 19,
+                'outer_reverse': 18,
+            },
+        },
+    'Agilent_121020_WeiYang':
+        {
+            'oligo_file': ('/home/dfeldman/flycodes/wei_binders/1_realrun_for_ecoli/final_order_large_pool.list'),
+            'primers': {
+                'outer_forward': 19, # after substituting pT14 adapter
+                'inner_reverse': 19,
+                'inner_forward': 19,
+                'outer_reverse': 18,
+            },
+            'max_length': 230,
+            'max_oligos': 19092,
+        },
 }
+
+
+cterm_pat = '(?P<design>.*?)(?P<linker>(?:GGS|GS|G)*GSK)(?P<barcode>.*R)'
 
 
 def find_overlap(first_insert, second_insert, max_k=100):
@@ -29,9 +55,15 @@ def find_overlap(first_insert, second_insert, max_k=100):
 
 def add_overlaps(df_agilent):
     it = df_agilent[['first_insert', 'second_insert']].values
-    overlap_lengths = [find_overlap(a, b) for a, b in it]
-    overlaps = [x[:k] for x, k in zip(df_agilent['second_insert'], overlap_lengths)]
-    return df_agilent.assign(overlap_length=overlap_lengths, overlap=overlaps)
+    overlap_lengths, overlaps, assemblies = [], [], []
+    for first, second in it:
+        k = find_overlap(first, second)
+        overlap_lengths += [k]
+        overlaps += [second[:k]]
+        assemblies += [first + second[k:]]
+    return df_agilent.assign(overlap_length=overlap_lengths, 
+                             overlap=overlaps,
+                             assembly=assemblies)
 
 
 def add_primers(df_agilent, outer_forward, inner_reverse, inner_forward,
