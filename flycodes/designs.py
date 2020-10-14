@@ -147,18 +147,14 @@ class DESIGN_6():
     min_length = 9
     max_length = 13
     num_to_generate = int(1e6) # test
-    num_generation_runs = 1 # test
+    num_generation_runs = 10 # test
 
     # does this stay the same?
     precursor_mz_start = 500.2667
     precursor_mz_max = 850
-    precursor_bins = np.arange(precursor_mz_start, precursor_mz_max, MZ_DOUBLE_SPACING)
-
-    # precursor_bins = precursor_bins[:3] # test
-
-    precursor_bin_width = MZ_DOUBLE_SPACING
+    precursor_bin_width = 10 # fewer mz bins for less prosit jobs
+    precursor_bins = np.arange(precursor_mz_start, precursor_mz_max, precursor_bin_width)
     precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
-
 
     # sometimes Prosit predicts iRT between 0 and 120 but the peptide elutes
     # between -25 and -10
@@ -168,15 +164,25 @@ class DESIGN_6():
     normalized_collision_energy = 27
 
     # number of peptides retained for barcode selection, increase to saturate downstream filters
-    input_barcodes_per_iRT_mz_bin = 1000
+    input_barcodes_per_iRT_mz_bin = int(1e6)
     pred_barcodes_per_mz_bin = (
         input_barcodes_per_iRT_mz_bin * 
         len(iRT_bins) * 2)
 
-    # increase to get more barcodes
-    ms1_resolution = 50000
+    # filter peptides by number of product ions
+    min_usable_ions = 5
+    usable_ion_intensity = 0.25
+    ion_mz_start = 200.1517
+    ion_mz_max = 1300
+    usable_ion_gate = ('ion_type == "y" & {} < ion_mz < {} & ion_charge == 1'
+        '& 2 < ion_length < (length - 1) & {} < intensity_prosit'
+        .format(ion_mz_start, ion_mz_max, usable_ion_intensity))
+    # exact values don't matter for filtering by number of ions
+    ignore_ion_intensity = 0.25
+    ion_bins = np.arange(ion_mz_start, ion_mz_max, MZ_DOUBLE_SPACING)
+    ion_bin_width = MZ_DOUBLE_SPACING
 
-
+    
 
 
 runs = {
@@ -186,6 +192,7 @@ runs = {
     'run_004': DESIGN_4,
     'run_005': DESIGN_2,
     'run_006': DESIGN_6,
+    'run_007': DESIGN_6,
     }
 
 
