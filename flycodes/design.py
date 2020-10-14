@@ -941,7 +941,7 @@ def filter_by_spacing(xs, spacing):
 
 def bin_by_resolution(xs, resolution):
     """Bin values such that each bin width is 1/(left edge).
-    Corresponds to mz resolving power.
+    Useful for creating mz bins distinguishable at fixed resolving power.
     """
     current = xs.min()
     end = xs.max()
