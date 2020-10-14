@@ -14,7 +14,6 @@ class DESIGN_0():
     num_to_generate = int(4e6)
     num_generation_runs = 30
 
-    precursors_per_bin = 200
     precursor_mz_start = 500.2667
     precursor_mz_max = 850
     precursor_bins = np.arange(precursor_mz_start, precursor_mz_max, MZ_DOUBLE_SPACING)
@@ -109,7 +108,7 @@ class DESIGN_3(DESIGN_0):
 
     # subdivide MS1 bins into N groups
     ms1_selection_scans = 10
-    #  = ms1_selection_scans
+
     n = int(np.ceil(len(parent.precursor_bin_names) / ms1_selection_scans))
     ms1_selection_ranges = {}
     for i in range(ms1_selection_scans):
@@ -126,7 +125,6 @@ class DESIGN_4(DESIGN_3):
     name = 'pool0_termR'
     rule_set = 'pool0_termR'
 
-
     # num_to_generate = 1e4
     # num_generation_runs = 10
 
@@ -141,12 +139,53 @@ class DESIGN_4(DESIGN_3):
     # iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
 
 
+class DESIGN_6():
+    name = 'pool1_termR'
+    rule_set = 'pool0_termR'
+    exclude_regex = 'NG'
+
+    min_length = 9
+    max_length = 13
+    num_to_generate = int(1e6) # test
+    num_generation_runs = 1 # test
+
+    # does this stay the same?
+    precursor_mz_start = 500.2667
+    precursor_mz_max = 850
+    precursor_bins = np.arange(precursor_mz_start, precursor_mz_max, MZ_DOUBLE_SPACING)
+
+    # precursor_bins = precursor_bins[:3] # test
+
+    precursor_bin_width = MZ_DOUBLE_SPACING
+    precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
+
+
+    # sometimes Prosit predicts iRT between 0 and 120 but the peptide elutes
+    # between -25 and -10
+    iRT_bin_width = 8
+    iRT_bins = np.arange(-5, 150, iRT_bin_width)
+    iRT_bin_names = {x: '{:.1f}'.format(x) for x in iRT_bins}
+    normalized_collision_energy = 27
+
+    # number of peptides retained for barcode selection, increase to saturate downstream filters
+    input_barcodes_per_iRT_mz_bin = 1000
+    pred_barcodes_per_mz_bin = (
+        input_barcodes_per_iRT_mz_bin * 
+        len(iRT_bins) * 2)
+
+    # increase to get more barcodes
+    ms1_resolution = 50000
+
+
+
+
 runs = {
     'run_001': DESIGN_0,
     'run_002': DESIGN_1,
     'run_003': DESIGN_3,
     'run_004': DESIGN_4,
     'run_005': DESIGN_2,
+    'run_006': DESIGN_6,
     }
 
 
