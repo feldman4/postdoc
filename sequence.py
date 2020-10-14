@@ -51,13 +51,21 @@ def translate_dna(s):
     return aa
 
 
-def load_e_coli_codons():
-    f = os.path.join(resources, 'codon_usage', 'e_coli_316407.csv')
+def load_codons(organism):
+    f = os.path.join(resources, 'codon_usage', 'organisms.csv')
+    taxids = pd.read_csv(f).set_index('organism')['taxid'].to_dict()
+    
+    organism = organism.lower().replace('.', '').replace(' ', '_')
+    try:
+        table = f'{organism}_{taxids[organism]}.csv'
+    except KeyError:
+        raise ValueError(f'{organism} must be one of {list(taxids.keys())}')
+    f = os.path.join(resources, 'codon_usage', table)
     return (pd.read_csv(f)
             .assign(codon_dna=lambda x: x['codon'].str.replace('U', 'T')))
 
 
-codon_dict = load_e_coli_codons().set_index('codon_dna')['amino_acid']
+codon_dict = load_codons('E. coli').set_index('codon_dna')['amino_acid']
 
 
 def reverse_complement(seq):
@@ -113,9 +121,9 @@ def print_alignment(a, b, width=60, as_string=False):
         print(txt)
 
 
-def reverse_translate_max(aa_seq, organism='ecoli'):
+def reverse_translate_max(aa_seq, organism='e_coli'):
     if organism not in codon_maps:
-        codon_maps['ecoli'] = (load_e_coli_codons()
+        codon_maps[organism] = (load_codons(organism)
         .sort_values('relative_frequency', ascending=False)
         .drop_duplicates('amino_acid')
         .set_index('amino_acid')['codon_dna'].to_dict()
@@ -123,3 +131,18 @@ def reverse_translate_max(aa_seq, organism='ecoli'):
     codon_map = codon_maps[organism]
     return ''.join([codon_map[x] for x in aa_seq])
 
+
+def get_genbank_features(f):
+    from Bio import SeqIO
+    records = list(SeqIO.parse(open(f,'r'), 'genbank'))
+    if len(records) != 1:
+        raise ValueError(f'found {len(records)} records in genbank {f}')
+
+    features = {}
+    for f in records[0].features:
+        label = f.qualifiers['label'][0]
+        seq = f.extract(records[0].seq)
+        if label in features:
+            raise ValueError(f'repeated feature {label}')
+        features[label] = str(seq)
+    return features
