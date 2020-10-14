@@ -1,12 +1,15 @@
-import pyteomics.ms1
-import pyteomics.mzml
-import pandas as pd
-import numpy as np
-import os
+import io
 import gzip
+import os
 import re
 
+import pandas as pd
+import pyteomics.ms1
+import pyteomics.mzml
+import numpy as np
+
 from ..constants import HOME
+
 
 class Ecoli:
     def __init__(self):
@@ -156,6 +159,36 @@ def generate_msfragger_cmd(mzML, protein_fa, output_format='pepXML'):
     java_flags = '-jar -Dfile.encoding=UTF-8 -Xmx6G'
     cmd = f'java {java_flags} {msfragger_jar} {params} {mzML}'
     return cmd
+
+_pierce_standards = """
+sequence mass mz hydrophobicity
+SSAAPPPPPR 985.5220 493.7683 7.56
+GISNEGQNASIK 1224.6189 613.3167 15.50
+HVLTSIGEK 990.5589 496.2867 15.52
+DIPVPKPK 900.5524 451.2834 17.65
+IGDYAGIK 843.4582 422.7363 19.15
+TASEFDSAIAQDK 1389.6503 695.8324 25.88
+SAAGAFGPELSR 1171.5861 586.8003 25.24
+ELGQSGVDTYLQTK 1545.7766 773.8955 28.37
+GLILVGGYGTR 1114.6374 558.3259 32.18
+GILFVGSGVSGGEEGAR 1600.8084 801.4115 34.50
+SFANQPLEVVYSK 1488.7704 745.3924 34.96
+LTILEELR 995.5890 498.8018 37.30
+NGFILDGFPR 1144.5905 573.3025 40.42
+ELASGLSFPVGFK 1358.7326 680.3735 41.18
+LSSEAPALFQFDLK 1572.8279 787.4212 46.66
+""".strip()
+
+def pierce_standards():
+    return pd.read_csv(io.StringIO(_pierce_standards), sep='\s+')
+
+
+def filter_by_standards(df_barcodes, min_distance_to_standards=0.1):
+    from scipy.spatial.distance import cdist
+    df_ms = pierce_standards()
+    distances = cdist(df_barcodes[['mz']], df_ms[['mz']])
+    keep = (distances.min(axis=1) > min_distance_to_standards)
+    return df_barcodes[keep]
 
 
 msfragger_jar = 'misc/msfragger/MSFragger-3.0.jar'
