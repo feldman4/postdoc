@@ -1,4 +1,4 @@
-from . import design, designs, ms, pool0
+from . import design, designs, ms
 
 from .design import (
     generate_peptide_set, 
