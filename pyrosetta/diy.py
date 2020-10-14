@@ -12,6 +12,11 @@ from ..constants import AA_3_1
 logger = logging.getLogger(__name__)
 
 
+alphabet = 'abcdefghijklmnopqrstuvwxyz'
+digits = '0123456789'
+all_chain_ids = alphabet.upper() + alphabet.lower() + digits
+
+
 def read_pdb(filename, add_info=True, reorder_cols=True):
     with open(filename, 'r') as fh:
         txt = fh.read()
@@ -130,11 +135,11 @@ pdb_useful_order = [
    ]
 
 
-def atom_record(record_name, atom_name, atom_serial, 
+def atom_record(atom_name, atom_serial, 
     res_name, chain, res_seq, x, y, z, 
     element, altLoc=' ', iCode=' ', occupancy=1, temp_factor=0, charge='', 
     **junk):
-    
+    record_name = 'ATOM'
     fields = []
     for pdb_name, name, width, fmt in pdb_spec:
         if name == '':
@@ -335,3 +340,5 @@ def to_fixed_width(n, max_width, allow_overflow=False, do_round=True):
         raise OverflowError(
             "Impossible to represent in fixed-width non-scientific format")
     return str0
+
+
