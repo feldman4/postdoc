@@ -4,13 +4,21 @@ import re
 import tempfile
 import os
 from glob import glob
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from ..constants import AA_3_1
 
 logger = logging.getLogger(__name__)
 
+# constants copied here so this module can be stand-alone
+
+AA_3 = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+           'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+AA_1 = list('ARNDCQEGHILKMFPSTWYV')
+CANONICAL_AA = AA_1
+AA_3_1 = dict(zip(AA_3, AA_1))
+AA_1_3 = dict(zip(AA_1, AA_3))
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
 digits = '0123456789'
@@ -46,7 +54,7 @@ def read_pdb_string(pdb_string, reorder_cols=True, add_info=True):
     return df
 
 
-def read_pdb_records(pdb_string):
+def read_pdb_records(pdb_string, only_cols=None):
     """
     http://www.wwpdb.org/
      documentation/file-format-content/format33/sect9.html
@@ -77,10 +85,7 @@ def read_pdb_records(pdb_string):
             .assign(**{col_res_seq: lambda x: x[col_res_seq].astype(int)})
         )
 
-    col_widths = [x[2] for x in pdb_spec]
-    col_cs = np.cumsum(col_widths)
-    colspecs = list(zip([0] + list(col_cs), col_cs))
-    columns = [x[1] for x in pdb_spec]
+    columns, colspecs = get_pdb_colspecs()
 
     buffer = io.StringIO(pdb_string)
     return (pd.read_fwf(buffer, colspecs=colspecs, header=None)
@@ -91,6 +96,16 @@ def read_pdb_records(pdb_string):
             .assign(altLoc=lambda x: x['altLoc'].fillna(''))
             .assign(charge=lambda x: x['altLoc'].fillna(''))
     )
+
+
+def get_pdb_colspecs():
+    """Column names and widths for `pd.read_fwf`.
+    """
+    col_widths = [x[2] for x in pdb_spec]
+    col_cs = np.cumsum(col_widths)
+    colspecs = list(zip([0] + list(col_cs), col_cs))
+    columns = [x[1] for x in pdb_spec]
+    return columns, colspecs
 
 
 # name in spec, name, width, format
@@ -342,3 +357,45 @@ def to_fixed_width(n, max_width, allow_overflow=False, do_round=True):
     return str0
 
 
+def get_chain_sequences(df_pdb):
+    return (df_pdb.drop_duplicates(['res_seq', 'chain'])
+            .groupby('chain')['res_aa'].apply(''.join))
+
+
+def parse_scorefile_string(txt):
+    txt = re.sub('^SCORE:\s+', '', txt, flags=re.MULTILINE)
+    return pd.read_csv(io.StringIO(txt), sep='\s+')
+
+
+def read_scorefile(f):
+    """Rosetta .sc files
+    """
+    with open(f, 'r') as fh:
+        return parse_scorefile_string(fh.read())
+
+
+def read_pdb_sequences(filename, first_chain_only=False):
+    """Faster loading of chain residue sequences from pdb.
+    """
+    columns = dict(zip(*get_pdb_colspecs()))
+    chain_0, chain_1 = columns['chain']
+    res_0, res_1 = columns['res_name']
+    res_seq_0, res_seq_1 = columns['res_seq']
+
+    chains = defaultdict(list)
+    chain_lengths = defaultdict(lambda: -1)
+    with open(filename, 'r') as fh:
+        for line in fh:
+            if line.startswith('ATOM'):
+                chain = line[chain_0:chain_1]
+                aa = AA_3_1[line[res_0:res_1]]
+                res_seq = line[res_seq_0:res_seq_1]
+                res_i = int(res_seq) - 1
+                if res_i > chain_lengths[chain]:
+                    chain_lengths[chain] = res_i
+                    chains[chain].append(aa)
+            if first_chain_only and line.startswith('TER'):
+                break
+                
+    chains = {k: ''.join(v) for k,v in chains.items()}
+    return chains
