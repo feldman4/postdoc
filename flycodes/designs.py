@@ -182,7 +182,15 @@ class DESIGN_6():
     ion_bins = np.arange(ion_mz_start, ion_mz_max, MZ_DOUBLE_SPACING)
     ion_bin_width = MZ_DOUBLE_SPACING
 
-    
+    ms1_resolution = 80000
+
+
+class DESIGN_7(DESIGN_6):
+    name = 'pool1_termK'
+    rule_set = 'pool0_termK'
+
+
+
 
 
 runs = {
@@ -193,6 +201,7 @@ runs = {
     'run_005': DESIGN_2,
     'run_006': DESIGN_6,
     'run_007': DESIGN_6,
+    'run_008': DESIGN_7,
     }
 
 
