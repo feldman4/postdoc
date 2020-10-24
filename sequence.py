@@ -43,6 +43,40 @@ def parse_fasta(txt):
     return entries
 
 
+
+def fasta_frame(files_or_search):
+    """Convenience function, pass either a list of files or a 
+    glob wildcard search term.
+    """
+    
+    if isinstance(files_or_search, str):
+        files = natsorted(glob(files_or_search))
+    else:
+        files = files_or_search
+
+    cols = ['name', 'seq', 'file_ix', 'file']
+    records = []
+    for f in files:
+        for i, (name, seq) in enumerate(read_fasta(f)):
+            records += [{
+                'name': name, 'seq': seq, 'file_ix': i, 
+                'file': f,
+            }]
+
+    return pd.DataFrame(records)[cols]
+
+
+def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(), 
+              cat_cols=tuple(), uint16_cols=tuple()):
+    return (df
+           .assign(**{c: df[c].astype(int) for c in int_cols})
+           .assign(**{c: df[c].astype(np.uint16) for c in uint16_cols})
+           .assign(**{c: df[c].astype(float) for c in float_cols})
+           .assign(**{c: df[c].astype(str) for c in str_cols})
+           .assign(**{c: df[c].astype('category') for c in cat_cols})
+           )
+
+
 def translate_dna(s):
     assert len(s) % 3 == 0
     aa = ''
