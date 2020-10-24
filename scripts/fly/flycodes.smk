@@ -9,6 +9,7 @@ import postdoc.flycodes as fly
 from postdoc.flycodes import designs
 from postdoc.utils import timestamp, csv_frame
 
+import numpy as np
 import pandas as pd
 import inspect
 
@@ -38,7 +39,12 @@ rule all:
         expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
             design=METADATA.name,
             bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values())
+            bin_mz=METADATA.precursor_bin_names.values()),
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values()),
+        'barcodes_ms1.csv',
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
@@ -160,4 +166,57 @@ rule filter_barcodes_ms1_range:
              .assign(ms1_range=wildcards.ms1_range)
              .to_csv(output[0], index=None)
             )
+
+rule filter_by_ms1_resolution:
+    input:
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv'
+    output:
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv'
+    run:
+        df_barcodes = (pd.read_csv(input[0])
+        .pipe(fly.ms.filter_by_standards) 
+        .pipe(fly.design.add_usable_ion_count, METADATA)
+        .assign(usable_ion_count=lambda x: 
+                x['usable_ion_count'].clip(upper=METADATA.min_usable_ions))
+        .sort_values('usable_ion_count', ascending=False)
+        .pipe(fly.design.add_mz_resolution_bins, METADATA.ms1_resolution)
+        .query('mz_res_bin_even')
+        .drop_duplicates(['mz_res_bin_center', 'iRT_bin'])
+        )
+
+        df_barcodes.to_csv(output[0], index=None)
+
+
+rule complete_ms1_resolution:
+    input:
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values())
+    output:
+        table='barcodes_ms1.csv',
+        delta_mz='figures/delta_mz.png',
+        iRT_vs_mz='figures/iRT_vs_mz.png',
+    run:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        df_barcodes = pd.concat([pd.read_csv(f) for f in input], sort=True)
+        cols = ['sequence', 'mz', 'mz_res_bin_center','iRT', 'iRT_bin', 'usable_ion_count']
+        df_barcodes[cols].to_csv(output.table, index=None)
+
+        os.makedirs('figures', exist_ok=True)
+        nearest_mz = df_barcodes.set_index('sequence').sort_values('mz').groupby('iRT_bin')['mz'].diff()
+        nearest_ratio = nearest_mz / list(df_barcodes['mz'])
+        ax = nearest_ratio.dropna().pipe(np.log10).clip(upper=-4).hist()
+        ax.set_xlabel('log10(delta mz / mz)')
+        ax.figure.savefig(output.delta_mz)
+
+        fg = (df_barcodes
+        .assign(length=lambda x: x['sequence'].str.len())
+        .pipe(sns.FacetGrid, height=8, aspect=2, hue='length')
+        .map(plt.scatter, 'mz', 'iRT', s=4)
+        .add_legend()
+        .savefig(output.iRT_vs_mz)
+        )
 
