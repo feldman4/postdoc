@@ -6,6 +6,7 @@ from Bio.SeqUtils.MeltingTemp import Tm_NN
 tev_tag_0 = 'MGSHHHHHHENLYFQGWS'
 tev_tag_1 = 'MGHHHHHHGWSENLYFQGS'
 
+bsai_short_tail = 'ACTTACTCATGGTCTCc'
 bsai_tail = 'CTTACGCACTTACTCATGGTCTCc'
 pT10_fwd = bsai_tail + 'AAGAGC'
 pT10_rev = bsai_tail + 'GTTA'
