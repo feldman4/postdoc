@@ -1,6 +1,6 @@
 from ..sequence import get_genbank_features, reverse_translate_max, translate_dna
 from ..sequence import reverse_complement as rc
-from .design import make_cterm_linker
+
 import pandas as pd
 
 # reverse are antisense to forward
@@ -39,6 +39,17 @@ def load_pT14_parts():
     left, cterm = assembled.split(design)
     linker, right = [x for x in cterm.split('N') if x]
     return left, linker, right
+
+
+def make_cterm_linker(length, base='GSK', repeat='GGS', left='G'):
+    assert length >= len(base)
+    backwards_repeat = ('GGS' * int((length + 1)/ 3))[::-1]
+    n_to_add = length - len(base)
+    assert n_to_add >= 0
+    linker = backwards_repeat[:n_to_add][::-1] + base
+    linker = 'G' + linker[1:]
+    assert len(linker) == length
+    return linker
 
 
 def substitute_cterm_linker(df_agilent, linker='GSK', dna='GGATCC...'):
