@@ -2,6 +2,9 @@ from .sequence import print_alignment
 from .sequence import read_fasta
 from .imports import *
 from .utils import ls_df
+from .scripts import app
+
+from postdoc.sequence import reverse_complement as rc
 
 try:
     from .drive import Drive
