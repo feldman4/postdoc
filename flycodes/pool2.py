@@ -1,4 +1,5 @@
 from glob import glob
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from ..utils import DivPath
@@ -18,6 +19,7 @@ make_linkers = {
     'flycodes/mgh_oligomers/barcodes_ms1_cterm.csv': make_cterm_linker
     }
 
+
 def assign_termini(scorefile=contacts_scorefile):
     df_sc = diy.read_scorefile(scorefile)
     rs = np.random.RandomState(seed=0)
@@ -36,7 +38,7 @@ def load_pdb_sequences(files, progress=lambda x: x):
     arr = []
     for f in progress(files):
         chains = diy.read_pdb_sequences(f, first_chain_only=True)
-        arr += [{'file': f, 'sequence': chains['A']}]
+        arr += [{'pdb_file': f, 'sequence': chains['A']}]
     return pd.DataFrame(arr)
 
 
@@ -93,4 +95,26 @@ def export_term_lists(termini):
 
     (pd.DataFrame(arr)
      .groupby('list')['pdb_name']
-     .apply(lambda x: x.to_csv(x.name, index=False, header=False)));
+     .apply(lambda x: x.to_csv(x.name, index=False, header=False)))
+
+
+def add_barcode_noRK(df):
+    pat = '([^RK]*)'
+    return (df.assign(barcode_noRK=lambda x: x['barcode'].str.extract(pat)[0]))
+
+
+def plot_length_distribution(df_designs):
+    fig, (ax0, ax1) = plt.subplots(figsize=(9, 4), ncols=2)
+    df_designs['design'].str.len().value_counts().sort_index().plot(ax=ax0)
+    df_designs['CDS'].str.len().value_counts().sort_index().plot(ax=ax0)
+    ax0.legend()
+    ax0.set_ylabel('number of oligos')
+    ax0.set_xlabel('length (aa)')
+        
+    ax1 = df_designs['barcode_length'].value_counts().sort_index().plot(kind='bar', ax=ax1)
+    ax1.set_xlabel('barcode length')
+    ax1.set_ylabel('number of oligos')
+    plt.xticks(rotation=0)
+    
+    fig.tight_layout()
+    return fig

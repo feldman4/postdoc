@@ -992,7 +992,7 @@ def make_linker(length, base, repeat, cap):
     return linker
 
 
-def make_cterm_linker(length, base='GSK', repeat='GGS', cap='G'):
+def make_cterm_linker(length, base='GS', repeat='GGS', cap='G'):
     return make_linker(length, base, repeat, cap)
 
 
