@@ -1,6 +1,7 @@
-sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
-
-GPU_MEM_FRACTION = 0.1
+"""
+sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/fly/run.sh run_003
+sbatch -p medium --mem=80g -c 10 s/fly/run.sh run_003
+"""
 
 # IMPORTS
 
@@ -8,19 +9,24 @@ import postdoc.flycodes as fly
 from postdoc.flycodes import designs
 from postdoc.utils import timestamp, csv_frame
 
+import numpy as np
 import pandas as pd
 import inspect
-METADATA = dict(inspect.getmembers(designs, inspect.isclass))[config['design']]
 
-RUN_NAME = timestamp(METADATA.name)
+sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
 
+# CONSTANTS
+
+GPU_MEM_FRACTION = 0.1
 MODEL_IRT = ('/home/dfeldman/flycodes/prosit_models/'
          'model_irt_prediction/')
 MODEL_SPECTRA = ('/home/dfeldman/flycodes/prosit_models/'
                  'model_fragmentation_prediction/')
 
-# RULES
+# CONFIG
 
+METADATA = designs.runs[config['run']]
+RUN_NAME = timestamp(METADATA.name) # unique name for this snakemake run
 RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_generation_runs)]
 
 
@@ -30,19 +36,23 @@ rule all:
         #     design=METADATA.name,
         #     run=RUNS,
         #     bin_mz=METADATA.precursor_bin_names.values()),
-        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
-        #     design=METADATA.name,
-        #     bin_iRT=METADATA.iRT_bin_names.values(),
-        #     bin_mz=METADATA.precursor_bin_names.values())
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values()),
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values()),
+        'barcodes_ms1.csv',
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values())
-        expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
-            design=METADATA.name,
-            bin_iRT=list(METADATA.iRT_bin_names.values()),
-            ms1_range=list(METADATA.ms1_selection_ranges.keys()))
-
+        # expand('process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=list(METADATA.iRT_bin_names.values()),
+        #     ms1_range=list(METADATA.ms1_selection_ranges.keys()))
 
 
 rule generate_peptides:
@@ -51,28 +61,23 @@ rule generate_peptides:
             bin_mz=METADATA.precursor_bin_names.values())
     run:
         if METADATA.rule_set == 'RJ_76':
-            df_peptides = (fly.design.permute_precursors(METADATA.known_peptides, 
+            df_peptides = fly.design.permute_precursors(METADATA.known_peptides, 
                 METADATA.num_permutations)
-                .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
-                .assign(mz_bin=lambda x: 
-                    x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
-                        METADATA.precursor_bin_width))
-                .query('mz_bin == mz_bin')
-                .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
-                .assign(run=RUN_NAME)
-            )
         else:
-            df_peptides = (fly.generate_peptide_set(
+            df_peptides = fly.generate_peptide_set(
                 METADATA.num_to_generate, METADATA.min_length, 
-                METADATA.max_length, METADATA.rule_set)
-                .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
-                .assign(mz_bin=lambda x: 
-                    x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
-                        METADATA.precursor_bin_width))
-                .query('mz_bin == mz_bin')
-                .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
-                .assign(run=RUN_NAME)
-            )
+                METADATA.max_length, METADATA.rule_set, seed=int(wildcards.run))
+
+        df_peptides = (df_peptides
+            .loc[lambda x: ~x['sequence'].str.contains(METADATA.exclude_regex)]
+            .assign(mz_bin=lambda x: 
+                x['mz'].pipe(fly.bin_by_value, METADATA.precursor_bins, 
+                    METADATA.precursor_bin_width))
+            .query('mz_bin == mz_bin')
+            .assign(mz_bin=lambda x: x['mz_bin'].map(METADATA.precursor_bin_names))
+            .assign(run=RUN_NAME)
+        )
+
         # need to write empty csv files for empty bins
         for f, mz_bin in zip(output, METADATA.precursor_bin_names.values()):
             (df_peptides.query('mz_bin == @mz_bin')
@@ -162,16 +167,56 @@ rule filter_barcodes_ms1_range:
              .to_csv(output[0], index=None)
             )
 
+rule filter_by_ms1_resolution:
+    input:
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv'
+    output:
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv'
+    run:
+        df_barcodes = (pd.read_csv(input[0])
+        .pipe(fly.ms.filter_by_standards) 
+        .pipe(fly.design.add_usable_ion_count, METADATA)
+        .assign(usable_ion_count=lambda x: 
+                x['usable_ion_count'].clip(upper=METADATA.min_usable_ions))
+        .sort_values('usable_ion_count', ascending=False)
+        .pipe(fly.design.add_mz_resolution_bins, METADATA.ms1_resolution)
+        .query('mz_res_bin_even')
+        .drop_duplicates(['mz_res_bin_center', 'iRT_bin'])
+        )
+
+        df_barcodes.to_csv(output[0], index=None)
 
 
+rule complete_ms1_resolution:
+    input:
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv',
+            design=METADATA.name,
+            bin_iRT=METADATA.iRT_bin_names.values(),
+            bin_mz=METADATA.precursor_bin_names.values())
+    output:
+        table='barcodes_ms1.csv',
+        delta_mz='figures/delta_mz.png',
+        iRT_vs_mz='figures/iRT_vs_mz.png',
+    run:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
 
-"""
-squeue --user=dfeldman
+        df_barcodes = pd.concat([pd.read_csv(f) for f in input], sort=True)
+        cols = ['sequence', 'mz', 'mz_res_bin_center','iRT', 'iRT_bin', 'usable_ion_count']
+        df_barcodes[cols].to_csv(output.table, index=None)
 
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/run_003.sh
-sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/run_004.sh
+        os.makedirs('figures', exist_ok=True)
+        nearest_mz = df_barcodes.set_index('sequence').sort_values('mz').groupby('iRT_bin')['mz'].diff()
+        nearest_ratio = nearest_mz / list(df_barcodes['mz'])
+        ax = nearest_ratio.dropna().pipe(np.log10).clip(upper=-4).hist()
+        ax.set_xlabel('log10(delta mz / mz)')
+        ax.figure.savefig(output.delta_mz)
 
-sbatch -p medium --mem=80g -c 10 s/run_003.sh
-sbatch -p medium --mem=80g -c 10 s/run_004.sh
+        fg = (df_barcodes
+        .assign(length=lambda x: x['sequence'].str.len())
+        .pipe(sns.FacetGrid, height=8, aspect=2, hue='length')
+        .map(plt.scatter, 'mz', 'iRT', s=4)
+        .add_legend()
+        .savefig(output.iRT_vs_mz)
+        )
 
-"""

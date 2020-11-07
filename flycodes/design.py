@@ -495,11 +495,11 @@ def rolling_window_sizes(values, window_size):
     return sizes
 
 
-def generate_peptide_set(num_to_generate, min_length, max_length, rule_set):
+def generate_peptide_set(num_to_generate, min_length, max_length, rule_set, seed=None):
     peptides = []
     for length in range(min_length, max_length + 1):
         num_peptides = int(num_to_generate / (max_length - min_length))
-        peptides += generate_peptides(length, num_peptides, rule_set)
+        peptides += generate_peptides(length, num_peptides, rule_set, seed)
     peptides = set(peptides)
     mz_dict = {x: calc_mz(x, charge=2) for x in peptides}
     peptides = np.array(sorted(peptides, key=mz_dict.get))
@@ -941,7 +941,7 @@ def filter_by_spacing(xs, spacing):
 
 def bin_by_resolution(xs, resolution):
     """Bin values such that each bin width is 1/(left edge).
-    Corresponds to mz resolving power.
+    Useful for creating mz bins distinguishable at fixed resolving power.
     """
     current = xs.min()
     end = xs.max()
@@ -960,3 +960,41 @@ def add_mz_resolution_bins(df_barcodes, resolution):
     return (df_barcodes.assign(
             mz_res_bin_center=centers[bins],
             mz_res_bin_even=(bins % 2) == 0))
+
+
+def add_usable_ion_count(df_peptides, METADATA):
+    """Allow prioritizing peptides by number of ions in predicted spectrum above 
+    METADATA.usable_ion_intensity.
+    """
+    df_ions = peptides_to_ions(df_peptides, 
+            METADATA.usable_ion_gate,
+            METADATA.ignore_ion_intensity,
+            METADATA.ion_bins,
+            METADATA.ion_bin_width)
+    counts = (df_ions
+     .query('intensity_prosit > @METADATA.usable_ion_intensity')
+     .groupby('sequence').size().to_dict())
+    final_counts = df_peptides['sequence'].map(counts).fillna(0)
+    return (df_peptides.assign(usable_ion_count=list(final_counts)))
+
+
+def make_linker(length, base, repeat, cap):
+    assert len(cap) == 1
+    assert length >= len(base)
+    if length == len(base):
+        return base
+    backwards_repeat = (repeat * int((length + 1)/ 3))[::-1]
+    n_to_add = length - len(base)
+    assert n_to_add >= 0
+    linker = backwards_repeat[:n_to_add][::-1] + base
+    linker = cap + linker[1:]
+    assert len(linker) == length
+    return linker
+
+
+def make_cterm_linker(length, base='GS', repeat='GGS', cap='G'):
+    return make_linker(length, base, repeat, cap)
+
+
+def make_nterm_linker(length, base='GS', repeat='GGS', cap='G'):
+    return make_linker(length, base[::-1], repeat[::-1], cap)[::-1]

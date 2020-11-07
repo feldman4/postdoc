@@ -57,6 +57,12 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True,
     return pd.concat([read_csv(f) for f in progress(files)], sort=sort)
 
 
+def read_list(filename):
+    with open(filename, 'r') as fh:
+        txt = fh.read()
+    return txt.strip().split('\n')
+
+
 def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(), 
               cat_cols=tuple(), uint16_cols=tuple()):
     return (df

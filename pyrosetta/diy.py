@@ -4,12 +4,25 @@ import re
 import tempfile
 import os
 from glob import glob
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from ..constants import AA_3_1
 
 logger = logging.getLogger(__name__)
+
+# constants copied here so this module can be stand-alone
+
+AA_3 = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+           'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+AA_1 = list('ARNDCQEGHILKMFPSTWYV')
+CANONICAL_AA = AA_1
+AA_3_1 = dict(zip(AA_3, AA_1))
+AA_1_3 = dict(zip(AA_1, AA_3))
+
+alphabet = 'abcdefghijklmnopqrstuvwxyz'
+digits = '0123456789'
+all_chain_ids = alphabet.upper() + alphabet.lower() + digits
 
 
 def read_pdb(filename, add_info=True, reorder_cols=True):
@@ -41,7 +54,7 @@ def read_pdb_string(pdb_string, reorder_cols=True, add_info=True):
     return df
 
 
-def read_pdb_records(pdb_string):
+def read_pdb_records(pdb_string, only_cols=None):
     """
     http://www.wwpdb.org/
      documentation/file-format-content/format33/sect9.html
@@ -72,10 +85,7 @@ def read_pdb_records(pdb_string):
             .assign(**{col_res_seq: lambda x: x[col_res_seq].astype(int)})
         )
 
-    col_widths = [x[2] for x in pdb_spec]
-    col_cs = np.cumsum(col_widths)
-    colspecs = list(zip([0] + list(col_cs), col_cs))
-    columns = [x[1] for x in pdb_spec]
+    columns, colspecs = get_pdb_colspecs()
 
     buffer = io.StringIO(pdb_string)
     return (pd.read_fwf(buffer, colspecs=colspecs, header=None)
@@ -88,28 +98,45 @@ def read_pdb_records(pdb_string):
     )
 
 
+def get_pdb_colspecs():
+    """Column names and widths for `pd.read_fwf`.
+    """
+    col_widths = [x[2] for x in pdb_spec]
+    col_cs = np.cumsum(col_widths)
+    colspecs = list(zip([0] + list(col_cs), col_cs))
+    columns = [x[1] for x in pdb_spec]
+    return columns, colspecs
+
+
 # name in spec, name, width, format
 pdb_spec = [
-    ('Record name','record_name',    6, '{ <6}'),
-    ('serial',     'atom_serial',    5, '{ >5}'),
+    # this is spec, but some code writes atom_serial over 100,000...
+    # ('Record name','record_name',    6, '{ <6}'),
+    # ('serial',     'atom_serial',    5, '{ >5}'),
+    
+    ('Record name','record_name',    5, '{ <5}'),
+    ('serial',     'atom_serial',    6, '{ >6}'),
+
     ('unused',     '',               1, ' '),
     ('name',       'atom_name',      4, '{ <4}'),
     ('altLoc',     'altLoc',         1, '{ <1}'),
-    ('resName',    'res_name',       3, '{ <3}'),
+    ('resName',    'res_name',       3, '{ >3}'),
     ('unused',     '',               1, ' '),
     ('chainID',    'chain',          1, '{ <1}'),
     ('resSeq',     'res_seq',        4, '{ >4}'),
     ('iCode',      'iCode',          1, '{ <1}'),
     ('unused',     '',               3, '   '),
-    ('x',          'x',              8, '{>8.6g}'),
-    ('y',          'y',              8, '{>8.6g}'),
-    ('z',          'z',              8, '{>8.6g}'),
-    ('occupancy',  'occupancy',      6, '{>6.4}'),
-    ('tempFactor', 'temp_factor',    6, '{>6.4g}'),
-    ('unused',     '',              10, '          '),
+    ('x',          'x',              8, 'fw6'),
+    ('y',          'y',              8, 'fw6'),
+    ('z',          'z',              8, 'fw6'),
+    ('occupancy',  'occupancy',      6, 'fw4'),
+    ('tempFactor', 'temp_factor',    6, 'fw4'),
+    ('unused',     '',               6, ' '*6),
+    ('segmentID',  '',               4, ' '*4),
     ('element',    'element',        2, '{>2}'),
     ('charge',     'charge',         2, '{>2}'),
     ]
+
 
 
 pdb_useful_order = [
@@ -123,17 +150,24 @@ pdb_useful_order = [
    ]
 
 
-def atom_record(record_name, atom_name, atom_serial, 
+def atom_record(atom_name, atom_serial, 
     res_name, chain, res_seq, x, y, z, 
     element, altLoc=' ', iCode=' ', occupancy=1, temp_factor=0, charge='', 
     **junk):
-    
+    record_name = 'ATOM'
     fields = []
     for pdb_name, name, width, fmt in pdb_spec:
-        if name:
-            fmt = fmt[0] + name + ':' + fmt[1:]
-        fields.append(fmt.format(**locals()))
-
+        if name == '':
+            fields.append(fmt)
+        elif fmt.startswith('fw'):
+            fmt_width = int(fmt[2])
+            pad = ' ' * (width - fmt_width)
+            number = to_fixed_width(locals()[name], fmt_width)
+            fields.append(pad + number)
+        else:
+            fmt_py = fmt[0] + name + ':' + fmt[1:]
+            fields.append(fmt_py.format(**locals()))
+        
     return ''.join(fields)
 
 
@@ -300,3 +334,68 @@ def read_rosetta_params(filename):
             results[table] = df
         
     return results
+
+
+def to_fixed_width(n, max_width, allow_overflow=False, do_round=True):
+    """https://stackoverflow.com/questions/24960235/python-how-do-i-format-numbers-for-a-fixed-width
+    """
+    if do_round:
+        for i in range(max_width - 2, -1, -1):
+            str0 = '{:.{}f}'.format(n, i)
+            if len(str0) <= max_width:
+                break
+    else:
+        str0 = '{:.42f}'.format(n)
+        int_part_len = str0.index('.')
+        if int_part_len <= max_width - 2:
+            str0 = str0[:max_width]
+        else:
+            str0 = str0[:int_part_len]
+    if (not allow_overflow) and (len(str0) > max_width):
+        raise OverflowError(
+            "Impossible to represent in fixed-width non-scientific format")
+    return str0
+
+
+def get_chain_sequences(df_pdb):
+    return (df_pdb.drop_duplicates(['res_seq', 'chain'])
+            .groupby('chain')['res_aa'].apply(''.join))
+
+
+def parse_scorefile_string(txt):
+    txt = re.sub('^SCORE:\s+', '', txt, flags=re.MULTILINE)
+    return pd.read_csv(io.StringIO(txt), sep='\s+')
+
+
+def read_scorefile(f):
+    """Rosetta .sc files
+    """
+    with open(f, 'r') as fh:
+        return parse_scorefile_string(fh.read())
+
+
+def read_pdb_sequences(filename, first_chain_only=False):
+    """Faster loading of chain residue sequences from pdb.
+    """
+    columns = dict(zip(*get_pdb_colspecs()))
+    chain_0, chain_1 = columns['chain']
+    res_0, res_1 = columns['res_name']
+    res_seq_0, res_seq_1 = columns['res_seq']
+
+    chains = defaultdict(list)
+    chain_lengths = defaultdict(lambda: -1)
+    with open(filename, 'r') as fh:
+        for line in fh:
+            if line.startswith('ATOM'):
+                chain = line[chain_0:chain_1]
+                aa = AA_3_1[line[res_0:res_1]]
+                res_seq = line[res_seq_0:res_seq_1]
+                res_i = int(res_seq) - 1
+                if res_i > chain_lengths[chain]:
+                    chain_lengths[chain] = res_i
+                    chains[chain].append(aa)
+            if first_chain_only and line.startswith('TER'):
+                break
+                
+    chains = {k: ''.join(v) for k,v in chains.items()}
+    return chains
