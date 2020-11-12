@@ -5,6 +5,7 @@ from .utils import ls_df
 from .scripts import app
 
 from postdoc.sequence import reverse_complement as rc
+from postdoc.sequence import translate_dna
 
 try:
     from .drive import Drive
