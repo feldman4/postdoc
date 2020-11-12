@@ -29,22 +29,25 @@ METADATA = designs.runs[config['run']]
 RUN_NAME = timestamp(METADATA.name) # unique name for this snakemake run
 RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_generation_runs)]
 
+def expand_ms1_range(wildcards):
+    return expand('process/{{design}}_iRT_{{bin_iRT}}_mz_{bin_mz}.precursors.csv', 
+        bin_mz=METADATA.ms1_selection_ranges[wildcards.ms1_range])
 
 rule all:
     input: 
+        expand('barcodes_ms1_{ms1_res}.csv', ms1_res=METADATA.ms1_resolution)
         # expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
         #     design=METADATA.name,
         #     run=RUNS,
         #     bin_mz=METADATA.precursor_bin_names.values()),
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
-            design=METADATA.name,
-            bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values()),
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv',
-            design=METADATA.name,
-            bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values()),
-        'barcodes_ms1.csv',
+        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=METADATA.iRT_bin_names.values(),
+        #     bin_mz=METADATA.precursor_bin_names.values()),
+        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{ms1_res}.csv',
+        #     design=METADATA.name,
+        #     bin_iRT=METADATA.iRT_bin_names.values(),
+        #     bin_mz=METADATA.precursor_bin_names.values()),
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
@@ -56,6 +59,8 @@ rule all:
 
 
 rule generate_peptides:
+    """Generate random peptides following composition rules. Save by precursor mz bin.
+    """
     output:
         expand('process/{{design}}_{{run}}_{bin_mz}.peptides.csv', 
             bin_mz=METADATA.precursor_bin_names.values())
@@ -86,6 +91,8 @@ rule generate_peptides:
 
 
 rule predict_prosit:
+    """Predict iRT and fragmentation spectra of precursor peptides.
+    """
     input:
         expand('process/{{design}}_{run}_{{bin_mz}}.peptides.csv', 
             run=RUNS)
@@ -119,6 +126,9 @@ rule predict_prosit:
 
 
 rule filter_barcodes:
+    """Filter precursors to ensure each precursor generates ions that are unique
+    within a precursor mz and iRT bin.
+    """
     input:
         'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv'
     output:
@@ -137,11 +147,10 @@ rule filter_barcodes:
             ax.figure.savefig(output[0].replace('csv', 'png'), dpi=300)
 
 
-def expand_ms1_range(wildcards):
-    return expand('process/{{design}}_iRT_{{bin_iRT}}_mz_{bin_mz}.precursors.csv', 
-        bin_mz=METADATA.ms1_selection_ranges[wildcards.ms1_range])
-
 rule filter_barcodes_ms1_range:
+    """Original MS1 filtering strategy. Peptides are identified by iRT bin and precursor mz. 
+    Precursors also generate unique ions within an mz range.
+    """
     input:
         expand_ms1_range
     output:
@@ -167,11 +176,12 @@ rule filter_barcodes_ms1_range:
              .to_csv(output[0], index=None)
             )
 
+
 rule filter_by_ms1_resolution:
     input:
         'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv'
     output:
-        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv'
+        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{ms1_res}.csv'
     run:
         df_barcodes = (pd.read_csv(input[0])
         .pipe(fly.ms.filter_by_standards) 
@@ -179,7 +189,7 @@ rule filter_by_ms1_resolution:
         .assign(usable_ion_count=lambda x: 
                 x['usable_ion_count'].clip(upper=METADATA.min_usable_ions))
         .sort_values('usable_ion_count', ascending=False)
-        .pipe(fly.design.add_mz_resolution_bins, METADATA.ms1_resolution)
+        .pipe(fly.design.add_mz_resolution_bins, int(wildcards['ms1_res']))
         .query('mz_res_bin_even')
         .drop_duplicates(['mz_res_bin_center', 'iRT_bin'])
         )
@@ -188,15 +198,17 @@ rule filter_by_ms1_resolution:
 
 
 rule complete_ms1_resolution:
+    """Consolidate 
+    """
     input:
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_resolution.csv',
+        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{{ms1_res}}.csv',
             design=METADATA.name,
             bin_iRT=METADATA.iRT_bin_names.values(),
             bin_mz=METADATA.precursor_bin_names.values())
     output:
-        table='barcodes_ms1.csv',
-        delta_mz='figures/delta_mz.png',
-        iRT_vs_mz='figures/iRT_vs_mz.png',
+        table='barcodes_ms1_{ms1_res}.csv',
+        delta_mz='figures/ms1_{ms1_res}_delta_mz.png',
+        iRT_vs_mz='figures/iRT_{ms1_res}_vs_mz.png',
     run:
         import seaborn as sns
         import matplotlib.pyplot as plt
