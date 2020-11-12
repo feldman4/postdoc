@@ -45,20 +45,33 @@ def parse_overlap_oligos(filename,
                'inner_reverse': oligo_A_3,
                'inner_forward': oligo_B_5,
                'outer_reverse': oligo_B_3}
+    
     a, b = oligos[::2], oligos[1::2]
+    cols = ['primer_2', 'primer_3', 'overlap']
     df_agilent = (assembly.parse_agilent_oligos(a, b, primers)
-     .assign(name=names).set_index('name'))
+     .assign(name=names).set_index('name')
+     .pipe(lambda x:
+           x.join(x.groupby(cols).size().rename('overlap_repeats'),
+                  on=cols))
+    )
     df_agilent.to_csv(output_prefix + 'parsed.csv')
-
+    
     (df_agilent
      .groupby(['primer_1', 'primer_2', 'primer_3', 'primer_4'])
      .size().rename('count').reset_index()
      .to_csv(output_prefix + 'subpools.csv', index=None)
      )
+
+    (df_agilent.query('overlap_repeats > 1')
+     [['overlap', 'overlap_length', 'overlap_repeats']]
+     .to_csv(output_prefix + 'repeated_overlaps.csv')
+    )
     
     fig, ax = plt.subplots()
     assembly.plot_agilent_overlaps(df_agilent)
     fig.savefig(output_prefix + 'overlap_heatmap.png')
+    plt.close(fig) 
+
 
 
 def update_sanger():
@@ -167,7 +180,7 @@ def read_table(filename, col=0, header=None, sep=None):
     import warnings
     import pandas as pd
     import io
-
+    
     if header is True:
         header = 0
     if isinstance(col, str) and header is None:
@@ -213,6 +226,8 @@ def reverse_translate(filename, repeats=1, seed=0, progress=None,
 
 def minimize_overlap(filename, k, rounds=30, organism='e_coli', num_codons=2, seed=0,
     col=0, header=None, sep=None):
+    """Codon optimize DNA sequences to minimize overlapping k-mers.
+    """
     from postdoc.flycodes import assembly
     import numpy as np
 
@@ -225,6 +240,8 @@ def minimize_overlap(filename, k, rounds=30, organism='e_coli', num_codons=2, se
 
 
 def sort_by_overlap(filename, k, col=0, header=None, sep=None):
+    """Sort a list of sequences by number of overlappig k-mers.
+    """
     from postdoc.flycodes import assembly
     import numpy as np
 
@@ -242,16 +259,38 @@ def sort_by_overlap(filename, k, col=0, header=None, sep=None):
     return [sequences[i] for i in reversed(arr)]
 
 
+def fix_fire_completion(source_file):
+    """Modify auto-generated bash completion to include filenames.
+
+    Filenames are auto-completed everywhere except selecting initial app.sh command.
+    """
+    f = source_file
+    with open(f, 'r') as fh:
+        txt = fh.read()
+
+    substitutions = [('GLOBAL_OPTIONS=""', 'GLOBAL_OPTIONS=""\ninclude_f="-f"'),
+                     ('app.sh)', 'app.sh)\ninclude_f=""'),
+                     ('compgen -W', 'compgen ${include_f} -W'),
+                     ]
+    for a, b in substitutions:
+        if b in txt:
+            return
+        txt = txt.replace(a, b)
+
+    with open(f, 'w') as fh:
+        fh.write(txt)
+
+
 if __name__ == '__main__':
-    from signal import signal, SIGPIPE, SIG_DFL
-    signal(SIGPIPE,SIG_DFL)
     commands = [
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
         'calculate_overlap', 'calculate_overlap_strip',
         'parse_overlap_oligos',
         'update_sanger', 'update_sec',
-        'read_table', 
+        'read_table', 'fix_fire_completion',
         ]
-
-    fire.Fire({k: eval(k) for k in commands})
+    try:
+        fire.Fire({k: eval(k) for k in commands})
+    except BrokenPipeError:
+        pass
     
