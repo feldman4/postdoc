@@ -2,8 +2,10 @@ import collections
 from glob import glob
 import logging
 import io
+import hashlib
 import os
 import re
+import shutil
 import sys
 import time
 
@@ -272,3 +274,37 @@ def predict_ransac(df, x, y, y_pred, dupe_cols=None):
     df_ = df.drop_duplicates(dupe_cols) if dupe_cols else df
     model = RANSACRegressor().fit(df_[[x]], df_[y])
     return df.assign(**{y_pred: model.predict(df[[x]])})
+
+
+def to_list_dict(series):
+    d = collections.defaultdict(list)
+    for i,x in zip(series.index, series.values):
+        d[i].append(x)
+    return d
+
+
+def md5_file(f):
+    """Faster than calling md5sum
+    """
+    buf = hashlib.md5()
+    with open(f, 'rb') as fh:
+        while True:
+            chunk = fh.read(2**20)
+            buf.update(chunk)
+            if not chunk:
+                break
+    return buf.hexdigest()
+
+
+def copy_if_different(f1, f2):
+    """Copy `f1` to `f2` unless `f2` exists and is the same as `f1`.
+    """
+    if not os.path.exists(f2):
+        shutil.copy(f1, f2)
+        return True
+    elif md5_file(f1) != md5_file(f2):
+        shutil.copy(f1, f2)
+        return True
+    return False
+    
+
