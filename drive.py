@@ -97,7 +97,10 @@ def normalize_col_name(s):
     try:
         s = s.replace('# of', 'num')
         s = s.replace('\n', ' ')
+        s = s.replace(' / ', '_per_')
+        s = s.replace('/', '_per_')
         s = s.replace(' ', '_')
+        
     except AttributeError: # not a string
         pass
     return s
