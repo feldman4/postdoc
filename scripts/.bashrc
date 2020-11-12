@@ -2,6 +2,7 @@
 
 export PYTHONPATH="$HOME/packages:$PYTHONPATH"
 export PATH="$HOME/packages/postdoc/scripts:$PATH"
+export PATH="$HOME/packages/rtRosetta/scripts:$PATH"
 export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
 
 ######################### ALIASES #############################
@@ -48,3 +49,12 @@ nbless() {
     ipython nbconvert --to markdown --stdout $1 | mdless
 }
 
+# python fire completion
+source ~/.fire_completion
+
+# log bash input and search with hh
+# nicked from wyang12's .bashrc
+export PROMPT_COMMAND='echo "$(date "+%Y-%m-%d.%H:%M:%S") $(pwd) $(history 1)" >> ~/.logs_bash/digs-bash-history-$(date "+%Y-%m-%d").log;'
+function hh() {
+            for j in ~/.logs_bash/*; do echo $j; done | xargs grep -a $1 | tail -n ${2:-15}
+}
