@@ -238,33 +238,23 @@ def polish_snowflakes(sequences, k, allowed_swaps, rs, rounds=30, verbose=False)
     sequences = list(sequences)
     best = 1e10
     overlap, kmers = calculate_overlap(sequences, k)
+    bad_kmers = [k for k, v in kmers.items() if len(v) > 1]
     anneal = len(sequences)
     if verbose:
         log = sys.stdout
     else:
         log = io.StringIO()
     for _ in range(rounds):
+        # nothing to do
+        if len(bad_kmers) == 0:
+            break
+        
         # store state
         last_sequences = list(sequences)
-        import copy
         last_kmers = defaultdict(list, {k: list(v) for k,v in kmers.items()})
         altered = set()  # only modify sequences once per pass
-        
-        
-        # # make a change
-        # kmer = rs.choice(list(bad_kmers))
-        # hits = bad_kmers[kmer]
-        # for i, j in hits:
-        #     if i in altered:
-        #         continue
-        #     altered.update([i])
-        #     kmer_ = reoptimize_kmer(kmer, -j % 3, allowed_swaps, rs)
-        #     old = sequences[i]
-        #     sequences[i] = sequences[i][:j] + kmer_ + sequences[i][j + len(kmer_):]
-        #     update_kmers(kmers, old, sequences[i], i)
-        #     break
 
-        bad_kmers = [k for k, v in kmers.items() if len(v) > 1]
+        # alter sequences, updating kmer dictionary
         for kmer in rs.choice(bad_kmers, anneal):
             hits = kmers[kmer]
             for i, j in hits:
@@ -277,12 +267,13 @@ def polish_snowflakes(sequences, k, allowed_swaps, rs, rounds=30, verbose=False)
                 update_kmers(kmers, old, sequences[i], i)
             
         # check status, revert if worse
-        bad_kmers = {k: v for k, v in kmers.items() if len(v) > 1}
-        overlap_count = sum([len(x) for x in bad_kmers.values() if len(x) > 1])
+        bad_kmers = [k for k, v in kmers.items() if len(v) > 1]
+        overlap_count = sum([len(kmers[x]) for x in bad_kmers if len(kmers[x]) > 1])
         if overlap_count > best:
             print('reverting', file=log)
             sequences = last_sequences
             kmers = last_kmers
+            bad_kmers = [k for k, v in kmers.items() if len(v) > 1]
             anneal = max(int(anneal*.7), 1) # decrease
         else:
             anneal = min(len(sequences), max(int(anneal * 1.3), anneal + 1)) # increase
@@ -290,8 +281,7 @@ def polish_snowflakes(sequences, k, allowed_swaps, rs, rounds=30, verbose=False)
             print('overlapping kmers', len(bad_kmers), file=log)
             best = overlap_count
             last_sequences = list(sequences)
-        if len(bad_kmers) == 0:
-            break
+
 
         print('changed', len(altered), 'sequences', file=log)
 
