@@ -14,7 +14,7 @@ alias tar='tar -zxvf'
 alias less='less -S'
 alias rgf='rg --files | rg'
 alias kol="column -s, -t"
-# alias   rename='rename -s'
+alias watch='watch ' # triggers alias expansion
 
 ######################### TERMINAL ############################
 
@@ -29,9 +29,10 @@ export VISUAL=$EDITOR
 
 ########################### DIGS #############################
 
-alias sstatus='clusterstatus  | (head -n 31; grep $USER)'
-alias wstatus="watch 'clusterstatus  | (head -n 31; grep $USER)'"
+alias sstatus='clusterstatus | (head -n 31; grep $USER)'
+alias wstatus="watch 'clusterstatus | (head -n 31; grep $USER)'"
 alias sq='squeue --user `whoami`'
+alias fname='readlink -f'
 
 ########################### EXTRA ############################
 
@@ -58,3 +59,5 @@ export PROMPT_COMMAND='echo "$(date "+%Y-%m-%d.%H:%M:%S") $(pwd) $(history 1)" >
 function hh() {
             for j in ~/.logs_bash/*; do echo $j; done | xargs grep -a $1 | tail -n ${2:-15}
 }
+
+export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_variants/final_split/2_split/
