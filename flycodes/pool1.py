@@ -93,13 +93,19 @@ def replace_barcodes(df_agilent, barcodes, num_repeats):
     for s in barcodes:
         barcodes_by_length[len(s)] += [s]
 
+    # backwards compatible
+    assembly_aa = 'assembly_aa'
+    if assembly_aa not in df_agilent.columns:
+        assembly_aa = 'aa_sequence'
+    
     arr = []
     for _, row in df_agilent.iterrows():
 
-        dna, seq, barcode = row[['assembly', 'aa_sequence', 'barcode']]
+        dna, seq, barcode = row[['assembly', assembly_aa, 'barcode']]
         barcode_dna = dna[-len(barcode)*3:]
         assert seq.count(barcode) == 1
-        keep = 'name', 'overlap', 'overlap_length', 'source'
+        keep = ('name', 'overlap', 'overlap_length', 'source', 
+        'primer_1', 'primer_2', 'primer_3', 'primer_4')
         for _ in range(num_repeats):
             info = {'old_assembly': dna, 'old_assembly_aa': seq, 'old_barcode': barcode,
                     'old_first': row['first'], 'old_second': row['second']}
@@ -124,6 +130,8 @@ def replace_barcodes(df_agilent, barcodes, num_repeats):
     
     cols = ['name', 'source', 'new_barcode', 'old_barcode', 'overlap_length', 'overlap',
             'new_first', 'new_second', 'old_first', 'old_second', 
-            'new_assembly', 'new_assembly_aa', 'old_assembly', 'old_assembly_aa']
+            'new_assembly', 'new_assembly_aa', 'old_assembly', 'old_assembly_aa',
+            'primer_1', 'primer_2', 'primer_3', 'primer_4',
+            ]
 
     return df_split[cols]
