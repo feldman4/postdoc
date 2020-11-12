@@ -1,9 +1,11 @@
 #!/bin/sh
 
-source activate /home/dfeldman/.conda/envs/df-pyr-tf
-PYTHONPATH=/home/dfeldman/packages
+if [ "$CONDA_PREFIX" != "/home/dfeldman/.conda/envs/df-pyr-tf" ]
+then
+    source activate /home/dfeldman/.conda/envs/df-pyr-tf
+fi
 
-python /home/dfeldman/packages/postdoc/scripts/app.py "$@"
+PYTHONPATH=/home/dfeldman/packages python /home/dfeldman/packages/postdoc/scripts/app.py "$@"
 
 ### EXAMPLES
 
