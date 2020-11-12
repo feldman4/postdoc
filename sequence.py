@@ -244,17 +244,22 @@ def get_kmers(s, k):
     return [s[i:i+k] for i in range(n-k+1)]
 
 
-def read_fastq(filename, include_quality=False):
+def read_fastq(filename, include_quality=False, max_reads=1e12):
     if filename.endswith('gz'):
         fh = gzip.open(filename, 'rt')
     else:
         fh = open(filename, 'r')
     reads, quality_scores = [], []
+    read_count = 0
     for i, line in enumerate(fh):
         if i % 4 == 1:
             reads.append(line.strip())
+            read_count += 1
+            if read_count >= max_reads:
+                break
         if include_quality and i % 4 == 3:
             quality_scores.append(line.strip())
+        
     fh.close()
         
     if include_quality:
