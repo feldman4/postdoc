@@ -167,9 +167,9 @@ def print_crossover(q, r, r_end, max_distance=10, width=130):
 
     lines.append(f'Oligo A matches up to read position ~{end_A}')
     lines.append(f'Oligo B matches starting from read position ~{start_B}')
-    lines.append('--- Ref / Oligo A')
+    lines.append('--- Read / Oligo A')
     lines.append(print_alignment(r, q, width, as_string=True))
-    lines.append('--- Ref / Oligo B')
+    lines.append('--- Read / Oligo B')
     lines.append(print_alignment(r_end, q, width, as_string=True))
     return '\n'.join(lines)
 
@@ -225,3 +225,20 @@ def add_design_matches(df_reads, reference):
         .assign(design_distance=design_distance, design_match=design_match)
         .assign(design_length=lambda x: x['design_match'].str.len())
         )
+
+
+def add_matched_parts(df_matches):
+    """Sanger analysis.
+    """
+    linkers, barcodes = [], []
+    for _, row in df_matches.iterrows():
+        pat = f'^{row["control_seq_aa"]}([^*]*)K([^*]*)R$'
+        try:
+            linker, barcode = re.findall(pat, row['match_aa'])[0]
+            linkers.append(linker)
+            barcodes.append(barcode)
+        except:
+            linkers.append(None)
+            barcodes.append(None)
+            
+    return df_matches.assign(linker=linkers, barcode=barcodes)
