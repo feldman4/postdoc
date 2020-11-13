@@ -29,6 +29,7 @@ def parse_overlap_oligos(filename,
     from postdoc.flycodes import assembly
     import os
     import matplotlib.pyplot as plt
+    import pandas as pd
 
     if output_prefix is None:
         output_prefix = os.path.splitext(filename)[0] + '_'
@@ -46,32 +47,52 @@ def parse_overlap_oligos(filename,
                'inner_forward': oligo_B_5,
                'outer_reverse': oligo_B_3}
     
+    # parse oligos A and B, automatically detecting overlaps
     a, b = oligos[::2], oligos[1::2]
     cols = ['primer_2', 'primer_3', 'overlap']
     df_agilent = (assembly.parse_agilent_oligos(a, b, primers)
-     .assign(name=names).set_index('name')
+     .assign(name=names)
      .pipe(lambda x:
            x.join(x.groupby(cols).size().rename('overlap_repeats'),
                   on=cols))
     )
-    df_agilent.to_csv(output_prefix + 'parsed.csv')
+
+    # drop duplicates on "name" column (e.g., drop extra barcodes)
+    df_agilent.set_index('name').to_csv(output_prefix + 'parsed.csv')
+    df_agilent.drop_duplicates('name').set_index(
+        'name').to_csv(output_prefix + 'parsed_name_dedupe.csv')
     
+    # number of oligos per subpool
     (df_agilent
      .groupby(['primer_1', 'primer_2', 'primer_3', 'primer_4'])
      .size().rename('count').reset_index()
      .to_csv(output_prefix + 'subpools.csv', index=None)
      )
 
+    # list of overlaps that occur more than once in a subpool
+    # OligoOverlapOpt bug?
     (df_agilent.query('overlap_repeats > 1')
      [['overlap', 'overlap_length', 'overlap_repeats']]
      .to_csv(output_prefix + 'repeated_overlaps.csv')
     )
-    
+
+    # overlap edit distances, by subpool
+    arr = []
+    primer_cols = ['primer_1', 'primer_2', 'primer_3', 'primer_4']
+    for primers, df in df_agilent.drop_duplicates('name').groupby(primer_cols):
+        distances = _calculate_distances(df['overlap'])
+        d = {x: y for x,y in zip(primer_cols, primers)}
+        d.update(pd.Series(distances).value_counts().sort_index())
+        pd.Series(d).pipe(arr.append)
+    df = pd.concat(arr, axis=1).fillna(0)
+    df.index.name = 'index'
+    df.to_csv(output_prefix + 'overlap_edit_distances.csv')
+
+    # heatmap of overlaps by Tm and length    
     fig, ax = plt.subplots()
     assembly.plot_agilent_overlaps(df_agilent)
     fig.savefig(output_prefix + 'overlap_heatmap.png')
     plt.close(fig) 
-
 
 
 def update_sanger():
@@ -111,6 +132,32 @@ def update_sec():
         os.makedirs(os.path.dirname(f2), exist_ok=True)
         arr += [copy_if_different(f1, f2)]
     print(f'Copied {sum(arr)} out of {len(arr)} AKTA runs.')
+
+
+def calculate_distances(filename, header=None, col=0, sep=None):
+    """Calculate distribution of Levenshtein distances.
+    """
+    import io
+    import pandas as pd
+    sequences = read_table(filename, col=col, header=header, sep=sep)
+    distances = _calculate_distances(sequences)
+    df_distances = pd.Series(arr).value_counts().reset_index()
+    df_distances.columns = 'edit_distance', 'num_pairs'
+    df_distances = df_distances.sort_values('edit_distance')
+    s = io.StringIO()
+    df_distances.to_csv(s, index=None)
+    return s.getvalue()
+
+
+def _calculate_distances(sequences, max_to_calculate=1e5):
+    from Levenshtein import distance
+    if len(sequences) < 2:
+        raise ValueError('Less than 2 sequences provided.')
+    arr = []
+    for i, a in enumerate(sequences):
+        for b in sequences[i + 1:]:
+            arr.append(distance(a, b))
+    return arr
 
 
 def calculate_overlap(filename, k, header=None, col=0, sep=None):
@@ -284,6 +331,7 @@ def fix_fire_completion(source_file):
 if __name__ == '__main__':
     commands = [
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
+        'calculate_distances',
         'calculate_overlap', 'calculate_overlap_strip',
         'parse_overlap_oligos',
         'update_sanger', 'update_sec',
