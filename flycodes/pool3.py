@@ -81,3 +81,22 @@ def substitute_changes(df):
         second = b.replace(c, d)
         arr += [[name, first], [name, second]]
     return pd.DataFrame(arr, columns=['name', 'oligo'])
+
+
+def protein_weblogo(sequences, filename):
+    import weblogo
+    import IPython.display
+
+    cs = weblogo.std_color_schemes['hydrophobicity']
+    alph = weblogo.std_alphabets['protein']
+    seqs = weblogo.seq.SeqList(sequences, alphabet=alph)
+    logodata = weblogo.LogoData.from_seqs(seqs)
+    logooptions = weblogo.LogoOptions(
+        color_scheme=cs, stacks_per_line=120, stack_width=8)
+    logooptions.title = "A Logo Title"
+    logoformat = weblogo.LogoFormat(logodata, logooptions)
+    png = weblogo.png_formatter(logodata, logoformat)
+
+    with open(filename, 'wb') as fh:
+        fh.write(png)
+    return IPython.display.Image(filename)
