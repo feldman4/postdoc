@@ -15,6 +15,7 @@ alias less='less -S'
 alias rgf='rg --files | rg'
 alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
+alias imgcat='imgcat -p'
 
 ######################### TERMINAL ############################
 
@@ -61,3 +62,7 @@ function hh() {
 }
 
 export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_variants/final_split/2_split/
+
+function csvless() {
+    csvlook $1 | less
+}
