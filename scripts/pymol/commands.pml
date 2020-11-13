@@ -3,14 +3,50 @@ python
 import glob
 import os
 import inspect
+from collections import defaultdict
 
 home = os.path.join(os.environ['HOME'], 'packages', 'postdoc')
 scripts_dir = os.path.join(home, 'scripts', 'pymol')
-pdbs_dir = os.path.join(home, 'resources/pdbs')
+pdbs_dir = os.path.join(os.environ['HOME'], '.pymol/')
+
+os.makedirs(pdbs_dir, exist_ok=True)
 
 exclude_pml = ['pymolrc.pml', 'commands.pml', 'settings.pml']
 
 
+def get_object_info(selection='all'):
+    def accumulate(**kwargs):
+        stored.arr.append(kwargs)
+
+    stored.arr = []
+    keys = 'model', 'chain', 'oneletter', 'resi', 'resv', 'resn', 'name', 
+    kwargs = ', '.join([f'{k}={k}' for k in keys])
+    space = {'accumulate': accumulate}
+    cmd.iterate(f'({selection} & name CA)', f'accumulate({kwargs})', space=space)
+    return stored.arr
+
+def describe_chains(selection='all'):
+    arr = get_object_info(selection)
+    sequences = {}
+    num_residues = {}
+    
+    grouped = defaultdict(list)
+    for info in arr:
+        grouped[(info['model'], info['chain'])] += [info]
+
+    for model, chain in sorted(grouped):
+        print(f'{model} -- chain {chain}')
+        tmp = {x['resi']: x for x in grouped[(model, chain)]}
+        by_res = sorted(tmp.values(), key=lambda x: x['resv'])
+        min_resi, max_resi = min(tmp), max(tmp)
+        selector = f'{model} & chain {chain} & polymer.protein'
+        mass = util.compute_mass(selector, implicit=True)
+        # not sure what the resi correspond to...
+        #print(f'  {len(by_res)} residues (resi {min_resi} to {max_resi}), '
+        #      f'MW {mass/1000:.2f} kDa')
+        print(f'  {len(by_res)} residues, MW {mass/1000:.2f} kDa')
+        print('  ' + ''.join(x['oneletter'] for x in by_res))
+        
 def list_pdbs():
     return glob.glob(os.path.join(pdbs_dir, '**/*pdb'), recursive=True)
 
@@ -246,7 +282,6 @@ def glycine_ca_spheres(selection='all'):
     cmd.do(f'set sphere_scale, 0.4, {selector}')
     # cmd.do(f'color palecyan, {selector}')
     
-
 def skeleton(selection='all'):
     cmd.do(f'hide all, {selection}')
     cmd.do(f'show cartoon, {selection}')
@@ -258,9 +293,38 @@ def skeleton(selection='all'):
     cmd.do(f'set cartoon_transparency, 0.3, {selection}')
     cmd.do(f'set sphere_scale, 0.2, {selection}')
 
+def axes_at_origin(scale=3):
+    # axes.py
+    from pymol.cgo import CYLINDER, cyl_text
+    from pymol import cmd
+    from pymol.vfont import plain
+
+    # create the axes object, draw axes with cylinders coloured red, green,
+    #blue for X, Y and Z
+    s = scale
+    obj = [
+       CYLINDER, 0., 0., 0., s*10., 0., 0., s*0.2, 1.0, 1.0, 1.0, 1.0, 0.0, 0.,
+       CYLINDER, 0., 0., 0., 0., s*10., 0., s*0.2, 1.0, 1.0, 1.0, 0., 1.0, 0.,
+       CYLINDER, 0., 0., 0., 0., 0., s*10., s*0.2, 1.0, 1.0, 1.0, 0., 0.0, 1.0,
+       ]
+
+    # add labels to axes object (requires pymol version 0.8 or greater, I
+    # believe
+
+    #cyl_text(obj,plain,[-5.,-5.,-1],'Origin',0.20,axes=[[3,0,0],[0,3,0],[0,0,3]])
+    cyl_text(obj,plain,[s*10.,0.,0.],'X',0.20,axes=[[3,0,0],[0,3,0],[0,0,3]])
+    cyl_text(obj,plain,[0.,s*10.,0.],'Y',0.20,axes=[[3,0,0],[0,3,0],[0,0,3]])
+    cyl_text(obj,plain,[0.,0.,s*10.],'Z',0.20,axes=[[3,0,0],[0,3,0],[0,0,3]])
+
+    # then we load it into PyMOL
+    cmd.load_cgo(obj,'axes')
+
+
 commands = [
 # aliases
 ('rename', rename_selection),
+# describe
+('summarize', describe_chains),
 # visibility
 ('nowater', hide_water),
 ('nohoh', hide_water),
@@ -285,6 +349,7 @@ commands = [
 ('cml', list_commands),
 ('initialize_settings', initialize_settings),
 ('skeleton', skeleton),
+('labelorigin', axes_at_origin),
 ]
 
 for name, func in commands:
