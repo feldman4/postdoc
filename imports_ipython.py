@@ -13,6 +13,7 @@ try:
 except ImportError:
     print('Skipping .drive due to missing packages.')
 
+import scipy.stats
 from scipy.spatial.distance import pdist
 from math import ceil
 
