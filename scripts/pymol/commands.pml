@@ -92,27 +92,49 @@ def hide_water():
 def chainbow(selection='all'):
     util.chainbow(selection)
 
-def find_polar(selection='all', mode='all', name=None):
-    tmp = 'temp123'
-    cmd.select(tmp, selection)
+def find_polar(selection='all', mode='nobb', name=None):
+
+    split = selection.split(' to ')
+    if len(split) == 2:
+        selection_A, selection_B = split
+    elif len(split) == 1:
+        selection_A, selection_B = split[0], split[0]
+    else:
+        raise ValueError('more than two too many to to split')
+
+    tmp_A, tmp_B = 'temp123_A', 'temp123_B'
+    cmd.select(tmp_A, selection_A)
+    cmd.select(tmp_B, selection_B)
 
     if name is None:
-        name = '{}_polar_conts'.format('_'.join(selection.split()))
+        name = '{}_polar_conts'.format('_'.join(selection_A.split()))
     if mode == 'all':
         cmd.dist(
             name,
-            f'({tmp}) and not (solvent)',
-            f'({tmp}) and not (solvent)',
+            f'({tmp_A}) and not (solvent)',
+            f'({tmp_B}) and not (solvent)',
             quiet=1,mode=2,label=0,reset=1);
     if mode == 'nobb':
         cmd.dist(
             name,
-            f'({tmp}) and not (solvent) and not bb.',
-            f'({tmp}) and not (solvent)',
+            f'({tmp_A}) and not (solvent) and not bb.',
+            f'({tmp_B}) and not (solvent) and not bb.',
             quiet=1,mode=2,label=0,reset=1);
+        cmd.dist(
+            name,
+            f'({tmp_A}) and not (solvent) and bb.',
+            f'({tmp_B}) and not (solvent) and not bb.',
+            quiet=1,mode=2,label=0,reset=1);
+        cmd.dist(
+            name,
+            f'({tmp_A}) and not (solvent) and not bb.',
+            f'({tmp_B}) and not (solvent) and bb.',
+            quiet=1,mode=2,label=0,reset=1);
+        
 
     cmd.enable(name)
-    cmd.delete(tmp)
+    cmd.delete(tmp_A)
+    cmd.delete(tmp_B)
 
 def hide_hydrogens(selection='all'):
     cmd.hide('({} and hydro)'.format(selection))
@@ -124,6 +146,9 @@ def color_by_chain(selection='all'):
     util.color_chains(selection);
 
 def run_script(name=None):
+    if name == 'last' and hasattr(stored, 'last_script'):
+        name = stored.last_script
+
     files = list_scripts()
     if name is None:
         files = [os.path.relpath(f, scripts_dir) for f in files]
@@ -133,8 +158,9 @@ def run_script(name=None):
     script = fuzzy_match(files, name)
     if script:
         print(f'Running {script}')
+        stored.last_script = name
         cmd.run(script)
-        # print(f'Finished running {script}')
+
 
 def list_scripts():
     files = glob.glob(os.path.join(scripts_dir, '*pml'))
@@ -319,6 +345,23 @@ def axes_at_origin(scale=3):
     # then we load it into PyMOL
     cmd.load_cgo(obj,'axes')
 
+def show_interface(a, b, cutoff=3.5):
+    name_a = a.replace(' ', '_')
+    name_b = b.replace(' ', '_')
+    cmd.do(f'select interface_{name_a}, byres {a} within {cutoff} of {b}')
+    cmd.do(f'select interface_{name_b}, byres {b} within {cutoff} of {a}')
+    cmd.do(f'show sticks, interface_{name_a}')
+    cmd.do(f'show sticks, interface_{name_b}')
+    cmd.do(f'findpolar interface_{name_a} to interface_{name_b}')
+    both = f'interface_{name_a} or interface_{name_b}'
+    cmd.do(f'cnc {both}')
+    cmd.do(f'orient {both}')
+    cmd.do(f'zoom {both}, -2')
+    cmd.do(f'set stick_radius, 0.15, ({both}) and bb.')
+    cmd.do(f'set stick_radius, 0.25, ({both}) and (not bb. or name CA)')
+    cmd.do(f'show sticks, interface_{name_b}')
+    cmd.do(f'set cartoon_transparency, 0.8, {both}')
+
 
 commands = [
 # aliases
@@ -340,6 +383,7 @@ commands = [
 ('findpolar', find_polar),
 ('grabligands', select_ligands),
 ('labeltermini', label_termini),
+('showinterface', show_interface),
 # loading
 ('rcsb', fetch_with_defaults),
 ('pdbload', load_local_pdb),
