@@ -16,6 +16,7 @@ alias rgf='rg --files | rg'
 alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
 alias imgcat='imgcat -p'
+alias ptree='ps --user $(id -u) f'
 
 ######################### TERMINAL ############################
 
