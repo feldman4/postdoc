@@ -5,6 +5,8 @@ export PATH="$HOME/packages/postdoc/scripts:$PATH"
 export PATH="$HOME/packages/rtRosetta/scripts:$PATH"
 export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
 
+export PYTHONPATH="$HOME/packages/NatureProtocols/DF:$PYTHONPATH"
+
 ######################### ALIASES #############################
 
 alias l='ls -l --all --human-readable --no-group --color=auto --classify -v'
@@ -15,7 +17,6 @@ alias less='less -S'
 alias rgf='rg --files | rg'
 alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
-alias imgcat='imgcat -p'
 alias ptree='ps --user $(id -u) f'
 
 ######################### TERMINAL ############################
