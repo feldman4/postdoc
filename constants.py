@@ -28,6 +28,7 @@ RCSB = 'RCSB'
 biomart_columns = {'Gene stable ID': ENSG,
                    'HGNC ID': HGNC,
                    'NCBI gene ID': GENE_ID,
+                   'NCBI gene (formerly Entrezgene) ID': GENE_ID,
                    'HGNC symbol': GENE_SYMBOL,
                   }
 
