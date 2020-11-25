@@ -101,19 +101,34 @@ def correct_bkgr_dict(pred, constant=0.01):
     return corrected
 
 
-def calculate_sarle(pred, with_confidence=True, wrong=False):
-    contact_bins = pred[:, :, 1:]
-    def get_sarle(x):    
-        s = skew    (x, axis=-1)
-        k = kurtosis(x, axis=-1, fisher=False)
-        if wrong:
-            return s**2 + 1 /k
-        else:
-            return (s**2 + 1) / k
-    sarle = get_sarle(contact_bins)
-    confidence = (1 - pred[:, :, 0])
+# def calculate_sarle(pred, with_confidence=True, wrong=False):
+#     contact_bins = pred[:, :, 1:]
+#     def get_sarle(x):    
+#         s = skew    (x, axis=-1)
+#         k = kurtosis(x, axis=-1, fisher=False)
+#         if wrong:
+#             return s**2 + 1 /k
+#         else:
+#             return (s**2 + 1) / k
+#     sarle = get_sarle(contact_bins)
+#     confidence = (1 - pred[:, :, 0])
 
-    return 1/(sarle) * confidence**2
+#     return 1/(sarle) * confidence**2
+
+
+def weighted_moment(xs, weights, k):
+    """k=2 is variance
+    """
+    weights = weights / weights.sum()
+    center = np.average(xs, weights=weights)
+    return np.sum(weights * (xs - center)**k) / np.sum(weights)
+
+
+def get_sarle(xs, ys):
+    moments = [weighted_moment(xs, ys, k) for k in range(5)]
+    skew = moments[3] / std**3
+    kurtosis = moments[4] / std**4 - 3  # Fisher's/excess kurtosis
+    return (skew**2 + 1) / (kurtosis + 3)
 
 
 def describe_pred_minRMSD_alt(ds, cap=0.01):
