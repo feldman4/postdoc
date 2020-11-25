@@ -14,6 +14,19 @@ go_obo_remote = 'http://purl.obolibrary.org/obo/go/go-basic.obo'
 go_obo = os.path.basename(go_obo_remote)
 
 
+def download_biomart(ncbi_hgnc='tagging/tables/NCBI_HGNC.csv'):
+    from pybiomart import Server
+    server = Server(host='http://www.ensembl.org')
+    dataset = (server.marts['ENSEMBL_MART_ENSEMBL']
+                    .datasets['hsapiens_gene_ensembl'])
+
+    df_ncbi = (dataset
+      .query(attributes=['ensembl_gene_id', 'hgnc_symbol', 'entrezgene_id'])
+      .rename(columns=biomart_columns)
+      .to_csv(ncbi_hgnc, index=None)
+    )
+    
+
 def locate_match(search, col):
     search = search.lower()
     def locate(df):
