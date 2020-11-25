@@ -12,20 +12,19 @@ from sklearn.linear_model import RANSACRegressor
 from postdoc.utils import memoize, add_row_col, csv_frame, add_pat_extract
 import postdoc.sequence
 import postdoc.flycodes.design
+from postdoc.flycodes.ms import load_mzxml_data, load_pepxml_data
 
 pat_truseq = '(?P<index_plate>T[1234])_(?P<index_well>.\d\d)_S\d'
 
+maccoss_url = ('https://proteomicsresource.washington.edu/net/maccoss/'
+               'labkey/projects/maccoss/maccoss-cluster/maccoss/rj8/'
+               'TPP/Loomis/Loo_2020_0824_RJ_bakerLab/')
 
-def download_mzxml():
+
+def download_mzxml(url=maccoss_url, local='flycodes/ms/20200818/'):
     """
     Download mzXML from MacCoss server.
     """
-    url = ('https://proteomicsresource.washington.edu/net/maccoss/'
-           'labkey/projects/maccoss/maccoss-cluster/maccoss/rj8/'
-           'TPP/Loomis/Loo_2020_0824_RJ_bakerLab/')
-
-    local = 'flycodes/ms/20200818/'
-
     df_files = pd.read_html(url)[0].dropna(how='all', axis=1).dropna()
     files = df_files['Name'].pipe(list)
     files_mzxml = [f for f in files if f.endswith('mzXML')]
@@ -75,40 +74,6 @@ def write_peptide_fa(filename, sequences):
         fh.write('\n'.join(entries))
 
 
-def load_pepxml(f):
-    """Load MS2 scans from pepxml.
-    """
-    keys = 'assumed_charge',
-    arr = []
-    for x in pyteomics.pepxml.PepXML(f):
-        if 'search_hit' not in x:
-            continue
-        hit = x['search_hit'][0]
-        info = {'time': x['retention_time_sec'],
-                'RTime': x['retention_time_sec'] / 60,
-                'sequence': hit['peptide'],
-                'num_ions': hit['num_matched_ions'],
-                }
-        
-        if 'hyperscore' in hit['search_score']:
-            # MSFragger
-            info['score'] = hit['search_score']['hyperscore']
-        elif 'spscore' in hit['search_score']:
-            # Comet
-            info['score'] = hit['search_score']['spscore']
-        else:
-            raise ValueError(f'score not recognized {hit["search_score"]}')
-
-        info.update({k: x[k] for k in keys})
-        info['mass_error'] = hit['massdiff'] / hit['calc_neutral_pep_mass']
-        info['abs_mass_error'] = abs(info['mass_error'])
-
-        assert x['start_scan'] - x['end_scan'] == 0
-        info['scan_num'] = x['start_scan']
-        info['scan_ix'] = x['start_scan'] - 1
-        arr += [info]
-
-    return pd.DataFrame(arr)
 
 
 def add_library_info(df):
@@ -307,35 +272,6 @@ def scatter_with_ransac(data, color, x, y, x0=-25, x1=150, offset=5, **kwargs):
     ax.set_ylabel(y)
 
 
-def load_mzxml_data(filename, progress=lambda x: x):
-    mz = []
-    intensity = []
-    info = []
-    reader = pyteomics.mzxml.MzXML(filename)
-    for spectrum in progress(reader):
-        keys = 'retentionTime', 'peaksCount', 'num', 'totIonCurrent', 'basePeakIntensity'
-        d = {k: spectrum[k] for k in keys}
-        if 'precursorMz' in spectrum:
-            assert len(spectrum['precursorMz']) == 1
-            d.update(spectrum['precursorMz'][0])
-        info += [d]
-        mz += [spectrum['m/z array']]
-        intensity += [spectrum['intensity array']]
-
-    mz = np.array(mz)
-    intensity = np.array(intensity)
-    df_scan_info = pd.DataFrame(info)
-
-    scan_lengths = [x.shape[0] for x in mz]
-    df_scan_data = pd.DataFrame({
-        'scan_ix': np.repeat(np.arange(mz.shape[0]), scan_lengths),
-        'ion_mz': np.hstack(mz),
-        'intensity': np.hstack(intensity),
-    })
-
-    return df_scan_info, df_scan_data
-
-
 def plot_ion_scan(row_frags, df_ions_all, df_ms2_data):
     scan_ix = row_frags['scan_ix']
     barcode = row_frags['sequence']
@@ -443,7 +379,7 @@ def load_all_ions(search, sequences):
 def process_run(file_mzxml, file_pepxml, df_ms_runs, df_sample_info, df_pool0, df_ions,
                 progress=lambda x: x):
     """Match pepXML hits to expected barcodes, one row per ion.
-    """    
+    """
     run_samples = df_ms_runs.set_index('file')['sample'].to_dict()
     run_names = df_ms_runs.set_index('file')['short_name'].to_dict()
     ms_sample = run_samples[file_mzxml]
@@ -456,7 +392,7 @@ def process_run(file_mzxml, file_pepxml, df_ms_runs, df_sample_info, df_pool0, d
 
     df_scan_info, df_ms2_data = load_mzxml_data(file_mzxml, progress)
 
-    df_frags = (load_pepxml(file_pepxml)
+    df_frags = (load_pepxml_data(file_pepxml)
      # only keep top-scoring hit for each peptide
      .sort_values('score', ascending=False)
      .drop_duplicates('sequence')
