@@ -1,3 +1,4 @@
+from collections import defaultdict
 from glob import glob
 import os
 from natsort import natsorted
@@ -36,12 +37,33 @@ def read_fasta(f):
 
 def parse_fasta(txt):
     entries = []
-    for raw in txt.split('>'):
+    txt = '\n' + txt.strip()
+    for raw in txt.split('\n>'):
         name = raw.split('\n')[0].strip()
         seq = ''.join(raw.split('\n')[1:]).replace(' ', '')
         if name:
             entries += [(name, seq)]
     return entries
+
+
+def write_fasta(filename, list_or_records):
+    if isinstance(list_or_records[0], str):
+        n = len(list_or_records)
+        width = int(np.ceil(np.log10(n)))
+        fmt = '{' + f':0{width}d' + '}'
+        records = []
+        for i, s in enumerate(list_or_records):
+            records += [(fmt.format(i), s)]
+    else:
+        records = list_or_records
+
+    lines = []
+    for name, seq in records:
+        lines.extend([f'>{name}', seq])
+    with open(filename, 'w') as fh:
+            fh.write('\n'.join(lines))
+    
+        
 
 
 
@@ -95,9 +117,6 @@ def load_codons(organism):
     f = os.path.join(resources, 'codon_usage', table)
     return (pd.read_csv(f)
             .assign(codon_dna=lambda x: x['codon'].str.replace('U', 'T')))
-
-
-codon_dict = load_codons('E. coli').set_index('codon_dna')['amino_acid'].to_dict()
 
 
 def reverse_complement(seq):
@@ -278,3 +297,12 @@ def quality_scores_to_array(quality_scores, baseline=ord('!')):
                - baseline
               )
 
+
+codon_dict = load_codons('E. coli').set_index('codon_dna')['amino_acid'].to_dict()
+reverse_codons = defaultdict(list)
+[reverse_codons[v].append(k) for k, v in codon_dict.items()]
+reverse_codons = {k: '|'.join(v) for k, v in reverse_codons.items()}
+
+
+def aa_to_dna_re(aa_seq):
+    return ''.join(f'(?:{reverse_codons[x]})' for x in aa_seq)
