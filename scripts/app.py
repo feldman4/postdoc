@@ -271,6 +271,15 @@ def read_table(filename, col=0, header=None, sep=None):
         return df[col].pipe(list)
 
 
+def chunk(filename, total, ix, col=0, header=None, sep=None):
+    assert 0 < ix < total
+    import numpy as np
+    values = read_table(filename, col, header, sep)
+    n = len(values)
+    chunk_size = int((n + total - 1) / total)
+    return values[chunk_size*ix:chunk_size*(ix + 1)]
+
+
 def reverse_translate(filename, repeats=1, seed=0, progress=None, 
                       header=None, col=0, sep=None):
     """Reverse translate amino acids to DNA using reverse_translate_robby.
@@ -285,7 +294,7 @@ def reverse_translate(filename, repeats=1, seed=0, progress=None,
     random.seed(seed)
     
     sequences = read_table(filename, col=col, header=header, sep=sep)
-    if progress == 'tqdm':
+    if progress:
         sequences = tqdm(sequences)
 
     return [main(s, repeats) for s in sequences]
@@ -355,7 +364,7 @@ def fix_fire_completion(source_file):
         fh.write(txt)
 
 
-def count_inserts_NGS(fastq, up='GGTGGATCAGGAGGTTCG', down='GGAAGCGGTGGAAGTGG', max_reads=1e5,
+def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
                       preview=10):
     """Count protein sequences between adapters in NGS data (e.g., PEAR output).
 
@@ -365,6 +374,12 @@ def count_inserts_NGS(fastq, up='GGTGGATCAGGAGGTTCG', down='GGAAGCGGTGGAAGTGG', 
     :param max_reads: the maximum number of reads to load and analyze
     :param preview: number of histogram rows to print out
     """
+    
+    if up == 'chipmunk':
+        up = '(?:GGTGGATCAGGAGGTTCG|GGGTCGGCTTCGCATATG)'
+    if down == 'chipmunk':
+        down = '(?:GGAAGCGGTGGAAGTGG|CTCGAGGGTGGAGGTTCC)'
+    
     from postdoc.sequence import read_fastq, translate_dna
     import pandas as pd
     import re
@@ -396,7 +411,6 @@ def count_inserts_NGS(fastq, up='GGTGGATCAGGAGGTTCG', down='GGAAGCGGTGGAAGTGG', 
     print(translated_designs.head(preview))
 
 
-
 if __name__ == '__main__':
     commands = [
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
@@ -404,7 +418,7 @@ if __name__ == '__main__':
         'calculate_overlap', 'calculate_overlap_strip',
         'parse_overlap_oligos',
         'update_sanger', 'update_sec',
-        'read_table', 'fix_fire_completion',
+        'read_table', 'chunk', 'fix_fire_completion',
         'count_inserts_NGS',
         ]
     try:
