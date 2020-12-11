@@ -100,7 +100,7 @@ def find_polar(selection='all', mode='nobb', name=None):
     elif len(split) == 1:
         selection_A, selection_B = split[0], split[0]
     else:
-        raise ValueError('more than two too many to to split')
+        raise ValueError('more than two too many to split')
 
     tmp_A, tmp_B = 'temp123_A', 'temp123_B'
     cmd.select(tmp_A, selection_A)
