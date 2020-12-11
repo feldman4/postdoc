@@ -17,6 +17,7 @@ alias rgf='rg --files | rg'
 alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
 alias ptree='ps --user $(id -u) f'
+alias ttime='/usr/bin/time -v'
 
 ######################### TERMINAL ############################
 
