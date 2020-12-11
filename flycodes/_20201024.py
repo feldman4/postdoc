@@ -207,23 +207,30 @@ def calculate_distance_matches(queries, results):
     arr = []
     for q, rs in zip(queries, results):
         if len(rs) == 0:
-            arr += [(-1, '')]
+            arr += [(-1, '', 0)]
         else:
             ds = [(distance(q, r), r) for r in rs]
-            arr += [sorted(ds)[0]]
+            d, s = sorted(ds)[0]
+            degeneracy = sum([x[0] == d for x in ds])
+            arr += [(d, s, degeneracy)]
     return arr
 
 
-def add_design_matches(df_reads, reference):
-    queries = df_reads['seq_aa'].fillna('').pipe(list)
+def add_design_matches(df_reads, col, reference, window=30, k=12):
+    """
+    `df_reads` is a dataframe containing `col` with sequences
+    `reference` is a list of references
+    """
+    queries = df_reads[col].fillna('').pipe(list)
     queries = [q if '*' not in q else '' for q in queries]
-    results = match_queries(queries, reference, 30, 12)
+    results = match_queries(queries, reference, window, k)
     
     df_reads = df_reads.copy()
-    design_distance, design_match = zip(*calculate_distance_matches(queries, results))
+    design_distance, design_match, design_equidistant = zip(
+        *calculate_distance_matches(queries, results))
     return (df_reads
-        .assign(design_distance=design_distance, design_match=design_match)
-        .assign(design_length=lambda x: x['design_match'].str.len())
+            .assign(design_match=design_match, design_distance=design_distance,
+                design_equidistant=design_equidistant)
         )
 
 
