@@ -60,7 +60,6 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
                 if add_file is None:
                     raise ValueError(f'must provide `add_file` or named groups in {file_pat}')
                 first = match.groups()[0]
-                print(first)
                 df[add_file] = first
         return df
     
