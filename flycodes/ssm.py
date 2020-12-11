@@ -14,3 +14,8 @@ def add_mutations(df_ssm, design):
             .assign(num_mutations=[len(x) for x in all_codes])
            )
 
+
+def to_wide(df_ssm, col):
+    return (df_ssm
+            .pivot_table(columns='position', index='mutant', values=col, aggfunc='first')
+            )
