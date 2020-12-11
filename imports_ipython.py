@@ -1,5 +1,5 @@
 from .sequence import print_alignment
-from .sequence import read_fasta, read_fastq
+from .sequence import read_fasta, read_fastq, write_fasta
 from .imports import *
 from .utils import ls_df
 from .scripts import app
