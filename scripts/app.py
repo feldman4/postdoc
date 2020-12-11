@@ -63,8 +63,9 @@ def parse_overlap_oligos(filename,
         'name').to_csv(output_prefix + 'parsed_name_dedupe.csv')
     
     # number of oligos per subpool
+    primer_cols = ['primer_1', 'primer_2', 'primer_3', 'primer_4']
     (df_agilent
-     .groupby(['primer_1', 'primer_2', 'primer_3', 'primer_4'])
+     .groupby(primer_cols)
      .size().rename('count').reset_index()
      .to_csv(output_prefix + 'subpools.csv', index=None)
      )
@@ -72,8 +73,8 @@ def parse_overlap_oligos(filename,
     # list of overlaps that occur more than once in a subpool
     # OligoOverlapOpt bug?
     (df_agilent.query('overlap_repeats > 1')
-     [['overlap', 'overlap_length', 'overlap_repeats']]
-     .to_csv(output_prefix + 'repeated_overlaps.csv')
+     [['overlap', 'overlap_length', 'overlap_repeats'] + primer_cols]
+     .to_csv(output_prefix + 'repeated_overlaps.csv', index=None)
     )
 
     # overlap edit distances, by subpool
@@ -85,8 +86,18 @@ def parse_overlap_oligos(filename,
         d.update(pd.Series(distances).value_counts().sort_index())
         pd.Series(d).pipe(arr.append)
     df = pd.concat(arr, axis=1).fillna(0)
+    df = pd.concat([df[:4], df[4:].sort_index()])
     df.index.name = 'index'
     df.to_csv(output_prefix + 'overlap_edit_distances.csv')
+    df_plot = df[4:].astype(int)
+    df_plot.index.name = 'edit distance'
+    df_plot.columns.name = 'subpool'
+    fig, ax = plt.subplots(figsize=(6, 4))
+    df_plot.plot(ax=ax)
+    ax.set_ylabel('# of overlap pairs')
+    fig.tight_layout()
+    fig.savefig(output_prefix + 'overlap_edit_distances.png')
+    plt.close(fig)
 
     # heatmap of overlaps by Tm and length    
     fig, ax = plt.subplots()
@@ -221,7 +232,12 @@ def calculate_overlap_strip(filename, k, input='dna', output='dna', strip='GS',
 
 
 def read_table(filename, col=0, header=None, sep=None):
-    """Utility to read tables. If `col` is None return the whole table.
+    """Utility to read a list or table column from file or stdin. 
+    
+    :param filename: delimited text file or "stdin"
+    :param col: integer column (no header) or column name; if this is None returns the whole table
+    :param header: flag for presence of a header
+    :param sep: text delimiter, e.g., "," or "\s+"
     """
     import sys
     import warnings
@@ -255,9 +271,22 @@ def read_table(filename, col=0, header=None, sep=None):
         return df[col].pipe(list)
 
 
+def chunk(filename, total, ix, col=0, header=None, sep=None):
+    assert 0 < ix < total
+    import numpy as np
+    values = read_table(filename, col, header, sep)
+    n = len(values)
+    chunk_size = int((n + total - 1) / total)
+    return values[chunk_size*ix:chunk_size*(ix + 1)]
+
+
 def reverse_translate(filename, repeats=1, seed=0, progress=None, 
                       header=None, col=0, sep=None):
     """Reverse translate amino acids to DNA using reverse_translate_robby.
+
+    :param filename: input list or table
+    :param repeats: number of attempts, one seems OK
+    :param seed: random seed, incremented for each attempt
     """
     from rtRosetta.reverse_translate_robby import main
     from tqdm.auto import tqdm
@@ -265,7 +294,7 @@ def reverse_translate(filename, repeats=1, seed=0, progress=None,
     random.seed(seed)
     
     sequences = read_table(filename, col=col, header=header, sep=sep)
-    if progress == 'tqdm':
+    if progress:
         sequences = tqdm(sequences)
 
     return [main(s, repeats) for s in sequences]
@@ -274,6 +303,13 @@ def reverse_translate(filename, repeats=1, seed=0, progress=None,
 def minimize_overlap(filename, k, rounds=30, organism='e_coli', num_codons=2, seed=0,
     col=0, header=None, sep=None):
     """Codon optimize DNA sequences to minimize overlapping k-mers.
+
+    :param filename: input list or table
+    :param k: k-mer length
+    :param rounds: number of times to try replacing k-mers.
+    :param organism: codon table source
+    :param num_codons: allow substitution to the top N codons per amino acid
+    :param seed: random seed
     """
     from postdoc.flycodes import assembly
     import numpy as np
@@ -287,7 +323,7 @@ def minimize_overlap(filename, k, rounds=30, organism='e_coli', num_codons=2, se
 
 
 def sort_by_overlap(filename, k, col=0, header=None, sep=None):
-    """Sort a list of sequences by number of overlappig k-mers.
+    """Sort a list of sequences by number of overlapping k-mers (least to most).
     """
     from postdoc.flycodes import assembly
     import numpy as np
@@ -328,6 +364,53 @@ def fix_fire_completion(source_file):
         fh.write(txt)
 
 
+def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
+                      preview=10):
+    """Count protein sequences between adapters in NGS data (e.g., PEAR output).
+
+    :param fastq: fastq file, e.g., .assembled.fastq from PEAR
+    :param up: sequence of upstream adapter (default is pETCON GS linker)
+    :param down: sequence of downstream adapter (default is pETCON GS linker)
+    :param max_reads: the maximum number of reads to load and analyze
+    :param preview: number of histogram rows to print out
+    """
+    
+    if up == 'chipmunk':
+        up = '(?:GGTGGATCAGGAGGTTCG|GGGTCGGCTTCGCATATG)'
+    if down == 'chipmunk':
+        down = '(?:GGAAGCGGTGGAAGTGG|CTCGAGGGTGGAGGTTCC)'
+    
+    from postdoc.sequence import read_fastq, translate_dna
+    import pandas as pd
+    import re
+
+    reads = read_fastq(fastq, max_reads=max_reads)
+    print(f'Loaded {len(reads)} reads from {fastq}')
+    inserts = []
+    lengths = pd.Series(reads).str.len()
+
+    pat = f'{up}([ACGT]*){down}'
+    matches = [re.findall(pat, x) for x in reads]
+    inserts = [x for m in matches for x in m]
+    print(f'Reads with adapters: {len(inserts)} ({len(inserts) / len(reads):.2%})')
+
+    full = [x for x in inserts if len(x) % 3 == 0]
+    translated_designs = (pd.Series([translate_dna(x) for x in full]).value_counts()
+                        .reset_index().rename(columns={'index': 'design', 0: 'counts'}))
+
+    x = len(translated_designs)
+    print(f'Translated reads (length % 3 == 0): {x} ({x / len(reads):.2%})')
+    
+    x = sum(['*' not in x for x in translated_designs['design']])
+    print(f'Translated, no stop: {x} ({x / len(reads):.2%})')
+
+    f2 = fastq.replace('.fastq', '.designs.csv')
+    translated_designs.to_csv(f2, index=None)
+
+    print('Histogram of translated designs saved to', f2)
+    print(translated_designs.head(preview))
+
+
 if __name__ == '__main__':
     commands = [
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
@@ -335,7 +418,8 @@ if __name__ == '__main__':
         'calculate_overlap', 'calculate_overlap_strip',
         'parse_overlap_oligos',
         'update_sanger', 'update_sec',
-        'read_table', 'fix_fire_completion',
+        'read_table', 'chunk', 'fix_fire_completion',
+        'count_inserts_NGS',
         ]
     try:
         fire.Fire({k: eval(k) for k in commands})

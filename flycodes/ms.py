@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import pyteomics.ms1
 import pyteomics.mzml
+import pyteomics.pepxml
 import numpy as np
 
 from ..constants import HOME
@@ -84,6 +85,35 @@ def e_coli_crap_mz(drive, metadata):
     return bad_bins
 
 
+def load_mzxml_data(filename, progress=lambda x: x):
+    mz = []
+    intensity = []
+    info = []
+    reader = pyteomics.mzxml.MzXML(filename)
+    for spectrum in progress(reader):
+        keys = 'retentionTime', 'peaksCount', 'num', 'totIonCurrent', 'basePeakIntensity'
+        d = {k: spectrum[k] for k in keys}
+        if 'precursorMz' in spectrum:
+            assert len(spectrum['precursorMz']) == 1
+            d.update(spectrum['precursorMz'][0])
+        info += [d]
+        mz += [spectrum['m/z array']]
+        intensity += [spectrum['intensity array']]
+
+    mz = np.array(mz)
+    intensity = np.array(intensity)
+    df_scan_info = pd.DataFrame(info)
+
+    scan_lengths = [x.shape[0] for x in mz]
+    df_scan_data = pd.DataFrame({
+        'scan_ix': np.repeat(np.arange(mz.shape[0]), scan_lengths),
+        'ion_mz': np.hstack(mz),
+        'intensity': np.hstack(intensity),
+    })
+
+    return df_scan_info, df_scan_data
+
+
 def load_mzml_data(filename, progress=lambda x: x):
     mz = []
     intensity = []
@@ -93,7 +123,6 @@ def load_mzml_data(filename, progress=lambda x: x):
         scan = spectrum['scanList']['scan'][0]
         start = scan['scan start time']
         inject = scan['ion injection time']
-        peak_
         mz_arr = spectrum['m/z array']
         int_arr = spectrum['intensity array']
         info += [{'scan': start, 'inject': inject}]
@@ -125,6 +154,43 @@ def load_ms1_data(filename, progress=lambda x: x):
     return mz, intensity, df_info
 
 
+def load_pepxml_data(f, progress=lambda x: x):
+    """Load MS2 scans from pepxml.
+    """
+    keys = 'assumed_charge',
+    arr = []
+    for x in progress(pyteomics.pepxml.PepXML(f)):
+        if 'search_hit' not in x:
+            continue
+        hit = x['search_hit'][0]
+        info = {'time': x['retention_time_sec'],
+                'RTime': x['retention_time_sec'] / 60,
+                'sequence': hit['peptide'],
+                'num_ions': hit['num_matched_ions'],
+                }
+
+        if 'hyperscore' in hit['search_score']:
+            # MSFragger
+            info['score'] = hit['search_score']['hyperscore']
+        elif 'spscore' in hit['search_score']:
+            # Comet
+            info['score'] = hit['search_score']['spscore']
+            info['expect'] = hit['search_score']['expect']
+        else:
+            raise ValueError(f'score not recognized {hit["search_score"]}')
+
+        info.update({k: x[k] for k in keys})
+        info['mass_error'] = hit['massdiff'] / hit['calc_neutral_pep_mass']
+        info['abs_mass_error'] = abs(info['mass_error'])
+
+        assert x['start_scan'] - x['end_scan'] == 0
+        info['scan_num'] = x['start_scan']
+        info['scan_ix'] = x['start_scan'] - 1
+        arr += [info]
+
+    return pd.DataFrame(arr)
+
+
 def grid_ms1_intensities(mz, intensity, time):
     """Rounds down mz and time. Multiply input and divide output to increase precision.
     Integrate intensity falling into each time,mz bin.
@@ -146,19 +212,6 @@ def grid_ms1_intensities(mz, intensity, time):
     return df_int
 
 
-def generate_msfragger_cmd(mzML, protein_fa, output_format='pepXML'):
-    """
-    output_format can be tsv or pepXML
-    """
-    params_text = msfragger_params.format(
-        protein_fa=protein_fa, output_format=output_format)
-    params = HOME / 'Downloads' / 'fragger.test.params'
-    with open(params, 'w') as fh:
-        fh.write(params_text)
-    
-    java_flags = '-jar -Dfile.encoding=UTF-8 -Xmx6G'
-    cmd = f'java {java_flags} {msfragger_jar} {params} {mzML}'
-    return cmd
 
 _pierce_standards = """
 sequence mass mz hydrophobicity
@@ -189,6 +242,29 @@ def filter_by_standards(df_barcodes, min_distance_to_standards=0.1):
     distances = cdist(df_barcodes[['mz']], df_ms[['mz']])
     keep = (distances.min(axis=1) > min_distance_to_standards)
     return df_barcodes[keep]
+
+
+def generate_msfragger_cmd(mzML, protein_fa, 
+                           output_format='pepXML', 
+                           fragger_params_tmp='Downloads/fragger.params', 
+                           **kwargs):
+    """
+    output_format can be tsv or pepXML
+    """
+    params_text = msfragger_params.format(
+        protein_fa=protein_fa, output_format=output_format)
+    for key, value in kwargs.items():
+        pat = f'{key} = \w+'
+        match = re.findall(pat, params_text)
+        assert len(match) == 1
+        params_text = params_text.replace(match[0], f'{key} = {value}')
+
+    with open(fragger_params_tmp, 'w') as fh:
+        fh.write(params_text)
+
+    java_flags = '-jar -Dfile.encoding=UTF-8 -Xmx6G'
+    cmd = f'java {java_flags} {msfragger_jar} {fragger_params_tmp} {mzML}'
+    return cmd
 
 
 msfragger_jar = 'misc/msfragger/MSFragger-3.0.jar'
