@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import pyteomics.ms1
 import pyteomics.mzml
+import pyteomics.pepxml
 import numpy as np
 
 from ..constants import HOME
@@ -174,6 +175,7 @@ def load_pepxml_data(f, progress=lambda x: x):
         elif 'spscore' in hit['search_score']:
             # Comet
             info['score'] = hit['search_score']['spscore']
+            info['expect'] = hit['search_score']['expect']
         else:
             raise ValueError(f'score not recognized {hit["search_score"]}')
 
