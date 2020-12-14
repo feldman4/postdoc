@@ -180,18 +180,20 @@ def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
     from postdoc.wfc import aa_code
     from matplotlib import patheffects
 
-    assert df_or_array.shape[1] == len(aa_code)
+    assert df_or_array.shape[0] == len(aa_code)
     if isinstance(df_or_array, pd.DataFrame):
         df = df_or_array
+        aa_code = list(df.index)
     else:
         df = pd.DataFrame(df_or_array, columns=list(aa_code))
-    
+
     height = 5
     font_size = 12
     inner, outer, stroke_width = 'black', 'white', 2.5
 
     fig, ax = plt.subplots(figsize=(height*len(seq)/20, height))
-    sns.heatmap(df.T, ax=ax, square=True, **kwargs)
+    sns.heatmap(df, ax=ax, square=True, **kwargs)
+    
     for x, s in enumerate(seq):
         y = aa_code.index(s)
         txt = ax.text(x+0.5, y+0.5, s, 
@@ -358,3 +360,16 @@ def groupby_apply2(df_1, df_2, cols, f, tqdn=True):
         arr.append(f(d_1[k], d_2[k]))
     
     return pd.concat(arr)    
+
+
+def expand_sep(df, col, sep=','):
+    """Expands table by splitting strings. Drops index.
+    """
+    index, values = [], []
+    for i, x in enumerate(df[col]):
+        entries = [y.strip() for y in x.split(sep)]
+        index += [i] * len(entries)
+        values += entries
+
+    return (pd.DataFrame(df.values[index], columns=df.columns)
+            .assign(**{col: values}))

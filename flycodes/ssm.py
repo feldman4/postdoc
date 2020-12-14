@@ -1,8 +1,10 @@
 from Levenshtein import editops
 
-def add_mutations(df_ssm, design):
+aa_order = list('AVLIMFWDERKHSTYNQGPC')
+
+def add_mutations(df_ssm, design, col='aa_seq'):
     all_codes = []
-    for aa_seq in df_ssm['aa_seq']:
+    for aa_seq in df_ssm[col]:
         edits = editops(design, aa_seq)
         codes = []
         for op, i, j in edits:

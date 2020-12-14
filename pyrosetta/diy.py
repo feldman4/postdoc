@@ -399,3 +399,16 @@ def read_pdb_sequences(filename, first_chain_only=False):
                 
     chains = {k: ''.join(v) for k,v in chains.items()}
     return chains
+
+
+def fix_weird_residues(df_pdb):
+    """Correct weird residue names 
+    """
+    weirdos = {'KRR': 'K'}
+    arr = []
+    for a, b in df_pdb[['res_name', 'res_aa']].values:
+        if a in weirdos:
+            arr.append(weirdos[a])
+        else:
+            arr.append(b)
+    return (df_pdb.assign(res_aa=arr))

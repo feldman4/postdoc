@@ -7,6 +7,7 @@ import numpy as np
 
 import pandas as pd
 from Bio import SeqIO
+from Levenshtein import distance
 
 from .constants import resources
 
@@ -306,3 +307,125 @@ reverse_codons = {k: '|'.join(v) for k, v in reverse_codons.items()}
 
 def aa_to_dna_re(aa_seq):
     return ''.join(f'(?:{reverse_codons[x]})' for x in aa_seq)
+
+
+def make_kmer_dict(sequences, k):
+    """
+    """
+    kmers = defaultdict(list)
+    for i, seq in enumerate(sequences):
+        for kmer in get_kmers(seq, k):
+            kmers[kmer].append(i)
+    return kmers
+
+
+def match_nearest(query, sequences, kmers):
+    k = len(next(iter(kmers.keys())))
+
+    candidates = []
+    for kmer in get_kmers(query, k):
+        candidates.extend(kmers[kmer])
+    candidates = set(candidates)
+    # guess
+    candidates = sorted(candidates, key=lambda i: ~
+                        sequences[i].startswith(query[:2]))
+
+    matches = []
+    for i in candidates:
+        d = distance(sequences[i], query)
+        matches.append((d, i))
+        # exact match
+        if d == 0:
+            break
+    d, i = sorted(matches)[0]
+    return d, i
+
+
+def match_queries(queries, sequences, window, k, progress=lambda x: x):
+    """Match queries to reference sequences based on Levenshtein distance between
+    prefixes of length `window`. Only pairs with a shared kmer of length `k` are
+    checked. For each query, finds the first nearest prefix and returns all sequences 
+    that share that prefix.
+    """
+    query_lookup = {x: x[:window] for x in queries}
+    query_prefixes = sorted(set([x[:window] for x in queries]))
+
+    ref_lookup = defaultdict(list)
+    for x in sequences:
+        ref_lookup[x[:window]].append(x)
+    ref_prefixes = sorted(set([x[:window] for x in sequences]))
+
+    kmers = make_kmer_dict(ref_prefixes, k)
+
+    hits = {}
+    for q in progress(query_prefixes):
+        try:
+            hits[q] = match_nearest(q, ref_prefixes, kmers)
+        except IndexError:
+            pass
+
+    results = []
+    for q in queries:
+        try:
+            d, i = hits[query_lookup[q]]
+            results.append(ref_lookup[ref_prefixes[i]])
+        except KeyError:
+            results.append([])
+    return results
+
+
+def add_design_matches(df_reads, col, reference, window, k):
+    """
+    `df_reads` is a dataframe containing `col` with sequences
+    `reference` is a list of references
+    """
+    queries = df_reads[col].fillna('').pipe(list)
+    queries = [q if '*' not in q else '' for q in queries]
+    results = match_queries(queries, reference, window, k)
+
+    df_reads = df_reads.copy()
+    design_distance, design_match, design_equidistant = zip(
+        *calculate_distance_matches(queries, results))
+    return (df_reads
+            .assign(design_match=design_match, design_distance=design_distance,
+                    design_equidistant=design_equidistant)
+            )
+
+
+def calculate_distance_matches(queries, results):
+    """Get columns `design_distance` and `design_match` from results of match_queries`.
+    """
+    arr = []
+    for q, rs in zip(queries, results):
+        if len(rs) == 0:
+            arr += [(-1, '', 0)]
+        else:
+            ds = [(distance(q, r), r) for r in rs]
+            d, s = sorted(ds)[0]
+            degeneracy = sum([x[0] == d for x in ds])
+            arr += [(d, s, degeneracy)]
+    return arr
+
+
+def match_and_check(queries, reference, window, k, ignore_above=40, progress=lambda x: x):
+    """Perform fast Levenshtein distance matching of queries to reference
+    and check the results by brute force calculation (all pairs). Mismatches
+    with an edit distance greater than `ignore_above` are ignored.
+    """
+    print(f'Matching {len(queries)} queries to {len(reference)} '
+          f'reference sequences, window={window} and k={k}')
+    df_matched = (pd.DataFrame({'sequence': queries})
+                  .pipe(add_design_matches, col='sequence',
+                        reference=reference, window=window, k=k))
+    it = (df_matched
+          [['sequence', 'design_match']].values)
+    print('Checking fast matches against brute force matches...')
+    different = 0
+    for seq, match in progress(it):
+        xs = sorted(reference, key=lambda x: distance(x, seq))
+        a, b = distance(seq, match), distance(seq, xs[0])
+        if b < a and b <= ignore_above:
+            different += 1
+            print(f'{a},{b} (fast,exact distance); query={seq}')
+    print(f'Total mismatches: {different}')
+    return df_matched
