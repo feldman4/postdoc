@@ -9,8 +9,7 @@ from tqdm.auto import tqdm
 import numpy as np
 
 from .ssm import add_mutations
-from ..utils import expand_sep
-from ..utils import csv_frame
+from ..utils import expand_sep, codify, csv_frame
 
 miseq = '/home/kipnis/match_and_design/xml_csts_cNTF2s/DNAworks/20201019_MiSeq_analysis/'
 local = '/home/dfeldman/for/YK/20201019_MiSeq_analysis/'
@@ -18,6 +17,7 @@ example_design = 'RA_05052_NTF2'
 example_sample = 'sort_3_500_GateD'
 example_min_count = 10
 example_max_distance = 5
+
 
 def load_matches():
     f = f'{miseq}20201019_MiSeq_analysis_all_counts_summary.xlsx'
@@ -31,6 +31,7 @@ def load_matches():
                 .assign(distance_group=lambda x: x['design_distance'].apply(distance_groups))
                 )
     return df_matched, sample_labels
+
 
 def pivot_by_distance_groups(df_matched):
     cols = ['0', '1', '2', '3', '4', '<12', '<30', 'no match']
@@ -48,6 +49,7 @@ def pivot_by_distance_groups(df_matched):
     rows = ['assembled, untransformed', 'transformed']
     rows += [x for x in df_wide.index if x not in rows]
     return df_wide.loc[rows]
+
 
 def plot_all(df_wide):
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -84,6 +86,7 @@ def plot_enriched(df_matched, by_seq=True, sample=example_sample, num_sequences=
     ax.set_title(f'top {num_sequences} sequences from {sample}')
     fig.tight_layout()
     return fig
+
 
 def wc_l(f):
     
@@ -157,13 +160,14 @@ def sanity_check(df_matched, df_designs, design=example_design, sample=example_s
                         key=lambda x: distance(x, s))[0]
         assert distance(nearest, s) >= bin
 
+
 def get_mutants(df_matched, sample=example_sample, design=example_design, 
                 max_distance=example_max_distance, min_count=example_min_count):
     
     design_sequence = df_matched.query('design_name == @design')[
         'design_match'].iloc[0]
 
-    df_mutants = (df_matched
+    df_variants = (df_matched
         .query('sample_label == @sample')
         .query('design_name == @design')
         .query('design_distance <= @max_distance')
@@ -172,7 +176,7 @@ def get_mutants(df_matched, sample=example_sample, design=example_design,
         .pipe(add_mutations, design_sequence, 'sequence')
         )
     
-    mutations = (df_mutants
+    df_mutations = (df_variants
                 .pipe(expand_sep, 'mutation', ',')
                 ['mutation']
                 .value_counts().loc[lambda x: x.index.str.len() > 1]
@@ -180,15 +184,15 @@ def get_mutants(df_matched, sample=example_sample, design=example_design,
                 .assign(position=lambda x: x['index'].str[1:-1].astype(int))
                 .assign(design=lambda x: x['index'].str[0])
                 .assign(mutant=lambda x: x['index'].str[-1])
-
                 )
 
-    df_ssm = (mutations
+    df_ssm = (df_mutations
             .pivot_table(index='mutant', columns='position', values='num_sequences')
             .reindex(columns=1 + np.arange(len(design_sequence)))
             .fillna(0).astype(int))
 
-    return df_mutants, df_ssm
+    return df_variants, df_mutations, df_ssm
+
 
 def read_count_table(f):
     return pd.read_csv(f, header=None,
@@ -218,3 +222,41 @@ def summarize_variants(df_matched):
         df_summary.query('sample_label == "transformed"'),
         df_summary.query('sample_label != "transformed"'),
         ])
+
+
+def collect_all_mutants(df_matched):
+    """mutants indexed by sample_label, design_name, position
+    """
+    it = (df_matched
+          .query('count > @example_min_count')
+          .query('0 < design_distance <= @example_max_distance')
+          .loc[lambda x: x['design_match'].str.len() == x['sequence'].str.len()]
+          # very high complexity sample, read count threshold should be different
+          .query('sample_label != "assembled, untransformed"')
+          .groupby('sample_label')
+          )
+
+    arr = []
+    for sample_label, df in it:
+        it = df.groupby(['design_name', 'design_match'])
+        for (design_name, design_sequence), df_ in tqdm(it):
+            try:
+                df_mutations = (
+                    df_
+                     .pipe(add_mutations, design_sequence, 'sequence')
+                     .pipe(expand_sep, 'mutation', ',')
+                     .pipe(codify, variant='sequence')
+                     .groupby(['mutation', 'variant'])['count'].sum().rename('num_reads')
+                     .loc[lambda x: x['mutation'].str.len() > 1]
+                     .assign(position=lambda x: x['mutation'].str[1:-1].astype(int))
+                     .assign(design=lambda x: x['mutation'].str[0])
+                     .assign(mutant=lambda x: x['mutation'].str[-1])
+                     .assign(design_name=design_name)
+                     .assign(sample_label=sample_label)
+                     .pipe(arr.append)
+                     )
+            except AssertionError:
+                pass
+    cols = ['sample_label', 'design_name', 'variant', 'mutation',
+            'num_reads', 'position', 'design', 'mutant']
+    return pd.concat(arr).sort_values(cols[:4])[cols]
