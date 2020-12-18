@@ -64,9 +64,6 @@ def write_fasta(filename, list_or_records):
     with open(filename, 'w') as fh:
             fh.write('\n'.join(lines))
     
-        
-
-
 
 def fasta_frame(files_or_search):
     """Convenience function, pass either a list of files or a 
@@ -286,6 +283,7 @@ def read_fastq(filename, include_quality=False, max_reads=1e12):
         return reads, quality_scores
     else:
         return reads
+
 
 def quality_scores_to_array(quality_scores, baseline=ord('!')):
     """Only works if all quality scores have equal length.
