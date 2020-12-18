@@ -224,11 +224,11 @@ def summarize_variants(df_matched):
         ])
 
 
-def collect_all_mutants(df_matched):
+def collect_all_mutants(df_matched, min_count=example_min_count):
     """mutants indexed by sample_label, design_name, position
     """
     it = (df_matched
-          .query('count > @example_min_count')
+          .query('count > @min_count')
           .query('0 < design_distance <= @example_max_distance')
           .loc[lambda x: x['design_match'].str.len() == x['sequence'].str.len()]
           # very high complexity sample, read count threshold should be different
@@ -246,7 +246,8 @@ def collect_all_mutants(df_matched):
                      .pipe(add_mutations, design_sequence, 'sequence')
                      .pipe(expand_sep, 'mutation', ',')
                      .pipe(codify, variant='sequence')
-                     .groupby(['mutation', 'variant'])['count'].sum().rename('num_reads')
+                     .groupby(['mutation', 'variant'])
+                      ['count'].sum().rename('num_reads').reset_index()
                      .loc[lambda x: x['mutation'].str.len() > 1]
                      .assign(position=lambda x: x['mutation'].str[1:-1].astype(int))
                      .assign(design=lambda x: x['mutation'].str[0])
