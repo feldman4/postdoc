@@ -8,6 +8,7 @@ from collections import defaultdict
 home = os.path.join(os.environ['HOME'], 'packages', 'postdoc')
 scripts_dir = os.path.join(home, 'scripts', 'pymol')
 pdbs_dir = os.path.join(os.environ['HOME'], '.pymol/')
+tmalign_exe = '/anaconda/bin/tmalign'
 
 os.makedirs(pdbs_dir, exist_ok=True)
 
@@ -239,12 +240,15 @@ def fetch_with_defaults(rcsb, assembly=1):
     hide_water()
     color_by_chain('not polymer.nucleic')
 
-def load_pdb_grid(search, max_to_grid=20):
+def load_pdb_grid(search, max_to_grid=20, max_to_load=None):
     try:
         from natsort import natsorted
         files = natsorted(glob.glob(search))
     except ModuleNotFoundError:
         files = sorted(glob.glob(search))
+    if max_to_load:
+        files = files[:int(max_to_load)]
+    max_to_grid = int(max_to_grid)
 
     cmd.do('set scene_animation_duration, 0')
     print(f'Loading {len(files)} files...')
@@ -253,20 +257,24 @@ def load_pdb_grid(search, max_to_grid=20):
         name = os.path.basename(file)
         cmd.load(file, name)
         cmd.do(f'set grid_slot, {i+1}, {name}')
-        if i % max_to_grid == max_to_grid - 1:
-            cmd.do(f'scene {i}, store')
-            cmd.do('disable all')
+
         if i == 0:
             first_name = name
         else:
-            cmd.do(f'tmalign {name}, {first_name}')
+            cmd.do(f'tmalign {name}, {first_name}, exe={tmalign_exe}')
+            cmd.do('orient')
+
+        if i % max_to_grid == max_to_grid - 1:
+            cmd.do(f'scene {i}, store')
+            cmd.do('disable all')
     if i % max_to_grid != max_to_grid - 1:
         cmd.do(f'scene {i}, store')
         cmd.do('disable all')
     if i >= max_to_grid:
         cmd.do(f'scene {max_to_grid - 1}, recall')
     cmd.do('set grid_mode, 1')
-    cmd.do('zoom, buffer=-10')
+    #cmd.do('zoom, buffer=-10')
+
 
 def color_by_residue_type(selection='all'):
     acid = 'oxygen'
