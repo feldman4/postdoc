@@ -12,7 +12,7 @@ COMET_OUTPUT="${INPUT/.mzML/.pep.xml}"
 
 source activate /home/dfeldman/.conda/envs/tpp
 
-DATABASE='/home/dfeldman/flycodes/ms/pool0.fa'
+DATABASE='/home/dfeldman/flycodes/ms/pool0_by_subpool.fa'
 PARAMS='/home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params'
 
 comet -D$DATABASE -P$PARAMS $INPUT
