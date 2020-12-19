@@ -59,7 +59,7 @@ class Drive():
                 except:
                     pass
         if drop_unnamed:
-            cols_drop = [c for c in df.columns if c.startswith('Unnamed:')]
+            cols_drop = [c for c in df.columns if str(c).startswith('Unnamed:')]
             df = df.drop(cols_drop, axis=1)
         return df
 

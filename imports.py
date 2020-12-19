@@ -14,7 +14,7 @@ import os
 import re
 import sys
 
-from natsort import natsorted
+from natsort import natsorted, natsort_keygen
 import numpy as np
 import pandas as pd
 import seaborn as sns

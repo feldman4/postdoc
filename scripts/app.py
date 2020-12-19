@@ -1,5 +1,11 @@
 import fire
 
+def dataframe_to_csv_string(df):
+    import io
+    s = io.StringIO()
+    df.to_csv(s, index=None)
+    return s.getvalue()
+
 
 def parse_overlap_oligos(filename, 
     output_prefix=None,
@@ -148,17 +154,13 @@ def update_sec():
 def calculate_distances(filename, header=None, col=0, sep=None):
     """Calculate distribution of Levenshtein distances.
     """
-    import io
     import pandas as pd
     sequences = read_table(filename, col=col, header=header, sep=sep)
     distances = _calculate_distances(sequences)
     df_distances = pd.Series(arr).value_counts().reset_index()
     df_distances.columns = 'edit_distance', 'num_pairs'
-    df_distances = df_distances.sort_values('edit_distance')
-    s = io.StringIO()
-    df_distances.to_csv(s, index=None)
-    return s.getvalue()
-
+    return df_distances.sort_values('edit_distance').pipe(dataframe_to_csv_string)
+    
 
 def _calculate_distances(sequences, max_to_calculate=1e5):
     from Levenshtein import distance
@@ -411,6 +413,72 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
     print(translated_designs.head(preview))
 
 
+def find_nearest_sequence(
+    filename_query, 
+    filename_reference,
+    window=30, k=12,
+    col_query=0, header_query=None, sep_query=None,
+    col_reference=0, header_reference=None, sep_reference=None,
+    keep_query_table=False, 
+    keep_reference_table=False,
+    rename_cols=None,
+    ):
+    """Fast approximate matching of query to reference sequences.
+    
+    Candidate reference matches are found by hashing prefixes of length `window`. Only pairs with 
+    a shared kmer of length `k` are checked. Returns a table with nearest match (`design_match`),
+    exact edit distance from query (`design_distance`), and number of other designs matched at the
+    same distance (`design_equidistant`).
+
+    :param filename_query: source list or table for query sequences
+    :param filename_reference: source list or table for reference sequences
+    :param window: length of prefix used to find candidate matches
+    :param k: length of kmers used for fast matching
+    :param keep_query_table: keep rest of query table in output
+    :param_reference_table: keep rest of reference table in output
+    :rename_cols: columns to rename in output table, as a comma-separated list, e.g., 
+        "from,to,from2,to2"
+    """
+    import sys
+    import pandas as pd
+    from postdoc.sequence import add_design_matches
+    if keep_query_table:
+        df_query = read_table(
+            filename_query, col=None, header=header_query, sep=sep_query)
+        query = df_query[col_query]
+    else:
+        query = read_table(
+            filename_query, col=col_query, header=header_query, sep=sep_query)
+
+    if keep_reference_table:
+        df_reference = read_table(
+            filename_reference, col=None, header=header_reference, sep=sep_reference)
+        reference = df_reference[col_reference]
+    else:
+        reference = read_table(
+            filename_reference, col=col_reference, header=header_reference, sep=sep_reference)
+
+    print(f'Searching {len(query)} queries against {len(reference)} reference sequences '
+          f'(window={window}, k={k})', file=sys.stderr)
+    df_matched = (pd.DataFrame({'query': query})
+     .pipe(add_design_matches, col='query', reference=reference, window=window, k=k)
+     .rename(columns=lambda x: x.replace('design', 'reference'))
+    )
+    if keep_query_table:
+        df_matched = df_matched.join(df_query.set_index(col_query), on='query', rsuffix='_query')
+
+    if keep_reference_table:
+            df_matched = df_matched.join(df_reference.set_index(col_reference), 
+            on='reference_match', rsuffix='_reference')
+    
+    if rename_cols:
+        columns = {str(a): str(b) for a, b in zip(rename_cols[::2], rename_cols[1::2])}
+        df_matched.columns = df_matched.columns.astype(str)
+        df_matched = df_matched.rename(columns=columns).drop('DROP', axis=1, errors='ignore')
+
+    return dataframe_to_csv_string(df_matched)
+
+
 if __name__ == '__main__':
     commands = [
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
@@ -420,6 +488,7 @@ if __name__ == '__main__':
         'update_sanger', 'update_sec',
         'read_table', 'chunk', 'fix_fire_completion',
         'count_inserts_NGS',
+        'find_nearest_sequence',
         ]
     try:
         fire.Fire({k: eval(k) for k in commands})

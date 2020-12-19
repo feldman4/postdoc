@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from ..constants import skyline_columns
+from ..utils import add_ransac_pred
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -44,13 +45,6 @@ def export_barcode_info():
     df_pool1 = (pd.read_csv(oligo_table)
         .assign(short_name=lambda x: 'pool1_' + x['source'].str[0] + '_' + x['name'].apply(short_hex))
     )
-
-
-def add_ransac_pred(df, col_x, col_y):
-    from sklearn.linear_model import RANSACRegressor
-    model = RANSACRegressor()
-    model.fit(df[[col_x]], df[[col_y]])
-    return df.assign(**{col_y + '_pred': model.predict(df[[col_x]])})
 
 
 def load_skyline():
