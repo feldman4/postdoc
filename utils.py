@@ -373,3 +373,17 @@ def expand_sep(df, col, sep=','):
 
     return (pd.DataFrame(df.values[index], columns=df.columns)
             .assign(**{col: values}))
+
+
+def add_ransac_pred(df, col_x, col_y):
+    from sklearn.linear_model import RANSACRegressor
+    model = RANSACRegressor()
+    model.fit(df[[col_x]], df[[col_y]])
+    return df.assign(**{col_y + '_pred': model.predict(df[[col_x]])})
+
+
+def nglob(pathname, with_matches=False, include_hidden=False, recursive=True,
+          norm_paths=True, case_sensitive=True, sep=None):
+    from glob2 import glob
+    return natsorted(glob(pathname, with_matches, include_hidden, recursive,
+                           norm_paths, case_sensitive, sep))
