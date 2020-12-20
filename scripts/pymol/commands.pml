@@ -115,24 +115,34 @@ def find_polar(selection='all', mode='nobb', name=None):
             f'({tmp_A}) and not (solvent)',
             f'({tmp_B}) and not (solvent)',
             quiet=1,mode=2,label=0,reset=1);
-    if mode == 'nobb':
+    elif mode == 'nobb':
         cmd.dist(
-            name,
+            name + 'A',
             f'({tmp_A}) and not (solvent) and not bb.',
             f'({tmp_B}) and not (solvent) and not bb.',
             quiet=1,mode=2,label=0,reset=1);
         cmd.dist(
-            name,
+            name + 'B',
             f'({tmp_A}) and not (solvent) and bb.',
             f'({tmp_B}) and not (solvent) and not bb.',
             quiet=1,mode=2,label=0,reset=1);
         cmd.dist(
-            name,
+            name + 'C',
             f'({tmp_A}) and not (solvent) and not bb.',
             f'({tmp_B}) and not (solvent) and bb.',
             quiet=1,mode=2,label=0,reset=1);
+        # how to merge distance (?) objects?
+        #cmd.do(f'create {name}, {name}*')
+        #cmd.do(f'delete {name}A')
+        #cmd.do(f'delete {name}B')
+        #cmd.do(f'delete {name}C')
+    elif mode == 'bbonly':
+        cmd.dist(
+            name,
+            f'({tmp_A}) and not (solvent) and bb.',
+            f'({tmp_B}) and not (solvent) and bb.',
+            quiet=1,mode=2,label=0,reset=1);
         
-
     cmd.enable(name)
     cmd.delete(tmp_A)
     cmd.delete(tmp_B)
@@ -252,9 +262,22 @@ def load_pdb_grid(search, max_to_grid=20, max_to_load=None):
 
     cmd.do('set scene_animation_duration, 0')
     print(f'Loading {len(files)} files...')
+    names = [os.path.basename(f) for f in files]
+
+    # remove shared prefixes
+    prefix = 0
+    if len(files) > 1:
+        while len(set([x[:prefix + 1] for x in names])) == 1:
+            prefix += 1
+
     first_name = None
     for i, file in enumerate(files):
-        name = os.path.basename(file)
+        # random pymol limitations on object names
+        # max length, can't start with underscore
+        name = names[i][prefix:prefix+14]
+        while name.startswith('_'):
+            name = name[1:]
+
         cmd.load(file, name)
         cmd.do(f'set grid_slot, {i+1}, {name}')
 
@@ -267,18 +290,19 @@ def load_pdb_grid(search, max_to_grid=20, max_to_load=None):
         if i % max_to_grid == max_to_grid - 1:
             cmd.do(f'scene {i}, store')
             cmd.do('disable all')
-    if i % max_to_grid != max_to_grid - 1:
+    if i % max_to_grid != max_to_grid - 1 & i > 0:
         cmd.do(f'scene {i}, store')
         cmd.do('disable all')
     if i >= max_to_grid:
         cmd.do(f'scene {max_to_grid - 1}, recall')
+    cmd.do('orient')
+    cmd.do('zoom all, 4')
     cmd.do('set grid_mode, 1')
-    #cmd.do('zoom, buffer=-10')
+    rei;
 
-
-def color_by_residue_type(selection='all'):
-    acid = 'oxygen'
-    basic = 'neptunium'
+def color_by_residue_type(selection='bb.'):
+    acid = 'deepsalmon'
+    basic = 'tantalum'
     nonpolar = 'vanadium'
     polar = 'thulium'
     cysteine = 'paleyellow'
@@ -308,7 +332,7 @@ def color_by_residue_type(selection='all'):
     }
 
     for res, color in colormap.items():
-        cmd.do(f'color {color}, backbone and resn {res}')
+        cmd.do(f'color {color}, {selection} and resn {res}')
 
 def glycine_ca_spheres(selection='all'):
     selector = f'name CA and {selection} and resn gly'
@@ -364,10 +388,9 @@ def show_interface(a, b, cutoff=3.5):
     both = f'interface_{name_a} or interface_{name_b}'
     cmd.do(f'cnc {both}')
     cmd.do(f'orient {both}')
-    cmd.do(f'zoom {both}, -2')
+    cmd.do(f'zoom {both}')
     cmd.do(f'set stick_radius, 0.15, ({both}) and bb.')
     cmd.do(f'set stick_radius, 0.25, ({both}) and (not bb. or name CA)')
-    cmd.do(f'show sticks, interface_{name_b}')
     cmd.do(f'set cartoon_transparency, 0.8, {both}')
 
 
