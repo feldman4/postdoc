@@ -30,7 +30,7 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return stamp
 
 
-def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True, 
+def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None, sort=True, 
               include_cols=None, exclude_cols=None, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
@@ -49,6 +49,18 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, sort=True,
         if exclude_cols is not None:
             keep = [x for x in df.columns if not re.match(exclude_cols, x)]
             df = df[keep]
+        if file_pat is not None:
+            match = re.match(f'.*{file_pat}.*', f)
+            if match is None:
+                raise ValueError(f'{file_pat} failed to match {f}')
+            if match.groupdict():
+                for k,v in match.groupdict().items():
+                    df[k] = v
+            else:
+                if add_file is None:
+                    raise ValueError(f'must provide `add_file` or named groups in {file_pat}')
+                first = match.groups()[0]
+                df[add_file] = first
         return df
     
     if isinstance(files_or_search, str):
@@ -120,6 +132,8 @@ class SimpleBox:
 
 
 def codify(df, **kwargs):
+    """Change columns to integer coding.
+    """
     return df.assign(**{k: df[v].astype('category').cat.codes
                         for k, v in kwargs.items()})
 
@@ -166,18 +180,20 @@ def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
     from postdoc.wfc import aa_code
     from matplotlib import patheffects
 
-    assert df_or_array.shape[1] == len(aa_code)
+    assert df_or_array.shape[0] == len(aa_code)
     if isinstance(df_or_array, pd.DataFrame):
         df = df_or_array
+        aa_code = list(df.index)
     else:
         df = pd.DataFrame(df_or_array, columns=list(aa_code))
-    
+
     height = 5
     font_size = 12
     inner, outer, stroke_width = 'black', 'white', 2.5
 
     fig, ax = plt.subplots(figsize=(height*len(seq)/20, height))
-    sns.heatmap(df.T, ax=ax, square=True, **kwargs)
+    sns.heatmap(df, ax=ax, square=True, **kwargs)
+    
     for x, s in enumerate(seq):
         y = aa_code.index(s)
         txt = ax.text(x+0.5, y+0.5, s, 
@@ -189,7 +205,7 @@ def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
     return ax
 
 
-def flatten_col(df, col):
+def expand_listlike(df, col):
     """
     From https://stackoverflow.com/questions/27263805/pandas-column-of-lists-create-a-row-for-each-list-element
     
@@ -199,6 +215,16 @@ def flatten_col(df, col):
           col_: np.repeat(df[col_].values, df[col].str.len())
           for col_ in df.columns.drop(col)}
         ).assign(**{col: np.concatenate(df[col].values)})[df.columns]
+
+
+def flatten_cols(df, f='underscore'):
+    """Flatten column multi index.
+    """
+    if f == 'underscore':
+        def f(x): return '_'.join(str(y) for y in x if y != '')
+    df = df.copy()
+    df.columns = [f(x) for x in df.columns]
+    return df
 
 
 def add_row_col(df, well_col):
@@ -308,3 +334,56 @@ def copy_if_different(f1, f2):
     return False
     
 
+def assert_unique(df, *cols):
+    for col in cols:
+        assert len(df[col]) == len(set(df[col]))
+    return df
+
+
+def groupby_apply2(df_1, df_2, cols, f, tqdn=True):
+    """Apply a function `f` that takes two dataframes and returns a dataframe.
+    Groups inputs by `cols`, evaluates for each group, and concatenates the result.
+
+    """
+
+    d_1 = {k: v for k,v in df_1.groupby(cols)}
+    d_2 = {k: v for k,v in df_2.groupby(cols)}
+
+    if tqdn:
+        from tqdm import tqdm_notebook
+        progress = tqdm_notebook
+    else:
+        progress = lambda x: x
+
+    arr = []
+    for k in progress(d_1):
+        arr.append(f(d_1[k], d_2[k]))
+    
+    return pd.concat(arr)    
+
+
+def expand_sep(df, col, sep=','):
+    """Expands table by splitting strings. Drops index.
+    """
+    index, values = [], []
+    for i, x in enumerate(df[col]):
+        entries = [y.strip() for y in x.split(sep)]
+        index += [i] * len(entries)
+        values += entries
+
+    return (pd.DataFrame(df.values[index], columns=df.columns)
+            .assign(**{col: values}))
+
+
+def add_ransac_pred(df, col_x, col_y):
+    from sklearn.linear_model import RANSACRegressor
+    model = RANSACRegressor()
+    model.fit(df[[col_x]], df[[col_y]])
+    return df.assign(**{col_y + '_pred': model.predict(df[[col_x]])})
+
+
+def nglob(pathname, with_matches=False, include_hidden=False, recursive=True,
+          norm_paths=True, case_sensitive=True, sep=None):
+    from glob2 import glob
+    return natsorted(glob(pathname, with_matches, include_hidden, recursive,
+                           norm_paths, case_sensitive, sep))

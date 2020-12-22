@@ -54,3 +54,18 @@ AA_1 = list('ARNDCQEGHILKMFPSTWYV')
 CANONICAL_AA = AA_1
 AA_3_1 = dict(zip(AA_3, AA_1))
 AA_1_3 = dict(zip(AA_1, AA_3))
+
+skyline_columns = {
+    'Replicate': 'sample', 
+    'Replicate Name': 'sample',
+    'Protein': 'short_name', 
+    'Peptide': 'sequence',
+    'Peptide Retention Time': 'RTime',
+    'Normalized Area': 'peak_area',
+    'Total Area MS1': 'ms1_area',
+    'Best Retention Time': 'RTime',
+    'Min Start Time': 'RTime_start',
+    'Max End Time': 'RTime_end',
+    'Average Mass Error PPM': 'mass_error_ppm',
+    'Isotope Dot Product': 'idotp',
+    }

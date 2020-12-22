@@ -59,7 +59,7 @@ class Drive():
                 except:
                     pass
         if drop_unnamed:
-            cols_drop = [c for c in df.columns if c.startswith('Unnamed:')]
+            cols_drop = [c for c in df.columns if str(c).startswith('Unnamed:')]
             df = df.drop(cols_drop, axis=1)
         return df
 
@@ -76,8 +76,6 @@ def get_service():
 def list_files(service):
     results = service.files().list(
         q=f"mimeType='{xlsx_mime}' or mimeType='{gsheet_mime}'",
-        # pageSize=10, 
-        # fields="nextPageToken, files(id, name)",
         fields="files(id, name)",
         ).execute()
     items = results.get('files', [])
@@ -86,9 +84,8 @@ def list_files(service):
 
 def update_resources():
     from .constants import RULE_SETS
-
-    drive = Drive()
     
+    drive = Drive()
     df_rules = drive('mass spec barcoding/rule sets', header=[0, 1])
     df_rules.fillna('').to_csv(RULE_SETS, index=None)
 

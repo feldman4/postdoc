@@ -29,7 +29,6 @@ rule fuse_reads:
                 break
 
         shell('cat {prefix}*.assembled.fastq > {output[0]}')
-
-
-
         
+        shell('mkdir -p merged/per_lane')
+        shell('mv {prefix}_* > merged/per_lane')
