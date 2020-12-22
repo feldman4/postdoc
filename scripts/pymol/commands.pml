@@ -145,6 +145,29 @@ def color_not_carbon(selection='all'):
 def color_by_chain(selection='all'):
     util.color_chains(selection);
 
+def color_yang(selection='all'):
+    """Rosetta colors from Yang Hsia
+    """
+    colors = (
+        ('teal', 'ASP+GLU'),
+        ('teal', 'LYS+ARG'),
+        ('teal', 'ASN+GLN'),
+        ('teal', 'HIS'),
+        ('marine', 'SER+THR'),
+        ('grey90', 'ALA'),
+        ('grey60', 'LEU+VAL+ILE+PHE'),
+        ('grey60', 'MET'),
+        ('yellow', 'CYS'),
+        ('palegreen', 'TYR'),
+        ('palegreen', 'TRP'),
+        ('pink', 'GLY'),
+        ('orange', 'PRO'),
+        )
+
+    for color, resn in colors:
+        cmd.do(f'color {color}, {selection} and resn {resn}')
+
+
 def run_script(name=None):
     if name == 'last' and hasattr(stored, 'last_script'):
         name = stored.last_script
@@ -378,6 +401,7 @@ commands = [
 ('cnc', color_not_carbon),
 ('cbc', color_by_chain),
 ('crt', color_by_residue_type),
+('cyang', color_yang),
 ('glyballs', glycine_ca_spheres),
 # selecting/labeling
 ('findpolar', find_polar),
