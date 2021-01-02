@@ -79,12 +79,16 @@ def read_list(filename):
 
 def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(), 
               cat_cols=tuple(), uint16_cols=tuple()):
+    def listify(s):
+        if isinstance(s, str):
+            return [s]
+        return s
     return (df
-           .assign(**{c: df[c].astype(int) for c in int_cols})
-           .assign(**{c: df[c].astype(np.uint16) for c in uint16_cols})
-           .assign(**{c: df[c].astype(float) for c in float_cols})
-           .assign(**{c: df[c].astype(str) for c in str_cols})
-           .assign(**{c: df[c].astype('category') for c in cat_cols})
+           .assign(**{c: df[c].astype(int) for c in listify(int_cols)})
+           .assign(**{c: df[c].astype(np.uint16) for c in listify(uint16_cols)})
+           .assign(**{c: df[c].astype(float) for c in listify(float_cols)})
+           .assign(**{c: df[c].astype(str) for c in listify(str_cols)})
+           .assign(**{c: df[c].astype('category') for c in listify(cat_cols)})
            )
 
 
