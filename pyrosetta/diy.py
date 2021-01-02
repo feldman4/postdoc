@@ -49,9 +49,21 @@ def read_pdb_string(pdb_string, reorder_cols=True, add_info=True):
               .assign(res_ix=lambda x:
                       x['res_seq'].astype('category').cat.codes)
               .assign(res_aa=lambda x: x['res_name'].map(AA_3_1))
+              .assign(res_ix_global=get_global_residue_index)
               )
-
+        
     return df
+
+def get_global_residue_index(df_pdb):
+    seen = set()
+    i = -1
+    arr = []
+    for res_seq, chain in df_pdb[['res_seq', 'chain']].values:
+        if (res_seq, chain) not in seen:
+            i += 1
+            seen.add((res_seq, chain))
+        arr += [i]
+    return arr
 
 
 def read_pdb_records(pdb_string, only_cols=None):
