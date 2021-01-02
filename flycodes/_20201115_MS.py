@@ -13,9 +13,11 @@ design_info = f'{home}'
 
 iRT_threshold = 10
 gate_ppm = 'abs(mass_error_ppm) < 1.5'
-gate_skyline = f'({gate_ppm}) & (abs(iRT_pred - iRT) < @iRT_threshold)'
+gate_skyline = f'({gate_ppm}) & (abs(iRT_pred - iRT) < {iRT_threshold})'
 
 oligo_table = 'flycodes/pool1/split_oligos.csv'
+
+stages = 'whole cell', 'IMAC', 'IMAC + dialysis', 'SEC'
 
 def export_sample_info():
     from ..imports_ipython import drive
