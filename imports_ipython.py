@@ -5,7 +5,7 @@ from .utils import ls_df
 from .scripts import app
 
 from postdoc.sequence import reverse_complement as rc
-from postdoc.sequence import translate_dna
+from postdoc.sequence import translate_dna, try_translate_dna
 
 try:
     from .drive import Drive
@@ -16,6 +16,7 @@ except ImportError:
 import scipy.stats
 from scipy.spatial.distance import pdist
 from math import ceil
+from pandas import IndexSlice as pdx
 
 import IPython
 from IPython.display import display
