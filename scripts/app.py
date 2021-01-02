@@ -129,6 +129,12 @@ def update_sanger():
     df_sanger.to_csv(f, index=None)
 
     print(f'Wrote {len(df_sanger)} entries to {f}')
+    for group, df in df_sanger.groupby('group', sort=False):
+        msg = f'{len(df)} {group}'
+        missing_name = df['name'].isnull().sum()
+        if missing_name:
+            msg = f'{msg} ({missing_name} missing name match)'
+        print(msg)
 
 
 def update_sec():
