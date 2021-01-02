@@ -4,6 +4,7 @@ export PYTHONPATH="$HOME/packages:$PYTHONPATH"
 export PATH="$HOME/packages/postdoc/scripts:$PATH"
 export PATH="$HOME/packages/rtRosetta/scripts:$PATH"
 export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
+export PATH="$HOME/.bin:$PATH" # .local/bin got polluted with random python crap
 export PYTHONPATH="$HOME/packages/NatureProtocols/DF:$PYTHONPATH"
 
 ######################### ALIASES #############################
