@@ -135,11 +135,19 @@ class SimpleBox:
         return iter(self._get_contents())
 
 
-def codify(df, **kwargs):
+def codify(df, as_codes=True, sort=False, ordered=True, **kwargs):
     """Change columns to integer coding.
     """
-    return df.assign(**{k: df[v].astype('category').cat.codes
-                        for k, v in kwargs.items()})
+    df = df.copy()
+    for k,v in kwargs.items():
+        categories = df[v].drop_duplicates()
+        if sort:
+            categories = sorted(categories)
+        values = pd.Categorical(df[v], categories=categories, ordered=ordered)
+        if as_codes:
+            values = values.codes
+        df[k] = values
+    return df
 
 
 def ls_df(search):
@@ -231,10 +239,10 @@ def flatten_cols(df, f='underscore'):
     return df
 
 
-def add_row_col(df, well_col):
+def add_row_col(df, col='well'):
     return (df
-            .assign(row=lambda x: x[well_col].str[0])
-            .assign(col=lambda x: x[well_col].str[1:].astype(int))
+            .assign(row=lambda x: x[col].str[0])
+            .assign(col=lambda x: x[col].str[1:].astype(int))
             )
 
 
@@ -391,3 +399,10 @@ def nglob(pathname, with_matches=False, include_hidden=False, recursive=True,
     from glob2 import glob
     return natsorted(glob(pathname, with_matches, include_hidden, recursive,
                            norm_paths, case_sensitive, sep))
+
+
+def pivot_96w(df, values, index='row', columns='col'):
+    
+    return (df.pivot_table(index=index, columns=columns, values=values)
+            .reindex(index=list('ABCDEFGH'), columns=range(1,13))
+           )
