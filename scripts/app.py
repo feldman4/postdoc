@@ -1,4 +1,6 @@
 import fire
+# delay other imports for speed
+
 
 def dataframe_to_csv_string(df):
     import io
@@ -408,10 +410,10 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
     translated_designs = (pd.Series([translate_dna(x) for x in full]).value_counts()
                         .reset_index().rename(columns={'index': 'design', 0: 'count'}))
 
-    x = len(translated_designs)
+    x = translated_designs['count'].sum()
     print(f'Translated reads (length % 3 == 0): {x} ({x / len(reads):.2%})')
     
-    x = sum(['*' not in x for x in translated_designs['design']])
+    x = translated_designs.loc[lambda x: ~x['design'].str.contains('\*')]['count'].sum()
     print(f'Translated, no stop: {x} ({x / len(reads):.2%})')
 
     f2 = fastq.replace('.fastq', '.designs.csv')
@@ -487,13 +489,13 @@ def find_nearest_sequence(
     return dataframe_to_csv_string(df_matched)
 
 
-def submit_from_command_list(filename, name=None, array=None, queue='short', 
+def submit_from_command_list(filename, array=None, name=None, queue='short', 
                              memory='4g', num_cpus=1, stdout='default', stderr='default'):
     """Submit SLURM jobs from a list of commands.
 
     :param filename: file with one line per command
-    :param name: sbatch job name (-J)
     :param array: submit as a task array with this many concurrent jobs (e.g., --array=5)
+    :param name: sbatch job name (-J), defaults to `filename`
     :param queue: sbatch queue (-p)
     :param memory: sbatch memory (--mem)
     :param num_cpus: sbatch number of cpus (-c)
