@@ -394,6 +394,43 @@ def show_interface(a, b, cutoff=3.5):
     cmd.do(f'set cartoon_transparency, 0.8, {both}')
 
 
+def show_stubs(selection='all', knobs=True):
+    cmd.do(f'hide sticks, {selection}')
+    cmd.do(f'show sticks, {selection} and name CA or name CB')
+    if knobs:
+        cmd.do(f'show spheres, {selection} and name CB')
+        cmd.do(f'set sphere_scale, 0.3, {selection} and name CB')
+
+def show_stubs_fancy(selection='all'):
+    show_stubs(selection)
+    color_by_residue_type(f'{selection} and name CB')
+
+def external_wire(selection):
+    gray = 'gray40'
+    external = 'not (bb. or name CA or name CB)'
+    cmd.do(f'show wire, {selection} and {external}')
+    show_polar_h(f'{selection} and {external}')
+    cmd.do(f'color {gray}, {selection} and {external}')
+    color_not_carbon(f'{selection} and {external}')
+    cmd.do(f'color {gray}, {selection} and {external} and elem H')
+
+
+def view_one(selection='all'):
+    cmd.do(f'hide everything, {selection}')
+    cmd.do(f'show cartoon, {selection}')
+    color_by_chain(selection)
+    show_stubs_fancy(selection)
+
+
+def view_two(selection='all'):
+    cmd.do(f'hide everything, {selection}')
+    cmd.do(f'show cartoon, {selection}')
+    color_by_chain(selection)
+    show_stubs_fancy(selection)
+    external_wire(selection)
+    find_polar(selection)
+
+
 commands = [
 # aliases
 ('rename', rename_selection),
@@ -404,6 +441,10 @@ commands = [
 ('nohoh', hide_water),
 ('noh', hide_hydrogens),
 ('justpolarh', show_polar_h),
+('show_stubs', show_stubs),
+('stubs', show_stubs_fancy),
+('v1', view_one),
+('v2', view_two),
 # coloring
 ('chainbow', chainbow),
 ('cnc', color_not_carbon),
