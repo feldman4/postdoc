@@ -22,7 +22,7 @@ watson_crick.update({k.lower(): v.lower()
                      for k, v in watson_crick.items()})
 
 
-codon_maps = {} 
+codon_maps = {}
 
 
 def read_fasta(f):
@@ -261,12 +261,12 @@ def get_kmers(s, k):
     return [s[i:i+k] for i in range(n-k+1)]
 
 
-def read_fastq(filename, include_quality=False, max_reads=1e12):
+def read_fastq(filename, max_reads=1e12, include_quality=False, include_names=False):
     if filename.endswith('gz'):
         fh = gzip.open(filename, 'rt')
     else:
         fh = open(filename, 'r')
-    reads, quality_scores = [], []
+    reads, quality_scores, names = [], [], []
     read_count = 0
     for i, line in enumerate(fh):
         if i % 4 == 1:
@@ -276,11 +276,17 @@ def read_fastq(filename, include_quality=False, max_reads=1e12):
                 break
         if include_quality and i % 4 == 3:
             quality_scores.append(line.strip())
+        if include_names and i % 4 == 0:
+            names.append(':'.join(line.split()[0].split(':')[3:7]))
         
     fh.close()
-        
-    if include_quality:
-        return reads, quality_scores
+    if include_quality or include_names:
+        return_val = (reads,)
+        if include_quality:
+            return_val += (quality_scores,)
+        if include_names:
+            return_val += (names,)
+        return return_val
     else:
         return reads
 
@@ -427,3 +433,35 @@ def match_and_check(queries, reference, window, k, ignore_above=40, progress=lam
             print(f'{a},{b} (fast,exact distance); query={seq}')
     print(f'Total mismatches: {different}')
     return df_matched
+
+
+def load_abi_zip(filename):
+    """Extract Bio.SeqIO records from sanger zip file.
+    """
+    zh = zipfile.ZipFile(filename, 'r')
+    arr = []
+    for zi in zh.filelist:
+        if not zi.filename.endswith('ab1'):
+            print(f'Skipping {zi.filename}')
+            continue
+        fh = zh.open(zi.filename, 'r')
+        buffer = BytesIO(fh.read())
+        arr += [SeqIO.read(buffer, 'abi')]
+    return arr
+
+
+def get_abi_traces(abi_record):
+    channels = 'DATA9', 'DATA10', 'DATA11', 'DATA12'
+    bases = list('GATC')
+    traces = np.array([abi_record.annotations['abif_raw'][c]
+                       for c in channels])
+    df = pd.DataFrame(traces).T
+    df.columns = bases
+    return df
+
+
+def try_translate_dna(s):
+    try:
+        return translate_dna(s)
+    except:
+        return None

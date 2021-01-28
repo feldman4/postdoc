@@ -1,4 +1,6 @@
 import fire
+# delay other imports for speed
+
 
 def dataframe_to_csv_string(df):
     import io
@@ -129,6 +131,12 @@ def update_sanger():
     df_sanger.to_csv(f, index=None)
 
     print(f'Wrote {len(df_sanger)} entries to {f}')
+    for group, df in df_sanger.groupby('group', sort=False):
+        msg = f'{len(df)} {group}'
+        missing_name = df['name'].isnull().sum()
+        if missing_name:
+            msg = f'{msg} ({missing_name} missing name match)'
+        print(msg)
 
 
 def update_sec():
@@ -274,6 +282,8 @@ def read_table(filename, col=0, header=None, sep=None):
 
 
 def chunk(filename, total, ix, col=0, header=None, sep=None):
+    """Split list or table column into chunks of defined size.
+    """
     assert 0 < ix < total
     import numpy as np
     values = read_table(filename, col, header, sep)
@@ -398,12 +408,12 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
 
     full = [x for x in inserts if len(x) % 3 == 0]
     translated_designs = (pd.Series([translate_dna(x) for x in full]).value_counts()
-                        .reset_index().rename(columns={'index': 'design', 0: 'counts'}))
+                        .reset_index().rename(columns={'index': 'design', 0: 'count'}))
 
-    x = len(translated_designs)
+    x = translated_designs['count'].sum()
     print(f'Translated reads (length % 3 == 0): {x} ({x / len(reads):.2%})')
     
-    x = sum(['*' not in x for x in translated_designs['design']])
+    x = translated_designs.loc[lambda x: ~x['design'].str.contains('\*')]['count'].sum()
     print(f'Translated, no stop: {x} ({x / len(reads):.2%})')
 
     f2 = fastq.replace('.fastq', '.designs.csv')
@@ -479,19 +489,76 @@ def find_nearest_sequence(
     return dataframe_to_csv_string(df_matched)
 
 
+def submit_from_command_list(filename, array=None, name=None, queue='short', 
+                             memory='4g', num_cpus=1, stdout='default', stderr='default'):
+    """Submit SLURM jobs from a list of commands.
+
+    :param filename: file with one line per command
+    :param array: submit as a task array with this many concurrent jobs (e.g., --array=5)
+    :param name: sbatch job name (-J), defaults to `filename`
+    :param queue: sbatch queue (-p)
+    :param memory: sbatch memory (--mem)
+    :param num_cpus: sbatch number of cpus (-c)
+    :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
+    :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
+    """
+    import os
+    import sys
+    import subprocess
+    import pandas as pd
+
+    commands = pd.read_csv(filename, header=None)[0]
+    
+    if name is None:
+        name = os.path.basename(filename)
+
+    little_a = '_%a' if array else ''
+    if stdout is 'default':
+        stdout = f'logs/{name}_%A{little_a}.out'
+
+    if stderr is 'default':
+        stderr = f'logs/{name}_%A{little_a}.err'
+    
+    base_command = (f'sbatch -p {queue} -J {name} --mem={memory} '
+                    f'-c {num_cpus} -o {stdout} -e {stderr}')
+    if array:
+        print(f'Submitting array of {len(commands)} tasks...')
+        flag = f'--array=1-{len(commands)}'
+        if isinstance(array, int):
+            flag += f'%{int(array)}'
+        cmd = f'--wrap="sed -n ${{SLURM_ARRAY_TASK_ID}}p {filename} | bash"'
+        subprocess.Popen(' '.join([base_command, flag, cmd]),
+                        shell=True, stdout=sys.stdout, stderr=sys.stderr)
+
+    else:
+        print(f'Submitting {len(commands)} jobs...')
+        for cmd in commands:
+            subprocess.Popen(base_command + f' --wrap="{cmd}"', 
+                            shell=True, stdout=sys.stdout, stderr=sys.stderr)
+
+
 if __name__ == '__main__':
+    # order is preserved
     commands = [
+        # digs commands
+        'submit', 'update_sanger', 'update_sec',
+
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
         'calculate_distances',
         'calculate_overlap', 'calculate_overlap_strip',
         'parse_overlap_oligos',
-        'update_sanger', 'update_sec',
-        'read_table', 'chunk', 'fix_fire_completion',
+        
         'count_inserts_NGS',
+        
+        # utility commands
+        'read_table', 'fix_fire_completion', 'chunk',
+        
         'find_nearest_sequence',
         ]
+    # if the command name is different from the function name
+    named = {'submit': 'submit_from_command_list'}
     try:
-        fire.Fire({k: eval(k) for k in commands})
+        fire.Fire({k: eval(named.get(k, k)) for k in commands})
     except BrokenPipeError:
         pass
     

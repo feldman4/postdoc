@@ -8,7 +8,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from .assembly import get_allowed_swaps, polish_snowflakes
 from .design import make_nterm_linker, make_cterm_linker
-from ..sequence import aa_to_dna_re, translate_dna
+from ..sequence import aa_to_dna_re, translate_dna, load_codons, reverse_complement
 from ..pyrosetta import diy
 from ..utils import DivPath, csv_frame, read_list, assert_unique
 
@@ -30,10 +30,12 @@ make_linkers = {
     'flycodes/pool2/input/barcodes_ms1_cterm.csv': make_cterm_linker
     }
 
+# length in amino acids
+min_CDS_length = 135
 
-design_table = 'flycodes/pool2/process/barcoded_designs_pre.csv'
+design_table_pre = 'flycodes/pool2/process/barcoded_designs_pre.csv'
 design_table_rt = 'flycodes/pool2/process/barcoded_designs_rt.csv'
-design_table_min = 'flycodes/pool2/barcoded_designs.csv'
+design_table_min = 'flycodes/pool2/process/barcoded_designs_min.csv'
 design_table_agilent = 'flycodes/pool2/barcoded_designs_agilent.csv'
 rt_list = 'flycodes/pool2/process/reverse_translate.list'
 ms1_barcode_files = list(make_linkers.keys())
@@ -45,6 +47,12 @@ adapters = {
     'pT13': ('TAAGAAGGAGATATACCATG', 'CGCAGTAGCGGCAGTC'),
 }
 
+bamhi = 'GGATCC'
+bsai = 'GGTCTC'
+avoid_sites = bamhi, bsai
+
+num_stop_codon_controls = 200 # hard-coded... =(
+
 class Pipeline():
     steps = [
         'download_layout',
@@ -53,7 +61,8 @@ class Pipeline():
         'do_reverse_translate',
         'adjust_rt_sequences',
         'minimize_overlap',
-        'export_oligos',
+        'export_order',
+        'check_order',
     ]
 
     def download_layout():
@@ -115,7 +124,10 @@ class Pipeline():
         barcodes are specified by each layout row.
         """
         df_pool2 = pd.read_csv(layout_file)
-        copy_keys = ['subpool', 'description', 'vector', 'CDS_template', 'oligo_template']
+        copy_keys = [
+            'subpool', 'description', 'vector', 'CDS_template', 'oligo_template',
+            'min_length', 'max_length',
+        ]
         cols = ['subpool', 'description', 'vector', 'pdb_file', 'CDS',
                 'CDS_length', 'design_length', 'barcode_length', 'linker_length',
                 'design', 'barcode', 'linker', 'barcode_noRK', 'CDS_template', 'oligo_template']
@@ -144,24 +156,27 @@ class Pipeline():
          .pipe(add_barcode_noRK)
          .assign(CDS=lambda x: x.apply(lambda y: y['CDS_template'].format(**y), axis=1))
          .assign(CDS_length=lambda x: x['CDS'].str.len())
+         .query('min_length <= CDS_length <= max_length')
          [cols]
         )
 
         assert df_designs.isnull().any().any() == False
 
-        df_designs.to_csv(design_table, index=None)
+        df_designs.to_csv(design_table_pre, index=None)
+
 
     def check_stacey_sequences():
-        df_designs = pd.read_csv(design_table)
+        df_designs = pd.read_csv(design_table_pre)
         sg_designs = df_designs.query('subpool == [5, 6]')['design'].pipe(set)
         f = 'flycodes/pool2/input/stacey/new_trunc.fasta'
         sg_designs_fa = [x[1] for x in read_fasta(f)]
         assert set(sg_designs) == set(sg_designs_fa)
 
-    def do_reverse_translate(repeats=1):
+    def do_reverse_translate(repeats=1, enzymes=('bsai', 'bamhi')):
         from rtRosetta.reverse_translate_robby import main
-        aa_sequences = pd.read_csv(design_table)['CDS']
-        dna_sequences = [main(x, repeats) for x in tqdm(aa_sequences)]
+        aa_sequences = pd.read_csv(design_table_pre)['CDS']
+        dna_sequences = [main(x, num_times_to_loop=repeats, enzymes=enzymes) 
+                         for x in tqdm(aa_sequences)]
         pd.Series(dna_sequences).to_csv(rt_list, index=None, header=None)
 
     def adjust_rt_sequences():
@@ -169,7 +184,7 @@ class Pipeline():
         for each design and BamHI restriction site is maintained.
         """
         dna = read_list(rt_list)
-        df_designs = (pd.read_csv(design_table)
+        df_designs = (pd.read_csv(design_table_pre)
                     .assign(CDS_dna_0=dna)
                     .assign(CDS_dna_1=consolidate_design_dna)
                     .assign(CDS_dna=restore_BamHI_linker)
@@ -184,6 +199,10 @@ class Pipeline():
         df_designs.to_csv(design_table_rt, index=None)
 
     def minimize_overlap(k=15, rounds=200, num_codons=3, seed=0, verbose=True):
+        """Minimizes kmer overlap within design only (does not include barcode or linker).
+        Could have merged design and linker for this step, instead limit max length to 7 aa and
+        hope for the best.
+        """
         df_designs = pd.read_csv(design_table_rt)
         original = df_designs['design_dna'].drop_duplicates()
 
@@ -192,6 +211,8 @@ class Pipeline():
         allowed_swaps = get_allowed_swaps(organism, num_codons)
         minimized = polish_snowflakes(
             original, k, allowed_swaps, rs, rounds=rounds, verbose=verbose)
+
+        minimized = [remove_restriction_sites(x, avoid_sites, rs) for x in minimized]
         
         replace = {x : y for x, y in zip(original, minimized)}
 
@@ -209,11 +230,14 @@ class Pipeline():
         )
 
     def export_order():
-        df_design = pd.read_csv(design_table_min)
+        df_design = (pd.read_csv(design_table_min)
+         .pipe(add_stop_codon_controls, num_stop_codon_controls))
 
         assert_one_to_one(df_design[['pdb_file', 'design']].values)
 
-        design_nums = df_design['design'].astype('category').cat.codes
+        # assign agilent IDs
+        design_nums = ((df_design['subpool'].astype(str) + df_design['design'])
+         .astype('category').cat.codes + 1)
         repeat_nums = (df_design
          .reset_index(drop=True).reset_index()
          .groupby(['design', 'pdb_file'])
@@ -227,29 +251,57 @@ class Pipeline():
             agilent_ids.append(str(a).zfill(design_width) + str(b).zfill(repeat_width))
 
         df_design['agilent_id'] = agilent_ids
+        # now Agilent wants separate construct_id and barcode_id
+        df_design['construct_id'] = design_nums
+        df_design['barcode_id'] = repeat_nums
+        
         df_design['name'] = df_design['pdb_file'] + '.' + repeat_nums.astype(str)
         
-        arr = []
-        it = df_design[['agilent_id', 'name', 'vector', 'CDS_dna']].values
-        for ag_id, name, vector, CDS_dna in it:
-            fwd, rev = adapters[vector]
-            arr += [{'agilent_id': ag_id, 'sequence': fwd + CDS_dna + rev}]
-            
-        cols = ['name', 'agilent_id', 'description', 'vector', 
-                'CDS_dna', 'CDS', 'design', 'barcode']
+        cols = ['name', 'agilent_id', 'subpool', 'description', 'vector', 
+                'CDS_dna', 'CDS', 'design', 'barcode', 'linker', 'stop_control']
         df_design[cols].sort_values('agilent_id').to_csv(
             design_table_agilent, index=None)
+
+        # add adapters
+        arr = []
+        cols = ['agilent_id', 'construct_id',
+                'barcode_id', 'name', 'vector', 'CDS_dna']
+        it = df_design[cols].values
+        for ag_id, con_id, bc_id, name, vector, CDS_dna in it:
+            fwd, rev = adapters[vector]
+            arr += [{
+                'construct_id': con_id,
+                'barcode_id': bc_id,
+                'agilent_id': ag_id, 
+                'sequence': fwd + CDS_dna + rev}]
+            
         pd.DataFrame(arr).sort_values('agilent_id').to_csv(order_table, index=None)
 
+    def check_order():
+        df_design = pd.read_csv(design_table_agilent)
+        df_order = pd.read_csv(order_table)
+        assert len(set(df_order['agilent_id'])) == len(df_order['agilent_id'])
+
+        bamhi_count = [x.count(bamhi) for x in df_order['sequence']]
+        bamhi_hist = pd.Series(bamhi_count).value_counts()
+        if list(bamhi_hist.index) != [1]:
+            print('WARNING: not all have sequences have 1 BamHI site')
+            print(bamhi_hist)
+
+        ordered_seqs = df_order.set_index('agilent_id')['sequence'].to_dict()
+        for _, row in tqdm(df_design.iterrows(), total=len(df_design)):
+            dna = ordered_seqs[row['agilent_id']]
+            check_design_row(row, dna)
+
     def plot_order_stats():
-        lengths = (pd.read_csv(order_table)
-                   ['sequence'].str.len()
-                   .value_counts().sort_index())
-        ax = lengths.plot()
+        lengths = pd.read_csv(order_table)['sequence'].str.len()
+        length_hist = lengths.value_counts().sort_index()
+        ax = length_hist.plot()
+        ax.scatter(lengths, [0] * len(lengths), color='red', marker='|', lw=1)
 
         ax.set_xlabel('construct length (nt)')
         ax.set_ylabel('count')
-        ax.set_title(order_table + f'\nmax length: {lengths.index.max()}')
+        ax.set_title(order_table + f'\n{lengths.min()}-{lengths.max()} nt')
 
         ax.figure.savefig(home / 'figures/agilent_order_length.png')
 
@@ -329,13 +381,13 @@ def add_barcode_noRK(df):
 
 def plot_length_distribution(df_designs):
     fig, (ax0, ax1) = plt.subplots(figsize=(9, 4), ncols=2)
-    df_designs['design'].str.len().value_counts().sort_index().plot(ax=ax0)
-    df_designs['CDS'].str.len().value_counts().sort_index().plot(ax=ax0)
-    ax0.legend()
+    df_designs['design'].str.len().value_counts().sort_index().plot(kind='bar', ax=ax0)
+    df_designs['CDS'].str.len().value_counts().sort_index().plot(kind='bar', color='orange', ax=ax0)
+    ax0.legend(loc='upper left')
     ax0.set_ylabel('number of oligos')
     ax0.set_xlabel('length (aa)')
         
-    ax1 = df_designs['barcode_length'].value_counts().sort_index().plot(kind='bar', ax=ax1)
+    ax1 = df_designs['barcode'].str.len().value_counts().sort_index().plot(kind='bar', ax=ax1)
     ax1.set_xlabel('barcode length')
     ax1.set_ylabel('number of oligos')
     plt.xticks(rotation=0)
@@ -345,18 +397,22 @@ def plot_length_distribution(df_designs):
 
 
 def consolidate_design_dna(df):
-    """Force all design occurrences to use the same reverse translation.
+    """Force all amino acid occurrences to use the same reverse translation.
     """
     arr = []
     designs = {}
-    for design, dna in tqdm(df[['design', 'CDS_dna_0']].values):
+    cols = ['design', 'CDS_dna_0']
+    for design, dna in tqdm(df[cols].values):
         pat = aa_to_dna_re(design)
         if design not in designs:
             designs[design] = findone(design, dna)
-            arr += [dna]
+            # no change
         else:
             match = findone(design, dna)
-            arr += [dna.replace(match, designs[design])]
+            dna = dna.replace(match, designs[design])
+
+        arr += [dna]
+
     return arr
 
 
@@ -407,3 +463,134 @@ def assert_one_to_one(values):
                 d[a] = b
             else:
                 assert d[a] == b
+
+
+def check_design_row(row, dna):
+    barcode_noRK = row['barcode'].replace('R', '').replace('K', '')
+    fwd, rev = adapters[row['vector']]
+    cds_dna = dna.replace(fwd, '').replace(rev, '')
+    cds = translate_dna(row['CDS_dna'])
+    linker = cds.replace(row['design'], '').replace(barcode_noRK, '')
+
+    assert cds_dna == row['CDS_dna']
+    assert cds == row['CDS']
+    assert row['design'] in row['CDS']
+    assert barcode_noRK in row['CDS']
+    assert dna.startswith(fwd) and dna.endswith(rev)
+    assert linker.count('K') == 1
+    assert set(linker) == {'G', 'K', 'S'}
+
+
+def remove_restriction_sites(dna, sites, rs):
+    codon_sequence = to_codons(dna)
+    sites = set(sites)
+    for site in list(sites):
+        sites.add(reverse_complement(site))
+
+    for site in sites:
+        width = len(site)
+        dna = ''.join(codon_sequence)
+        if site not in dna:
+            continue
+
+        for i in range(len(dna)):
+            # if we encounter a restriction site
+            if dna[i:i + len(site)] == site:
+                # change any of these codons
+                overlapped_codons = sorted(
+                    set([int((i + offset) / 3) for offset in range(width)]))
+                # accept first change that removes restriction site
+                for j in overlapped_codons:
+                    # change this codon
+                    new_codon = swap_codon(codon_sequence[j], rs)
+                    local_dna = ''.join([new_codon if k == j else codon_sequence[k]
+                                         for k in overlapped_codons])
+                    # if codon removes this site, keep it
+                    if site not in local_dna:
+                        codon_sequence = codon_sequence[:j] + \
+                            [new_codon] + codon_sequence[j + 1:]
+                        break
+    dna = ''.join(codon_sequence)
+    for site in sites:
+        assert site not in dna
+    return dna
+
+
+def to_codons(dna):
+    assert len(dna) % 3 == 0
+    return [dna[i * 3:(i + 1) * 3] for i in range(int(len(dna) / 3))]
+
+
+def make_codon_map():
+    """Make dictionaries of aa => codon and codon => equivalent codons.
+    """
+    from collections import defaultdict
+
+    df_codons = load_codons('e_coli')
+    codon_map = defaultdict(list)
+
+    for a, b in df_codons[['amino_acid', 'codon_dna']].values:
+        codon_map[a].append(b)
+
+    codon_group = {}
+    for codons in codon_map.values():
+        for c in codons:
+            codon_group[c] = list(set(codons) - {c})
+
+    return codon_map, codon_group
+
+
+def swap_codon(codon, rs):
+    """Swap codon at random, if possible.
+    """
+    options = codon_group[codon]
+    if not options:
+        return codon
+    return rs.choice(options)
+
+
+codon_map, codon_group = make_codon_map()
+
+
+def add_stop_codon_controls(df_design, num_controls=200, seed=0):
+    """Samples designs with "validated" in description for conversion to
+    stop controls. The first or last design codon is randomly switched to a
+    TAA stop. Columns `CDS_dna`, `design_dna`, and `design` are updated.
+    New column `stop_control` is added, indicating the type of stop control 
+    or "no_stop".
+    """
+
+    df_design = df_design.reset_index(drop=True)
+
+    modify = (df_design
+              .loc[lambda x: x['description'].str.contains('validated')]
+              .sample(num_controls, replace=False, random_state=seed)
+              ['CDS_dna'].pipe(list)
+              )
+
+    df_mod = df_design.query('CDS_dna == @modify').copy()
+
+    arr = []
+    for i, row in df_mod.iterrows():
+        # we need to modify CDS_dna, design_dna, and design
+        if i % 2:
+            # N-term stop
+            new_design_dna = 'TAA' + row['design_dna'][3:]
+            row['stop_control'] = 'N-term'
+            row['pdb_file'] = row['pdb_file'] + '_stopN'
+        else:
+            new_design_dna = row['design_dna'][:-3] + 'TAA'
+            row['stop_control'] = 'C-term'
+            row['pdb_file'] = row['pdb_file'] + '_stopC'
+        row['CDS_dna'] = row['CDS_dna'].replace(row['design_dna'], new_design_dna)
+        row['CDS'] = translate_dna(row['CDS_dna'])
+        row['design_dna'] = new_design_dna
+        row['design'] = translate_dna(row['design_dna'])
+        
+        
+        arr += [row]
+
+    return (pd.concat([
+        df_design.query('CDS_dna != @modify').assign(stop_control='no_stop'),
+        pd.concat(arr, axis=1).T])
+    )
