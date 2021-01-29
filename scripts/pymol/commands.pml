@@ -443,6 +443,10 @@ def view_one(selection='all'):
     cmd.do(f'show cartoon, {selection}')
     color_by_chain(selection)
     show_stubs_fancy(selection)
+    ligands = f'({selection}) and (not polymer.protein)'
+    cmd.do(f'show sticks, {ligands}')
+    cmd.do(f'color white, {ligands}')
+    color_not_carbon(ligands)
 
 
 def view_two(selection='all'):
@@ -452,6 +456,10 @@ def view_two(selection='all'):
     show_stubs_fancy(selection)
     external_wire(selection)
     find_polar(selection)
+    ligands = f'({selection}) and (not polymer.protein)'
+    cmd.do(f'show sticks, {ligands}')
+    cmd.do(f'color white, {ligands}')
+    color_not_carbon(ligands)
 
 
 commands = [
