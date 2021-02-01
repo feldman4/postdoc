@@ -136,7 +136,7 @@ def sanger_database(drive):
         (pd.DataFrame({'file': files})
          .assign(**{x: row[x] for x in extra_cols})
          .assign(name=lambda x: x['file'].str.extract(row['identifier']))
-         .assign(seq=lambda x: x['file'].apply(load_ab1))
+         .assign(seq=lambda x: x['file'].apply(read_ab1))
          .assign(seq_rc=lambda x: x['seq'].apply(reverse_complement))
          .pipe(arr.append)
          )
@@ -145,7 +145,7 @@ def sanger_database(drive):
     return pd.concat(arr)[cols]
 
 
-def load_ab1(f):
+def read_ab1(f):
     with open(f, 'rb') as fh:
         records = list(SeqIO.parse(fh, 'abi'))
         assert len(records) == 1
