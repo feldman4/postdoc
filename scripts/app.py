@@ -1,5 +1,6 @@
 import fire
-# delay other imports for speed
+import postdoc.lab.sanger_app
+# delay imports for speed
 
 
 def dataframe_to_csv_string(df):
@@ -393,6 +394,7 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
         down = '(?:GGAAGCGGTGGAAGTGG|CTCGAGGGTGGAGGTTCC)'
     
     from postdoc.sequence import read_fastq, translate_dna
+    import numpy as np
     import pandas as pd
     import re
 
@@ -407,8 +409,11 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
     print(f'Reads with adapters: {len(inserts)} ({len(inserts) / len(reads):.2%})')
 
     full = [x for x in inserts if len(x) % 3 == 0]
-    translated_designs = (pd.Series([translate_dna(x) for x in full]).value_counts()
-                        .reset_index().rename(columns={'index': 'design', 0: 'count'}))
+    translated_designs = (pd.Series([translate_dna(x) for x in full])
+     .value_counts().reset_index()
+     .rename(columns={'index': 'design', 0: 'count'})
+     .assign(log10=lambda x: np.log10(x['count'] / len(reads)))
+     )
 
     x = translated_designs['count'].sum()
     print(f'Translated reads (length % 3 == 0): {x} ({x / len(reads):.2%})')
@@ -419,7 +424,7 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
     f2 = fastq.replace('.fastq', '.designs.csv')
     translated_designs.to_csv(f2, index=None)
 
-    print('Histogram of translated designs saved to', f2)
+    print('Histogram of translated reads saved to', f2)
     print(translated_designs.head(preview))
 
 
@@ -541,7 +546,10 @@ if __name__ == '__main__':
     # order is preserved
     commands = [
         # digs commands
-        'submit', 'update_sanger', 'update_sec',
+        'submit', 
+        'match_sanger',
+        
+        'update_sanger', 'update_sec',
 
         'reverse_translate', 'minimize_overlap', 'sort_by_overlap',
         'calculate_distances',
@@ -556,9 +564,18 @@ if __name__ == '__main__':
         'find_nearest_sequence',
         ]
     # if the command name is different from the function name
-    named = {'submit': 'submit_from_command_list'}
+    named = {'submit': submit_from_command_list,
+             'match_sanger': postdoc.lab.sanger_app.main}
+
+    final = {}
+    for k in commands:
+        try:
+            final[k] = named[k]
+        except KeyError:
+            final[k] = eval(k)
+
     try:
-        fire.Fire({k: eval(named.get(k, k)) for k in commands})
+        fire.Fire(final)
     except BrokenPipeError:
         pass
     

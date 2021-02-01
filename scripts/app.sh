@@ -41,4 +41,7 @@ $LOAD | $APP reverse-translate
 APP=/home/dfeldman/s/app.sh
 $APP count_inserts_NGS /home/dfeldman/for/xw/ngs/merged/494471_0.assembled.fastq
 
+APP=/home/dfeldman/s/app.sh
+$APP match_sanger --output=test /home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/5_combo1/cPCR1/30-473362954_ab1/*ab1
+
 ###EXAMPLES
