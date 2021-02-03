@@ -14,7 +14,7 @@ def parse_overlap_oligos(filename, output_prefix=None,
     oligo_A_5=18, oligo_A_3=19, oligo_B_5=19, oligo_B_3=18,
     header=None, sep=None, name_col=None, dna_col=0,
     ):
-    """Automatically parse pool of oligo pairs designed for overlap assembly.
+    """Analyze list of oligo pairs designed for overlap assembly.
     
     Input is a table of oligo pairs, listed sequentially (oligo A then oligo B for each design). 
     The following outputs are saved:
