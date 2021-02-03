@@ -10,29 +10,35 @@ def dataframe_to_csv_string(df):
     return s.getvalue()
 
 
-def parse_overlap_oligos(filename, 
-    output_prefix=None,
+def parse_overlap_oligos(filename, output_prefix=None,
     oligo_A_5=18, oligo_A_3=19, oligo_B_5=19, oligo_B_3=18,
     header=None, sep=None, name_col=0, dna_col=1,
     ):
-    """Parse overlap assembly oligo pool; summarize and plot.
+    """Automatically parse pool of oligo pairs designed for overlap assembly.
     
-    Saves a table with one row
-    per oligo pair, with columns for the detected adapters, overlap, assembled DNA, and 
-    translated protein sequences, as well as overlap Tm.
+    Input is a table of oligo pairs, listed sequentially (oligo A then oligo B for each design). 
+    The following outputs are saved:
+      parsed.csv: one row per oligo pair, with columns for the detected adapters, 
+        overlap, assembled DNA, and translated protein sequences, as well as overlap Tm.
+      subpools.csv: one row per subpool, defined by unique adapters
+      repeated_overlaps.csv: examples where the same overlap is reused
+      overlap_edit_distances.csv: histogram of Levenshtein edit distance between pairs of overlaps
+        for each subpool
+      overlap_edit_distances.png: plot of previous
+      overlap_heatmap.png: 2D histogram of overlap length and Tm (via Bio.SeqUtils.MeltingTemp.Tm_NN)
 
     :param filename: filename or "stdin"; loads sequences from a plain list (default) or a table 
         with column `dna_col` and optional `name_col`
-    :output_prefix: location to save analysis files, defaults to directory based on `filename`
-    :oligo_A_5: length of 5' adapter for oligo A
-    :oligo_A_3: length of 3' adapter for oligo A
-    :oligo_B_5: length of 5' adapter for oligo B
-    :oligo_B_3: length of 3' adapter for oligo B
+    :param output_prefix: location to save analysis files, defaults to directory based on `filename`
+    :param oligo_A_5: length of 5' adapter for oligo A
+    :param oligo_A_3: length of 3' adapter for oligo A
+    :param oligo_B_5: length of 5' adapter for oligo B
+    :param oligo_B_3: length of 3' adapter for oligo B
     :param header: to load a table with headers, use --header flag
-    :param dna_col: column name if there's a header, or zero-indexed column position if not; if this 
-        is a string then --header is assumed
-    :param name_col: column name if there's a header, or zero-indexed column position if not; if this 
-        is a string then --header is assumed
+    :param dna_col: column name if there's a header, or zero-indexed column position if not; if 
+        this is a string then --header is assumed
+    :param name_col: column name if there's a header, or zero-indexed column position if not; if 
+        this is a string then --header is assumed
     :param sep: table separator, argument to `pandas.read_csv()`
     """
     from postdoc.flycodes import assembly
