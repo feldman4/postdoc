@@ -12,7 +12,7 @@ def dataframe_to_csv_string(df):
 
 def parse_overlap_oligos(filename, output_prefix=None,
     oligo_A_5=18, oligo_A_3=19, oligo_B_5=19, oligo_B_3=18,
-    header=None, sep=None, name_col=0, dna_col=1,
+    header=None, sep=None, name_col=None, dna_col=0,
     ):
     """Automatically parse pool of oligo pairs designed for overlap assembly.
     
