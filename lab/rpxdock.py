@@ -1,4 +1,9 @@
 rpxdock_python_path = '/home/dfeldman/from/software/rpxdock/rpxdock/'
+hscore_data_dir = '/home/dfeldman/ntf2/rpxdock/hscore/'
+
+rpxdock_python = '/home/dfeldman/from/software/rpxdock/env/bin/python'
+rpxdock_app = '/home/dfeldman/from/software/rpxdock/rpxdock/rpxdock/app/dock.py'
+
 
 import sys 
 sys.path = [rpxdock_python_path] + sys.path
@@ -7,12 +12,14 @@ import rpxdock
 import rpxdock.bvh
 import rpxdock.geom
 
+import re
 import itertools
 import numpy as np
 import pandas as pd
 from glob import glob
 from natsort import natsorted
 import os
+import subprocess
 
 home_CR = '/home/chrichar/design_projects/cage_library_construction/'
 
@@ -61,6 +68,8 @@ symframe_info = {
 
 
 def label_components():
+    """Create an alphabetical code for components used in docking.
+    """
     search = f'{home_CR}rpx/dock/subunits/*_ASU/*pdb'
     units = glob(search)
 
@@ -77,6 +86,8 @@ def label_components():
 
 def scrape_result(filename, dock_ix=None, num_docks=None, max_distance=8, 
                   keep_contacts=False, progress=lambda x: x):
+    """Summarize rpxdock result pickle file.
+    """
     result = pd.read_pickle(filename)
     arr = []
     if dock_ix is None:
@@ -118,6 +129,8 @@ def scrape_result(filename, dock_ix=None, num_docks=None, max_distance=8,
 
 
 def compute_windows(df_result):
+    """Find sequence windows involved in dock for components 1 and 2.
+    """
     return (df_result
     .assign(design_width_c1_c2=b'(length_c1 - first_contact_c1) + last_contact_c2')
     .assign(design_width_c2_c1=b'(length_c2 - first_contact_c2) + last_contact_c1')
@@ -219,7 +232,7 @@ def find_pairs(result, i, max_distance):
 
 
 def body_to_dataframe(body, chain='A'):
-    """Convert body to a pdb dataframe.
+    """Convert rpxdock body to a pdb dataframe.
     """
     residues = [AA_1_3[x] for x in body.seq]
     res_seq = np.arange(len(residues)) + 1
@@ -324,6 +337,7 @@ def find_neighbor(df_pdb_assembly, sym):
             .sort_values().index[0]
             )
 
+
 def center_interface(df_pdb_assembly):
     """Operates in-place.
     """
@@ -352,4 +366,49 @@ def add_hscore(df_pdb_assembly, result, dock_ix, hscore, score_weights):
 
     cols = ['label', 'res_ix']
     return df_pdb_assembly.merge(df_hscores)
-    
+
+
+def make_opts(**kwargs):
+    opts = []
+    for k, v in kwargs.items():
+        if v is True:
+            opts += [f'--{k}']
+        elif v is not None:
+            opts += [f'--{k}', f'{v}']
+    return opts
+
+
+def generate_command(inputs1=None, output_prefix=None, architecture=None, 
+                # how much to output
+                dump_pdbs=True, nout_top=10, loglevel='warning',
+                # how to score
+                core_only_ss=None, hscore_files='ailv_h', hscore_data_dir=hscore_data_dir,
+                # how to sample
+                beam_size=10, max_bb_redundancy=3, cart_bounds='0 300',
+                allowed_residues1=None,
+                # ??
+                max_delta_h=99999, 
+                **kwargs):
+    """Generate command line invocation, with some defaults.
+    """
+
+    d = locals()
+    d.pop('kwargs')
+    d.update(kwargs)
+    opts = make_opts(**d)
+
+    rpxdock_cmd = f'PYTHONPATH={rpxdock_python_path} {rpxdock_python} {rpxdock_app}'
+    return rpxdock_cmd.split() + opts
+
+
+def run_command(cmd):
+    result = subprocess.run(' '.join(cmd), shell=True, capture_output=True)
+    return {'stdout': result.stdout.decode(),
+            'stderr': result.stderr.decode(),
+            }
+
+
+def print_rpx_help():
+    rpx_help = generate_command(help=True)
+    print(run_command(rpx_help)['stdout'])
+
