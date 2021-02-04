@@ -48,6 +48,9 @@ def axes(corner=2, name='axes'):
 DESCRIPTION
 
     Puts coordinate axes to the lower left corner of the viewport.
+    X: red
+    Y: green
+    Z: cyan
     '''
     from pymol import cgo
 
@@ -57,6 +60,7 @@ DESCRIPTION
     l = 0.75 # cylinder length
     h = 0.25 # cone height
     d = w * 1.618 # cone base diameter
+    
 
     obj = [cgo.CYLINDER, 0.0, 0.0, 0.0,   l, 0.0, 0.0, w, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0,
            cgo.CYLINDER, 0.0, 0.0, 0.0, 0.0,   l, 0.0, w, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,
