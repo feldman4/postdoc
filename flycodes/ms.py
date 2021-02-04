@@ -2,10 +2,14 @@ import io
 import gzip
 import os
 import re
+import struct
+import base64
+
 
 import pandas as pd
 import pyteomics.ms1
 import pyteomics.mzml
+import pyteomics.mzxml
 import pyteomics.pepxml
 import numpy as np
 
@@ -212,6 +216,39 @@ def grid_ms1_intensities(mz, intensity, time):
     return df_int
 
 
+def unpack_tof_spectrum(spectrum):
+    keys = 'mzArrayBinary', 'intenArrayBinary'
+    precision_codes = {32: 'f', 64: 'd'}
+    arr = []
+    for k in keys:
+        encoded_data = spectrum[k]['data']['data'].encode()
+        raw_data = base64.decodebytes(encoded_data)
+        precision = int(spectrum[k]['data']['precision'])
+        length = int(len(raw_data) / (precision / 8))
+        unpack_format = f'<{length}{precision_codes[precision]}'
+        arr += [struct.unpack(unpack_format, raw_data)]
+    return np.array(arr)
+
+
+# @memoize()
+def load_tof_mzxml(filename, progress=lambda x: x):
+    """Data loader for IPD TOF MS.
+    """
+    reader = pyteomics.mzml.MzML(filename)
+
+    arr_info = []
+    arr_data = []
+    for i, spectrum in enumerate(progress(reader)):
+        arr_info += [{
+            'scan_ix': i,
+            'scan_id': spectrum['id'],
+            'time': (spectrum['spectrumDesc']['spectrumSettings']
+                             ['spectrumInstrument']['TimeInMinutes']),
+        }]
+        arr_data += [unpack_tof_spectrum(spectrum)]
+
+    return pd.DataFrame(arr_info), arr_data
+
 
 _pierce_standards = """
 sequence mass mz hydrophobicity
@@ -265,6 +302,9 @@ def generate_msfragger_cmd(mzML, protein_fa,
     java_flags = '-jar -Dfile.encoding=UTF-8 -Xmx6G'
     cmd = f'java {java_flags} {msfragger_jar} {fragger_params_tmp} {mzML}'
     return cmd
+
+
+
 
 
 msfragger_jar = 'misc/msfragger/MSFragger-3.0.jar'
