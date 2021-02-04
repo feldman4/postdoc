@@ -2,6 +2,7 @@ from ..imports_ipython import (
     drive, nglob, add_pat_extract, add_row_col, translate_dna, csv_frame, app)
 from .. import utils
 
+from collections import Counter
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -32,20 +33,22 @@ pat_pear = 'pear/(?P<sample>.*).assembl'
 def run():
     from ..imports_ipython import tqdm
 
-    os.makedirs(f'{home}/figures', exist_ok=True)
-    load_sample_info()
-    load_fastq_info(tqdm)
-    link_samples()
+    # os.makedirs(f'{home}/figures', exist_ok=True)
+    # load_sample_info()
+    # load_fastq_info(tqdm)
+    # link_samples()
 
-    # these need sbatch
-    prepare_pear_commands()
-    app.submit_from_command_list(pear_commands)
+    # # these need sbatch
+    # prepare_pear_commands()
+    # app.submit_from_command_list(pear_commands)
 
-    # count_inserts_NGS()
-
-    # plot_read_heatmap()
-    # plot_mapping_stats()
-    # plot_pool3_abundance()
+    print('Analyzing inserts...')
+    count_inserts_NGS()
+    print(f'Written to {count_inserts_log}')
+    print('Plotting...')
+    plot_read_heatmap()
+    plot_pool3_mapping_stats()
+    plot_pool3_abundance()
 
 
 def load_sample_info():
@@ -163,8 +166,6 @@ def count_inserts_NGS(progress=lambda x: x):
                 up = 'AGCAGTGGCAGT'
                 down = 'TAACTCGAGCACC'
             elif 'pTL13' in f:
-                # up = 'GGGTCGGCTTCGCATATG'
-                # down = 'AGTAGCGGCAGT'
                 up = 'ATGAGCGGTAGCGGTAGC'
                 down = 'GGCAGTCTCGAG'
             else:
@@ -355,3 +356,10 @@ def plot_pTL12_barcode_map(min_counts=3):
     ax.set_title(f'{df_plot.shape[0]} designs\npTL12.19 + pTL12.20')
     fig.savefig(f'{home}/figures/pTL12_design_distances.jpg')
 
+
+def add_parent_mutations(df_designs):
+    from postdoc.flycodes.ssm import add_mutations
+    designs = df_designs['design'].drop_duplicates().pipe(list)
+    xs = list(zip(*designs))
+    consensus = ''.join([Counter(x).most_common(1)[0][0] for x in xs])
+    return df_designs.pipe(add_mutations, consensus, 'design')
