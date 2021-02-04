@@ -406,3 +406,26 @@ def pivot_96w(df, values, index='row', columns='col'):
     return (df.pivot_table(index=index, columns=columns, values=values)
             .reindex(index=list('ABCDEFGH'), columns=range(1,13))
            )
+
+
+def hash_set(xs, width):
+    """Nice alphanumeric names for items in a set.
+    """
+    assert len(xs) == len(set(xs))
+    md5 = hashlib.md5()
+    arr = []
+    for x in xs:
+        md5.update(str(x).encode())
+        arr += [md5.hexdigest()[:width]]
+    assert len(arr) == len(set(arr))
+    return arr
+
+
+def assign_from_format(df, **kwargs):
+    """Apply a format string to each row.
+    df.pipe(assign_from_format, new_col='{a}.{b}')
+    """
+    for k, v in kwargs.items():
+        df = df.assign(
+            **{k: lambda x: x.apply(lambda row: v.format(**row), axis=1)})
+    return df
