@@ -9,6 +9,9 @@ set stick_radius, 0.3
 set scene_animation_duration, 0.75
 set movie_fps, 15
 
+set mesh_quality, 5
+set min_mesh_spacing, 0.5
+
 python
 
 import socket
