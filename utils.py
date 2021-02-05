@@ -421,9 +421,9 @@ def hash_set(xs, width):
     return arr
 
 
-def assign_from_format(df, **kwargs):
+def assign_format(df, **kwargs):
     """Apply a format string to each row.
-    df.pipe(assign_from_format, new_col='{a}.{b}')
+    df.pipe(assign_format, new_col='{a}.{b}')
     """
     for k, v in kwargs.items():
         df = df.assign(
