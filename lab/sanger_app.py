@@ -41,8 +41,8 @@ def parse_files(files, pat):
                 aa = translate_dna(dna)
             except AssertionError:
                 aa = None
-        arr += [{'sample': name, 'aa_match': aa, 'dna_match': dna,
-                 'sequence': seq, 'file': file}]
+            arr += [{'sample': name, 'aa_match': aa, 'dna_match': dna,
+                    'sequence': seq, 'file': file}]
     return pd.DataFrame(arr)
 
 
@@ -79,6 +79,9 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
     sample_col = 'file' if use_file_as_sample else 'sample'
     pat = f'(?:{start})([ACTG]*)(?:{end})'
     df_sequences = parse_files(files, pat)
+    if len(df_sequences) == 0:
+        print('No matches, is the pattern correct?')
+        return
     if output:
         dna_fasta = output + '_dna.fa'
         aa_fasta = output + '_aa.fa'
