@@ -362,7 +362,7 @@ def sort_by_overlap(filename, k, col=0, header=None, sep=None):
 
 
 def fix_fire_completion(source_file):
-    """Modify auto-generated bash completion to include filenames.
+    """Modify auto-generated bash completion to include filenames. See appcompletion.sh.
 
     Filenames are auto-completed everywhere except selecting initial app.sh command.
     """
@@ -501,7 +501,8 @@ def find_nearest_sequence(
 
 
 def submit_from_command_list(filename, array=None, name=None, queue='short', 
-                             memory='4g', num_cpus=1, stdout='default', stderr='default'):
+                             memory='4g', num_cpus=1, stdout='default', stderr='default', 
+                             dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
     :param filename: file with one line per command
@@ -512,6 +513,7 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     :param num_cpus: sbatch number of cpus (-c)
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
+    :param dry_run: print command instead of submitting
     """
     import os
     import sys
@@ -529,6 +531,9 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
 
     if stderr is 'default':
         stderr = f'logs/{name}_%A{little_a}.err'
+
+    for x in (stdout, stderr):
+        os.makedirs(os.path.dirname(x), exist_ok=True)
     
     base_command = (f'sbatch -p {queue} -J {name} --mem={memory} '
                     f'-c {num_cpus} -o {stdout} -e {stderr}')
@@ -538,14 +543,20 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
         if isinstance(array, int):
             flag += f'%{int(array)}'
         cmd = f'--wrap="sed -n ${{SLURM_ARRAY_TASK_ID}}p {filename} | bash"'
-        subprocess.Popen(' '.join([base_command, flag, cmd]),
-                        shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        final = ' '.join([base_command, flag, cmd])
+        if dry_run:
+            print(final)
+        else:
+            subprocess.Popen(final, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
     else:
         print(f'Submitting {len(commands)} jobs...')
         for cmd in commands:
-            subprocess.Popen(base_command + f' --wrap="{cmd}"', 
-                            shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            final = base_command + f' --wrap="{cmd}"'
+            if dry_run:
+                print(final)
+            else:
+                subprocess.Popen(final, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
 
 if __name__ == '__main__':
