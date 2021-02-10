@@ -1,12 +1,13 @@
 rpxdock_python_path = '/home/dfeldman/from/software/rpxdock/rpxdock/'
-hscore_data_dir = '/home/dfeldman/ntf2/rpxdock/hscore/'
+rpxdock_env_path = '/home/dfeldman/from/software/rpxdock/env/lib/python3.7/site-packages/'
+hscore_data_dir = '/home/dfeldman/from/EY/hscore/'
 
 rpxdock_python = '/home/dfeldman/from/software/rpxdock/env/bin/python'
 rpxdock_app = '/home/dfeldman/from/software/rpxdock/rpxdock/rpxdock/app/dock.py'
 
 
 import sys 
-sys.path = [rpxdock_python_path] + sys.path
+sys.path = [rpxdock_python_path, rpxdock_env_path] + sys.path
 
 import rpxdock
 import rpxdock.bvh
@@ -51,7 +52,7 @@ AA_1_3 = {'A': 'ALA',
 
 
 # icosahedral symframes are the same for I53, I3, I5
-symframes_I = rpxdock.geom.symframes('I') 
+# symframes_I = rpxdock.geom.symframes('I') 
 symframe_info = {
     'I3': {'neighbors': [2],
            'subunit': [0, 3, 6],
@@ -409,6 +410,8 @@ def run_command(cmd):
 
 
 def print_rpx_help():
+    """Rpxdock --help output.
+    """
     rpx_help = generate_command(help=True)
     print(run_command(rpx_help)['stdout'])
 
