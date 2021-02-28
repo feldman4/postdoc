@@ -61,11 +61,12 @@ source ~/.fire_completion
 # nicked from wyang12's .bashrc
 export PROMPT_COMMAND='echo "$(date "+%Y-%m-%d.%H:%M:%S") $(pwd) $(history 1)" >> ~/.logs_bash/digs-bash-history-$(date "+%Y-%m-%d").log;'
 function hh() {
-            for j in ~/.logs_bash/*; do echo $j; done | xargs grep -a $1 | tail -n ${2:-15}
+            ls -1 ~/.logs_bash/* | xargs grep -a $1 | tail -n ${2:-15}
 }
 
 export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_variants/final_split/2_split/
 
+# csvkit uses tabulate, which is slow and lacks a streaming option
 function csvless() {
-    csvlook $1 | less
+    cat <(head -400 $1 | csvlook) <(csvlook $1 | tail -n +402) | less
 }
