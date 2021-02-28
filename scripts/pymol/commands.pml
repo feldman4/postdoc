@@ -462,6 +462,16 @@ def view_two(selection='all'):
     color_not_carbon(ligands)
 
 
+def align_all(object_selection='all', align_selection='all', aligner='align'):
+    objects = cmd.get_object_list(object_selection)
+    if len(objects) < 2:
+        print(f'Skipping alignment, selected only: {objects}')
+    target = objects[0]
+    rest = objects[1:]
+    for mobile in rest:
+        cmd.do(f'{aligner} {mobile}, {target} and {align_selection}')
+
+
 commands = [
 # aliases
 ('rename', rename_selection),
@@ -488,6 +498,8 @@ commands = [
 ('grabligands', select_ligands),
 ('labeltermini', label_termini),
 ('showinterface', show_interface),
+# moving
+('alignall', align_all),
 # loading
 ('rcsb', fetch_with_defaults),
 ('pdbload', load_local_pdb),
