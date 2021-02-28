@@ -50,7 +50,7 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
             keep = [x for x in df.columns if not re.match(exclude_cols, x)]
             df = df[keep]
         if file_pat is not None:
-            match = re.match(f'.*{file_pat}.*', f)
+            match = re.match(f'.*?{file_pat}.*', f)
             if match is None:
                 raise ValueError(f'{file_pat} failed to match {f}')
             if match.groupdict():
@@ -135,7 +135,7 @@ class SimpleBox:
         return iter(self._get_contents())
 
 
-def codify(df, as_codes=True, sort=False, ordered=True, **kwargs):
+def codify(df, as_codes=True, sort=False, nsort=False, ordered=True, **kwargs):
     """Change columns to integer coding.
     """
     df = df.copy()
@@ -143,6 +143,8 @@ def codify(df, as_codes=True, sort=False, ordered=True, **kwargs):
         categories = df[v].drop_duplicates()
         if sort:
             categories = sorted(categories)
+        if nsort:
+            categories = natsorted(categories)
         values = pd.Categorical(df[v], categories=categories, ordered=ordered)
         if as_codes:
             values = values.codes
@@ -429,3 +431,13 @@ def assign_format(df, **kwargs):
         df = df.assign(
             **{k: lambda x: x.apply(lambda row: v.format(**row), axis=1)})
     return df
+
+
+def xr_open_dataset(f):
+    """File can be deleted or overwritten on disk and xr.open_dataset will still 
+    return the old version...
+    """
+    import xarray as xr
+    xr.open_dataset(f).close()
+    return xr.open_dataset(f)
+
