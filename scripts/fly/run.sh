@@ -8,12 +8,16 @@
 #SBATCH -e logs/sbatch_%A.out
 
 source activate /home/dfeldman/.conda/envs/prosit5
+PYTHONPATH=/home/dfeldman/packages:$PYTHONPATH
 
 RUN=$1
-cd /home/dfeldman/flycodes/$RUN
 
+mkdir -p flycodes/$RUN
+cd flycodes/$RUN
+
+# may want to add -k to ignore errors
+FLAGS="--resources gpu_mem_tenths=6 --cores"
 SNAKEFILE="-s /home/dfeldman/packages/postdoc/scripts/fly/flycodes.smk"
-FLAGS="-k --resources gpu_mem_tenths=6 --cores"
 
 # snakemake $SNAKEFILE --unlock
 snakemake $SNAKEFILE $FLAGS --config run=$RUN

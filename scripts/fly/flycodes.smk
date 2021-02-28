@@ -1,4 +1,5 @@
 """
+# example digs submission
 sbatch -p gpu --mem=80g --gres=gpu:rtx2080:1 -c 10 s/fly/run.sh run_003
 sbatch -p medium --mem=80g -c 10 s/fly/run.sh run_003
 """
@@ -12,8 +13,6 @@ from postdoc.utils import timestamp, csv_frame
 import numpy as np
 import pandas as pd
 import inspect
-
-sys.path.append(os.path.join(os.environ['HOME'], 'packages/prosit'))
 
 # CONSTANTS
 
@@ -184,17 +183,21 @@ rule filter_by_ms1_resolution:
         'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{ms1_res}.csv'
     run:
         df_barcodes = (pd.read_csv(input[0])
-        .pipe(fly.ms.filter_by_standards) 
-        .pipe(fly.design.add_usable_ion_count, METADATA)
-        .assign(usable_ion_count=lambda x: 
-                x['usable_ion_count'].clip(upper=METADATA.min_usable_ions))
-        .sort_values('usable_ion_count', ascending=False)
-        .pipe(fly.design.add_mz_resolution_bins, int(wildcards['ms1_res']))
-        .query('mz_res_bin_even')
-        .drop_duplicates(['mz_res_bin_center', 'iRT_bin'])
+        .pipe(fly.ms.filter_by_standards)
         )
-
-        df_barcodes.to_csv(output[0], index=None)
+        if len(df_barcodes) == 0:
+            pd.DataFrame().to_csv(output[0], index=None)
+        else:
+            (df_barcodes
+            .pipe(fly.design.add_usable_ion_count, METADATA)
+            .assign(usable_ion_count=lambda x: 
+                    x['usable_ion_count'].clip(upper=METADATA.min_usable_ions))
+            .sort_values('usable_ion_count', ascending=False)
+            .pipe(fly.design.add_mz_resolution_bins, int(wildcards['ms1_res']))
+            .query('mz_res_bin_even')
+            .drop_duplicates(['mz_res_bin_center', 'iRT_bin'])
+            .to_csv(output[0], index=None)
+            )
 
 
 rule complete_ms1_resolution:
@@ -213,7 +216,7 @@ rule complete_ms1_resolution:
         import seaborn as sns
         import matplotlib.pyplot as plt
 
-        df_barcodes = pd.concat([pd.read_csv(f) for f in input], sort=True)
+        df_barcodes = csv_frame(input)
         cols = ['sequence', 'mz', 'mz_res_bin_center','iRT', 'iRT_bin', 'usable_ion_count']
         df_barcodes[cols].to_csv(output.table, index=None)
 

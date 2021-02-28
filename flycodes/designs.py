@@ -150,10 +150,10 @@ class DESIGN_6():
     num_generation_runs = 10 # test
 
     # does this stay the same?
-    precursor_mz_start = 500.2667
+    precursor_mz_min = 500.2667
     precursor_mz_max = 850
     precursor_bin_width = 10 # fewer mz bins for less prosit jobs
-    precursor_bins = np.arange(precursor_mz_start, precursor_mz_max, precursor_bin_width)
+    precursor_bins = np.arange(precursor_mz_min, precursor_mz_max, precursor_bin_width)
     precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
 
     # sometimes Prosit predicts iRT between 0 and 120 but the peptide elutes
@@ -190,6 +190,18 @@ class DESIGN_7(DESIGN_6):
     rule_set = 'pool0_termK'
 
 
+class DESIGN_TEST(DESIGN_6):
+    num_to_generate = 1000
+    num_generation_runs = 1
+    # does this stay the same?
+    precursor_mz_min = 500.2667
+    precursor_mz_max = 550
+    precursor_bin_width = 10  # fewer mz bins for less prosit jobs
+    precursor_bins = np.arange(
+        precursor_mz_min, precursor_mz_max, precursor_bin_width)
+    precursor_bin_names = {x: '{:.2f}'.format(x) for x in precursor_bins}
+
+
 runs = {
     'run_001': DESIGN_0,
     'run_002': DESIGN_1,
@@ -199,6 +211,7 @@ runs = {
     'run_006': DESIGN_6,
     'run_007': DESIGN_6,
     'run_008': DESIGN_7,
+    'run_test': DESIGN_TEST,
     }
 
 

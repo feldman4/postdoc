@@ -943,6 +943,7 @@ def bin_by_resolution(xs, resolution):
     """Bin values such that each bin width is 1/(left edge).
     Useful for creating mz bins distinguishable at fixed resolving power.
     """
+    xs = np.array(xs)
     current = xs.min()
     end = xs.max()
     edges = [current]
@@ -952,6 +953,14 @@ def bin_by_resolution(xs, resolution):
     edges.append(current)
     edges = np.array(edges)
     centers = np.convolve(edges, [0.5, 0.5], mode='valid')
+
+    # np.digitize behaves weirdly if there are two equal bins
+    if len(set(edges)) == 1:
+        edges = edges[[0, 0]]
+        centers = edges[[0]]
+        bins = np.array([0 for _ in xs])
+        return bins, centers, edges
+
     return np.digitize(xs, edges), centers, edges
 
 
