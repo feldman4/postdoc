@@ -232,7 +232,7 @@ def unpack_tof_spectrum(spectrum):
 
 # @memoize()
 def load_tof_mzxml(filename, progress=lambda x: x):
-    """Data loader for IPD TOF MS.
+    """Data loader for IPD TOF MS. Later realized this is the obsolete mzData format.
     """
     reader = pyteomics.mzml.MzML(filename)
 
