@@ -1,6 +1,7 @@
 rpxdock_python_path = '/home/dfeldman/from/software/rpxdock/rpxdock/'
 rpxdock_env_path = '/home/dfeldman/from/software/rpxdock/env/lib/python3.7/site-packages/'
-hscore_data_dir = '/home/dfeldman/from/EY/hscore/'
+hscore_data_dir = '/home/sheffler/data/rpx/hscore'
+hscore_files = 'afilmv_ehl'
 
 rpxdock_python = '/home/dfeldman/from/software/rpxdock/env/bin/python'
 rpxdock_app = '/home/dfeldman/from/software/rpxdock/rpxdock/rpxdock/app/dock.py'
@@ -383,7 +384,7 @@ def generate_command(inputs1=None, output_prefix=None, architecture=None,
                 # how much to output
                 dump_pdbs=True, nout_top=10, loglevel='warning',
                 # how to score
-                core_only_ss=None, hscore_files='ailv_h', hscore_data_dir=hscore_data_dir,
+                core_only_ss=None, hscore_files=hscore_files, hscore_data_dir=hscore_data_dir,
                 # how to sample
                 beam_size=10, max_bb_redundancy=3, cart_bounds='0 300',
                 allowed_residues1=None,
