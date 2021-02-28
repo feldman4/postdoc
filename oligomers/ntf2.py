@@ -28,11 +28,37 @@ tmpdir = os.environ.get('TMPDIR', '.tmp')
 
 rpx_defaults = {'beam_size': 50000, 'architecture': 'C2', 'use_orig_coords': True}
 
+# default hscore: /home/sheffler/data/rpx/hscore/afilmv_ehl
 methods = {
     'sheets_only': 
         {'score_only_ss': 'E'},
     'sheet_helix': 
         {'score_only_ss': 'EH'},
+    'sheets_no_hscore':
+        {'score_only_ss': 'E',
+         'hscore_files': None,
+         'hscore_data_dir': None,
+        },
+    'ss-EH_aa-ILVFM':
+        {
+         'score_only_ss': 'EH',
+         'score_only_aa': 'ILVFM',
+        },
+    'ss-EH_aa-ILFM':
+    {
+        'score_only_ss': 'EH',
+        'score_only_aa': 'ILFM',
+    },
+    'ss-EH_aa-FM':
+    {
+        'score_only_ss': 'EH',
+        'score_only_aa': 'FM',
+    },
+    'ss-E_aa-ILVFM':
+    {
+        'score_only_ss': 'EH',
+        'score_only_aa': 'ILVFM',
+    },
 }
 
 pyrosetta_flags = (
@@ -45,10 +71,11 @@ pyrosetta_flags = (
 
 
 def add_method(method, opts):
-    try:
-        opts.update(methods[method])
-    except KeyError:
+    if method not in methods:
         raise ValueError(f'Method {method} not one of {methods.keys()}')
+    
+    opts.update(methods[method])
+        
 
 
 def setup_files():
@@ -60,14 +87,6 @@ def setup_files():
     for f in files:
         name = os.path.basename(f)
         shutil.copy(f, f'rosetta/{name}')
-
-    os.makedirs('reference', exist_ok=True)
-    files = [
-        '/home/norn/NTF2/201203_rocuronium/scripts/design_symmetry.py',
-    ]
-    for f in files:
-        name = os.path.basename(f)
-        shutil.copy(f, f'reference/{name}')
 
     symlinks = {
         '201203_rocuronium_designs': 
@@ -262,12 +281,58 @@ def load_monomer_table(name_width=10):
     df[['name', 'file', 'design']].to_csv(rocuronium_designs, index=False)
 
 
+def export_all_results(session='*'):
+    """Export `result.data` from rpxdock Results.pickle to normal file formats. Drop
+    redundant docks.
+
+    :param session: rpxdock session, corresponds to relative path rpxdock/{session}
+    """
+    search = f'rpxdock/{session}/results/*Result.pickle'
+    files = glob(search)
+    for f in tqdm(files):
+        export_results(f)
+
+
+def export_results(filename):
+    """Export `result.data` from rpxdock Results.pickle to normal file formats. Drop
+    redundant docks.
+    """
+    import json
+    import yaml
+    import pandas as pd
+
+    f_nc = filename.replace('pickle', 'nc')
+    f_yaml = filename.replace('pickle', 'dockinfo.yaml')
+
+    result = pd.read_pickle(filename)
+    xforms = result.data['xforms']
+    _, unique_ix = np.unique(
+        np.round(np.abs(xforms), 5), axis=0, return_index=True)
+    unique_ix = sorted(unique_ix)
+
+    result.data = result.data.sel(model=unique_ix)
+
+    dockinfo = json.loads(json.dumps(result.data.dockinfo))
+    with open(f_yaml, 'w') as fh:
+        yaml.dump(dockinfo, fh)
+
+    del result.data.attrs['dockinfo']
+
+    body = result.bodies[0][0]
+    name = os.path.basename(body.pdbfile)
+    if name.endswith('.pdb'):
+        name = name[:-4]
+    result.data.attrs['name'] = name
+    result.data.to_netcdf(f_nc)
+
+
 if __name__ == '__main__':
     commands = {
         'load_monomer_table': load_monomer_table,
         'rpxdock': rpxdock_one_design,
         'rpxdock_all': rpxdock_all,
         'dump_rpx_pdbs': dump_pdbs,
+        'export_results': export_all_results,
         'print_rpx_help': print_rpx_help,
         'setup_files': setup_files,
         'dump_pdbs': dump_pdbs,
@@ -278,6 +343,8 @@ if __name__ == '__main__':
 
 
 """
+Examples in ./test.sh
+
 Provided commands:
 ./app.sh load_monomer_table
 ./app.sh rpxdock --name {original name or short} --session {where to save output} ... rpxdock args
@@ -285,7 +352,5 @@ Provided commands:
 
 With rpxdock --make_command, user can generate a bunch of commands for job submission. There's a 
 submit command in the main app.
-
-Examples in ./test.sh
 """
 
