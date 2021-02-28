@@ -82,7 +82,7 @@ def load_pool3_counts():
     design_names = df_design.set_index('design')['name'].to_dict()
     barcoded_names = df_design.set_index('barcode')['name']
 
-    files = nglob(f'{home}pear/*.csv')
+    files = nglob(f'{home}/pear/*.csv')
     cols = ['sample', 'design_name', 'count', 'design', 'linker', 'barcode', 'CDS']
     df_counts = (csv_frame(files, file_pat=pat_pear)
     .rename(columns={'counts': 'count', 'design': 'insert'})
