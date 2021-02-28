@@ -384,7 +384,7 @@ def fix_fire_completion(source_file):
 
 
 def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
-                      preview=10):
+                      preview=10, write_table=True):
     """Count protein sequences between adapters in NGS data (e.g., PEAR output).
 
     :param fastq: fastq file, e.g., .assembled.fastq from PEAR
@@ -427,10 +427,11 @@ def count_inserts_NGS(fastq, up='chipmunk', down='chipmunk', max_reads=1e5,
     x = translated_designs.loc[lambda x: ~x['design'].str.contains('\*')]['count'].sum()
     print(f'Translated, no stop: {x} ({x / len(reads):.2%})')
 
-    f2 = fastq.replace('.fastq', '.designs.csv')
-    translated_designs.to_csv(f2, index=None)
-
-    print('Histogram of translated reads saved to', f2)
+    if write_table:
+        f2 = fastq.replace('.fastq', '.designs.csv')
+        translated_designs.to_csv(f2, index=None)
+        print('Histogram of translated reads saved to', f2)
+    
     print(translated_designs.head(preview))
 
 
