@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
 
-HOME = Path(os.environ['HOME'])
-JOBLIB_CACHE = Path(os.environ['HOME']) / '.joblib'
+try:
+    HOME = Path(os.environ['HOME'])
+except KeyError:
+    HOME = Path('/home/dfeldman')
+
+JOBLIB_CACHE = HOME / '.joblib'
 
 resources = Path(__file__).parents[0] / 'resources'
 RULE_SETS = resources / 'rule_sets.csv'
