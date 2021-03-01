@@ -8,7 +8,7 @@
 #SBATCH -e logs/sbatch_%A.out
 
 source activate /home/dfeldman/.conda/envs/prosit5
-PYTHONPATH=/home/dfeldman/packages:$PYTHONPATH
+export PYTHONPATH=/home/dfeldman/packages:$PYTHONPATH
 
 RUN=$1
 
@@ -18,6 +18,7 @@ cd flycodes/$RUN
 # may want to add -k to ignore errors
 FLAGS="--resources gpu_mem_tenths=6 --cores"
 SNAKEFILE="-s /home/dfeldman/packages/postdoc/scripts/fly/flycodes.smk"
+TIMESTAMP=`date +%y%M%d_%H%M%S`
 
 # snakemake $SNAKEFILE --unlock
-snakemake $SNAKEFILE $FLAGS --config run=$RUN
+snakemake $SNAKEFILE $FLAGS --config run=$RUN timestamp='"'$TIMESTAMP'"'
