@@ -498,7 +498,7 @@ def rolling_window_sizes(values, window_size):
 def generate_peptide_set(num_to_generate, min_length, max_length, rule_set, seed=None):
     peptides = []
     for length in range(min_length, max_length + 1):
-        num_peptides = int(num_to_generate / (max_length - min_length))
+        num_peptides = int(num_to_generate / (max_length - min_length + 1))
         peptides += generate_peptides(length, num_peptides, rule_set, seed)
     peptides = set(peptides)
     mz_dict = {x: calc_mz(x, charge=2) for x in peptides}
@@ -861,7 +861,7 @@ def peptides_to_ions(df_peptides, usable_ion_gate,
 
     return (df_peptides[cols]
      .assign(length=lambda x: x['sequence'].str.len())
-     .join(valid_ions.set_index(join_cols), on=join_cols)
+     .join(valid_ions.set_index(join_cols), on=join_cols, how='inner')
      .pipe(lambda x: pd.concat(
           [x, x['ion_name'].str.extract(pat_ion)], axis=1))
      .pipe(cast_cols, int_cols=['ion_length', 'ion_charge'])
