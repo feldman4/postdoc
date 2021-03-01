@@ -10,3 +10,4 @@ source activate /home/dfeldman/.conda/envs/jupyter
 
 jupyter lab --no-browser --port=5555 --ip=0.0.0.0
 
+echo $CUDA_VISIBLE_DEVICES > ~/logs/.cuda_latest
