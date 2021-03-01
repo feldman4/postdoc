@@ -5,7 +5,6 @@ sbatch -p medium --mem=80g -c 10 s/fly/run.sh run_003
 """
 
 # IMPORTS
-
 import postdoc.flycodes as fly
 from postdoc.flycodes import designs
 from postdoc.utils import timestamp, csv_frame
@@ -25,7 +24,7 @@ MODEL_SPECTRA = ('/home/dfeldman/flycodes/prosit_models/'
 # CONFIG
 
 METADATA = designs.runs[config['run']]
-RUN_NAME = timestamp(METADATA.name) # unique name for this snakemake run
+RUN_NAME = f'{METADATA.name}_{config["timestamp"]}' # unique name for this snakemake run
 RUNS = ['{:03d}'.format(x) for x in range(METADATA.num_generation_runs)]
 
 def expand_ms1_range(wildcards):
@@ -43,10 +42,9 @@ rule all:
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
         #     bin_mz=METADATA.precursor_bin_names.values()),
-        # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{ms1_res}.csv',
+        # expand('process/{design}_iRT_{bin_iRT}.ms1_{ms1_res}.csv',
         #     design=METADATA.name,
-        #     bin_iRT=METADATA.iRT_bin_names.values(),
-        #     bin_mz=METADATA.precursor_bin_names.values()),
+        #     bin_iRT=METADATA.iRT_bin_names.values()),
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=METADATA.name,
         #     bin_iRT=METADATA.iRT_bin_names.values(),
@@ -104,24 +102,27 @@ rule predict_prosit:
         d_spectra, d_irt = fly.load_prosit_models(
             MODEL_IRT, MODEL_SPECTRA, gpu_mem_fraction=GPU_MEM_FRACTION)
         df_peptides = pd.concat([pd.read_csv(f) for f in input])
-        
-        df_predicted = (df_peptides
-         # shuffle
-         .sample(frac=1, replace=False, random_state=0)
-         .head(METADATA.pred_barcodes_per_mz_bin)
-         .pipe(fly.add_prosit, d_spectra, d_irt, 
-            METADATA.normalized_collision_energy)
-         .assign(iRT_bin=lambda x: 
-                 x['iRT'].pipe(fly.bin_by_value, 
-                               METADATA.iRT_bins, METADATA.iRT_bin_width))
-         .query('iRT_bin == iRT_bin')
-         .pipe(fly.sort_by_spectral_efficiency)
-        )
+        if len(df_peptides) == 0:
+            for f in output:
+                pd.DataFrame().to_csv(f, index=None)
+        else:
+            df_predicted = (df_peptides
+            # shuffle
+            .sample(frac=1, replace=False, random_state=0)
+            .head(METADATA.pred_barcodes_per_mz_bin)
+            .pipe(fly.add_prosit, d_spectra, d_irt, 
+                METADATA.normalized_collision_energy)
+            .assign(iRT_bin=lambda x: 
+                    x['iRT'].pipe(fly.bin_by_value, 
+                                METADATA.iRT_bins, METADATA.iRT_bin_width))
+            .query('iRT_bin == iRT_bin')
+            .pipe(fly.sort_by_spectral_efficiency)
+            )
 
-        for f, iRT_bin in zip(output, METADATA.iRT_bin_names.values()):
-            (df_predicted.query('iRT_bin == @iRT_bin')
-                .to_csv(f, index=None)
-                )
+            for f, iRT_bin in zip(output, METADATA.iRT_bin_names.values()):
+                (df_predicted.query('iRT_bin == @iRT_bin')
+                    .to_csv(f, index=None)
+                    )
 
 
 rule filter_barcodes:
@@ -155,7 +156,6 @@ rule filter_barcodes_ms1_range:
     output:
         'process/{design}_iRT_{bin_iRT}_ms1_{ms1_range}.barcode_ions.csv'        
     run:
-        print('input', input)
         df_peptides = (csv_frame(input, sort=False)
          .assign(iRT_dist=b'abs(iRT - iRT_bin)')
          .sort_values('iRT_dist')
@@ -178,11 +178,13 @@ rule filter_barcodes_ms1_range:
 
 rule filter_by_ms1_resolution:
     input:
-        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv'
+        expand('process/{{design}}_iRT_{{bin_iRT}}_mz_{bin_mz}.precursors.csv', 
+            run=RUNS, bin_mz=METADATA.precursor_bin_names.values())
     output:
-        'process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{ms1_res}.csv'
+        'process/{design}_iRT_{bin_iRT}.ms1_{ms1_res}.csv'
     run:
-        df_barcodes = (pd.read_csv(input[0])
+        df_barcodes = (csv_frame(input)
+        .fillna(0) # some ions might be missing
         .pipe(fly.ms.filter_by_standards)
         )
         if len(df_barcodes) == 0:
@@ -201,13 +203,12 @@ rule filter_by_ms1_resolution:
 
 
 rule complete_ms1_resolution:
-    """Consolidate 
+    """Consolidate. 
     """
     input:
-        expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.ms1_{{ms1_res}}.csv',
+        expand('process/{design}_iRT_{bin_iRT}.ms1_{{ms1_res}}.csv',
             design=METADATA.name,
-            bin_iRT=METADATA.iRT_bin_names.values(),
-            bin_mz=METADATA.precursor_bin_names.values())
+            bin_iRT=METADATA.iRT_bin_names.values())
     output:
         table='barcodes_ms1_{ms1_res}.csv',
         delta_mz='figures/ms1_{ms1_res}_delta_mz.png',
