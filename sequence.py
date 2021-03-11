@@ -48,6 +48,11 @@ def parse_fasta(txt):
 
 
 def write_fasta(filename, list_or_records):
+    with open(filename, 'w') as fh:
+        format_fasta(list_or_records)
+
+
+def format_fasta(list_or_records):
     if isinstance(list_or_records[0], str):
         n = len(list_or_records)
         width = int(np.ceil(np.log10(n)))
@@ -61,8 +66,8 @@ def write_fasta(filename, list_or_records):
     lines = []
     for name, seq in records:
         lines.extend([f'>{name}', seq])
-    with open(filename, 'w') as fh:
-            fh.write('\n'.join(lines))
+    return '\n'.join(lines)
+
     
 
 def fasta_frame(files_or_search):
