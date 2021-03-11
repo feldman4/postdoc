@@ -233,8 +233,10 @@ class DESIGN_WW():
         len(iRT_bins) * 2)
 
     # filter peptides by number of product ions
-    min_usable_ions = 5
-    usable_ion_intensity = 0.25
+    target_usable_ions = 5
+    min_usable_ions = 2
+
+    usable_ion_intensity = 0.1
     ion_mz_start = 200.1517
     ion_mz_max = 1300
     usable_ion_gate = ('ion_type == "y" & {} < ion_mz < {} & ion_charge == 1'
@@ -258,7 +260,7 @@ runs = {
     'run_007': DESIGN_6,
     'run_008': DESIGN_7,
     'run_test': DESIGN_TEST,
-    'run_ww': DESIGN_WW,
+    'run_test_ww': DESIGN_WW,
     }
 
 
