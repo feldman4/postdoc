@@ -22,7 +22,6 @@ def well_to_row_col(well, sane=True):
     else:
         return well[0], int(well[1:])
 
-
 def melt_plate(df_plate):
     df_plate = df_plate.copy()
     df_plate.index.name = 'row'
@@ -31,4 +30,18 @@ def melt_plate(df_plate):
     df_long['well'] = (df_long['row'] + df_long['col'].astype(str)).apply(standardize_well)
     
     return df_long.set_index('well')['value']
+
+def plate_table(shape='96w'):
+    """
+    """
+    assert shape == '96w'
+    arr = []
+    for well in wells_96w_by_col:
+        arr += [{
+            'well': well,
+            'by_col_ix': wells_96w_by_col.index(well),
+            'by_row_ix': wells_96w_by_row.index(well),
+        }]
+    cols = ['well', 'row', 'col', 'by_col_ix', 'by_row_ix']
+    return pd.DataFrame(arr).pipe(add_row_col)[cols]
 
