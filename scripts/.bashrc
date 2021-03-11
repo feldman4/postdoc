@@ -59,7 +59,7 @@ source ~/.fire_completion
 
 # log bash input and search with hh
 # nicked from wyang12's .bashrc
-export PROMPT_COMMAND='echo "$(date "+%Y-%m-%d.%H:%M:%S") $(pwd) $(history 1)" >> ~/.logs_bash/digs-bash-history-$(date "+%Y-%m-%d").log;'
+export PROMPT_COMMAND='echo "$(date "+%Y-%m-%d.%H:%M:%S") $(pwd) $(history 1)" >> ~/.logs_bash/$(date "+%Y-%m-%d").log;'
 function hh() {
             ls -1 ~/.logs_bash/* | xargs grep -a $1 | tail -n ${2:-15}
 }
