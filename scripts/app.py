@@ -299,7 +299,7 @@ def chunk(filename, total, ix, col=0, header=None, sep=None):
     return values[chunk_size*ix:chunk_size*(ix + 1)]
 
 
-def reverse_translate(filename, enzymes='NdeI,XhoI,BamHI,BsaI', repeats=1, seed=0, 
+def reverse_translate(filename, enzymes=('NdeI', 'XhoI', 'BamHI', 'BsaI'), repeats=1, seed=0, 
                       progress=None, 
                       header=None, col=0, sep=None, index_col=None):
     """Reverse translate amino acids to DNA using reverse_translate_robby.
@@ -318,6 +318,7 @@ def reverse_translate(filename, enzymes='NdeI,XhoI,BamHI,BsaI', repeats=1, seed=
     :param sep: text delimiter, e.g., "," or "\s+"
     """
     from rtRosetta.reverse_translate_robby import main
+    from postdoc.sequence import translate_dna
     from tqdm.auto import tqdm
     import random
     import pandas as pd
@@ -331,8 +332,9 @@ def reverse_translate(filename, enzymes='NdeI,XhoI,BamHI,BsaI', repeats=1, seed=
     if progress:
         sequences = tqdm(sequences)
 
-    enzymes = enzymes.lower().split(',')
     dna = [main(s, repeats, enzymes=enzymes) for s in sequences]
+    for dna_, aa_ in zip(dna, sequences):
+        assert(translate_dna(dna_) == aa_)
 
     if index_col is None:
         return dna
