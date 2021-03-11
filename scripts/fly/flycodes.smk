@@ -177,6 +177,10 @@ rule filter_barcodes_ms1_range:
 
 
 rule filter_by_ms1_resolution:
+    """Simplified selection for high-resolution MS1 quantification. Require unique
+    iRT and MS1 mz at specified resolution. Only allow barcodes with 
+    `METADATA.min_usable_ions` passing `METADATA.usable_ion_gate`.
+    """
     input:
         expand('process/{{design}}_iRT_{{bin_iRT}}_mz_{bin_mz}.precursors.csv', 
             run=RUNS, bin_mz=METADATA.precursor_bin_names.values())
