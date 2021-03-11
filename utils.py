@@ -5,6 +5,7 @@ import io
 import hashlib
 import os
 import re
+import subprocess
 import shutil
 import sys
 import time
@@ -349,8 +350,13 @@ def copy_if_different(f1, f2):
     
 
 def assert_unique(df, *cols):
+    """Each argument can be a single column or a list of columns.
+    """
+    a = df.shape[0]
     for col in cols:
-        assert len(df[col]) == len(set(df[col]))
+        b = ~df[col].duplicated()
+        if a != b.sum():
+            raise ValueError(f'{b.sum()} / {a} entries are unique for column {col}')
     return df
 
 
@@ -441,3 +447,6 @@ def xr_open_dataset(f):
     xr.open_dataset(f).close()
     return xr.open_dataset(f)
 
+def count_lines_wc(filename):
+    cmd = f'wc -l {filename}'
+    return int(subprocess.check_output(cmd, shell=True).split()[0])
