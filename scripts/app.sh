@@ -44,4 +44,8 @@ $APP count_inserts_NGS /home/dfeldman/for/xw/ngs/merged/494471_0.assembled.fastq
 APP=/home/dfeldman/s/app.sh
 $APP match_sanger --output=test /home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/5_combo1/cPCR1/30-473362954_ab1/*ab1
 
+INPUT=/net/scratch/wlwhite/H2Db_minibinder_design/06_ordering/designs_and_scrambles_aa.fasta
+APP=/home/dfeldman/s/app.sh
+head -1000 $INPUT | $APP fasta_to_table stdin | $APP reverse_translate stdin --index_col=name --col=sequence --progress | $APP table_to_fasta stdin --name_col=name --sequence_col=dna
+
 ###EXAMPLES
