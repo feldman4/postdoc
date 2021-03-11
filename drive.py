@@ -46,6 +46,10 @@ class Drive():
             status, done = downloader.next_chunk()
             
         df = pd.read_excel(fh, **kwargs)
+        return clean(df, dropna=dropna, normalize=normalize, fix_int=fix_int, 
+                     drop_unnamed=drop_unnamed)
+
+    def clean(df, dropna='all', normalize=True, fix_int=True, drop_unnamed=True):
         if dropna:
             df = df.dropna(how=dropna, axis=0)
             df = df.dropna(how=dropna, axis=1)
