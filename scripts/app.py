@@ -457,7 +457,7 @@ def find_nearest_sequence(
     :param window: length of prefix used to find candidate matches
     :param k: length of kmers used for fast matching
     :param keep_query_table: keep rest of query table in output
-    :param_reference_table: keep rest of reference table in output
+    :param reference_table: keep rest of reference table in output
     :rename_cols: columns to rename in output table, as a comma-separated list, e.g., 
         "from,to,from2,to2"
     """
