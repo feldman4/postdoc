@@ -299,24 +299,46 @@ def chunk(filename, total, ix, col=0, header=None, sep=None):
     return values[chunk_size*ix:chunk_size*(ix + 1)]
 
 
-def reverse_translate(filename, repeats=1, seed=0, progress=None, 
-                      header=None, col=0, sep=None):
+def reverse_translate(filename, enzymes='NdeI,XhoI,BamHI,BsaI', repeats=1, seed=0, 
+                      progress=None, 
+                      header=None, col=0, sep=None, index_col=None):
     """Reverse translate amino acids to DNA using reverse_translate_robby.
 
-    :param filename: input list or table
+    Example:
+
+
+    :param filename: delimited text file or "stdin"; convert a fasta with `fasta_to_table` command
+    :param enzymes: comma-separated list of restriction sites to avoid
     :param repeats: number of attempts, one seems OK
     :param seed: random seed, incremented for each attempt
+    :param progress: add flag to include progress bar
+    :param index_col: if provided, keep this column in output table
+    :param col: integer column (no header) or column name; if this is None returns the whole table
+    :param header: flag for presence of a header
+    :param sep: text delimiter, e.g., "," or "\s+"
     """
     from rtRosetta.reverse_translate_robby import main
     from tqdm.auto import tqdm
     import random
+    import pandas as pd
+
     random.seed(seed)
     
-    sequences = read_table(filename, col=col, header=header, sep=sep)
+    if index_col is not None:
+        header = True
+    df = read_table(filename, col=None, header=header, sep=sep)
+    sequences = df[col]
     if progress:
         sequences = tqdm(sequences)
 
-    return [main(s, repeats) for s in sequences]
+    enzymes = enzymes.lower().split(',')
+    dna = [main(s, repeats, enzymes=enzymes) for s in sequences]
+
+    if index_col is None:
+        return dna
+    else:
+        return (pd.DataFrame({index_col: df[index_col], 'dna': dna})
+                .pipe(dataframe_to_csv_string))
 
 
 def minimize_overlap(filename, k, rounds=30, organism='e_coli', num_codons=2, seed=0,
@@ -560,6 +582,51 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
                 subprocess.Popen(final, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
 
+def fasta_to_table(filename):
+    """Turn a fasta file into a delimited table.
+
+    :param filename: fasta file or "stdin"
+    """
+    import pandas as pd
+    from postdoc.sequence import parse_fasta
+    import sys
+    
+    if filename == 'stdin':
+        text = sys.stdin.read()
+    else:
+        with open(filename, 'r') as fh:
+            text = fh.read()
+
+    return (pd.DataFrame(parse_fasta(text), columns=('name', 'sequence'))
+            .pipe(dataframe_to_csv_string))
+
+
+def table_to_fasta(filename, sequence_col, name_col=None, header=None, sep=None):
+    """Convert table to fasta format.
+
+    :param filename: delimited text file or "stdin"
+    :param sequence_col: column with sequences (name or index)
+    :param name_col: optional names for fasta records, otherwise they are numbered sequentially
+    :param header: flag for presence of a header
+    :param sep: text delimiter, e.g., "," or "\s+"
+    """
+    import pandas as pd
+    import numpy as np
+    from postdoc.sequence import format_fasta
+
+    if name_col is not None:
+        header = True
+
+    df = read_table(filename, col=None, header=header, sep=sep)
+    if name_col is None:
+        df['name_col'] = np.arange(len(df))
+        name_col = 'name_col'
+        
+    return format_fasta(df.loc[:, [name_col, sequence_col]].values)
+    
+
+
+
 if __name__ == '__main__':
     # order is preserved
     commands = [
@@ -580,6 +647,7 @@ if __name__ == '__main__':
         'read_table', 'fix_fire_completion', 'chunk',
         
         'find_nearest_sequence',
+        'fasta_to_table','table_to_fasta',
         ]
     # if the command name is different from the function name
     named = {'submit': submit_from_command_list,
