@@ -115,7 +115,8 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
         len_stats = df_sequences['aa_match'].str.len().describe()
 
         def show(a, b, msg):
-            print(f'{a}/{b} ({a/b:.1%}) {msg}')
+            ratio = a/b if b > 0 else 0
+            print(f'{a}/{b} ({ratio:.1%}) {msg}')
         show(num_dna_matches, num_traces, 'match DNA pattern')
         show(num_aa_matches, num_dna_matches, 'translated in frame')
         show(num_no_stop, num_aa_matches, 'have no stop codon')
