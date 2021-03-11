@@ -1,5 +1,5 @@
 #!/bin/bash
-# to add completion, run with source: . app_completion.sh
+# to add completion, run with source: . _appcompletion.sh
 
 app.sh -- --completion \
  | sed "s/app.py/app.sh/g" \
