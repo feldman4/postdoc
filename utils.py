@@ -9,6 +9,7 @@ import subprocess
 import shutil
 import sys
 import time
+import contextlib
 
 import decorator
 import matplotlib.pyplot as plt
@@ -302,7 +303,7 @@ def _memoize(f, *args, **kwargs):
     return f.cache[key]
 
 
-def predict_ransac(df, x, y, y_pred, dupe_cols=None):
+def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None):
     """
     Example:
         (df_frag_ions
@@ -313,6 +314,8 @@ def predict_ransac(df, x, y, y_pred, dupe_cols=None):
     """
     from sklearn.linear_model import RANSACRegressor
     df_ = df.drop_duplicates(dupe_cols) if dupe_cols else df
+    if query is not None:
+        df_ = df_.query(query)
     model = RANSACRegressor().fit(df_[[x]], df_[y])
     return df.assign(**{y_pred: model.predict(df[[x]])})
 
@@ -450,3 +453,14 @@ def xr_open_dataset(f):
 def count_lines_wc(filename):
     cmd = f'wc -l {filename}'
     return int(subprocess.check_output(cmd, shell=True).split()[0])
+
+
+@contextlib.contextmanager
+def set_cwd(working_dir):
+    """Based on 
+    https://stackoverflow.com/questions/169070/how-do-i-write-a-decorator-that-restores-the-cwd
+    """
+    curdir = os.getcwd()
+    os.chdir(working_dir)
+    try: yield
+    finally: os.chdir(curdir)
