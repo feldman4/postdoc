@@ -1,3 +1,5 @@
+#!/bin/sh
+
 # Find nearest matching designs for all assembled, translated protein sequences in NGS run.
 # Runs in a couple minutes on one core.
 
@@ -19,7 +21,7 @@ do
     # col and header arguments used to parse input tables
     # keep arguments join results to input tables
     # rename argument renames or drops resulting columns
-    APP=/home/dfeldman/s/app.sh
+    APP=/home/dfeldman/packages/postdoc_stable/scripts/app.sh
     $APP find_nearest_sequence $QUERY $REF \
         --col_query=0 \
         --col_reference=sequence --header_reference=True \
