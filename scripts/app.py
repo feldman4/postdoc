@@ -24,8 +24,8 @@ def parse_overlap_oligos(filename, output_prefix=None,
       repeated_overlaps.csv: examples where the same overlap is reused
       overlap_edit_distances.csv: histogram of Levenshtein edit distance between pairs of overlaps
         for each subpool
-      overlap_edit_distances.png: plot of previous
-      overlap_heatmap.png: 2D histogram of overlap length and Tm (via Bio.SeqUtils.MeltingTemp.Tm_NN)
+      overlap_edit_distances.jpg: plot of previous
+      overlap_heatmap.jpg: 2D histogram of overlap length and Tm (via Bio.SeqUtils.MeltingTemp.Tm_NN)
 
     :param filename: filename or "stdin"; loads sequences from a plain list (default) or a table 
         with column `dna_col` and optional `name_col`
@@ -48,7 +48,12 @@ def parse_overlap_oligos(filename, output_prefix=None,
 
     if output_prefix is None:
         output_prefix = os.path.splitext(filename)[0] + '_'
+
+    if isinstance(dna_col, str) or isinstance(name_col, str):
+        header = True
+
     df = read_table(filename, None, header=header, sep=sep)
+
     oligos = list(df[dna_col])
     assert len(oligos) % 2 == 0, 'number of oligos must be even'
     if name_col is None:
@@ -111,13 +116,13 @@ def parse_overlap_oligos(filename, output_prefix=None,
     df_plot.plot(ax=ax)
     ax.set_ylabel('# of overlap pairs')
     fig.tight_layout()
-    fig.savefig(output_prefix + 'overlap_edit_distances.png')
+    fig.savefig(output_prefix + 'overlap_edit_distances.jpg')
     plt.close(fig)
 
     # heatmap of overlaps by Tm and length    
     fig, ax = plt.subplots()
     assembly.plot_agilent_overlaps(df_agilent)
-    fig.savefig(output_prefix + 'overlap_heatmap.png')
+    fig.savefig(output_prefix + 'overlap_heatmap.jpg')
     plt.close(fig) 
 
 
