@@ -594,3 +594,177 @@ def add_stop_codon_controls(df_design, num_controls=200, seed=0):
         df_design.query('CDS_dna != @modify').assign(stop_control='no_stop'),
         pd.concat(arr, axis=1).T])
     )
+
+
+def get_barcode_linker(row):
+    """Extract the barcode+linker, needed to substitute overlap into
+    different barcoded versions of the same design.
+    """
+    if row['vector'] == 'pT12':
+        barcode = row['barcode'] + row['linker']
+        return findone(barcode, row['CDS_dna'])
+    elif row['vector'] == 'pT13':
+        barcode = row['linker'] + 'K' + row['barcode_noRK']
+        return findone(barcode, row['CDS_dna'])
+    else:
+        raise ValueError
+
+
+def restore_barcodes(df_agilent, df_parsed):
+    """Generate new oligo table by substituting overlaps in `df_parsed` for each 
+    matching design in `df_agilent`.
+    """
+    overlap_info = df_parsed.set_index('assembly_aa')[['first', 'second', 'assembly']]
+        
+    df_ok = (df_agilent
+     .assign(barcode_noRK=lambda x: x['barcode'].str.replace('[RK]', ''))
+     .join(overlap_info, on='CDS')
+    )
+
+    arr = []
+    it = tqdm(list(df_ok.groupby(['vector', 'design'], sort=False)))
+    for (vector, design), df in it:
+        if (~df['first'].isnull()).sum() != 1:
+            continue
+
+        row_0 = df.dropna().iloc[0]
+        barcode_dna_0 = get_barcode_linker(row_0)
+
+        for _, row in df.iterrows():
+            barcode_dna = get_barcode_linker(row)
+            arr += [{
+                'oligo_name': row['name'] + '_1st',
+                'dna': row_0['first'].replace(barcode_dna_0, barcode_dna),
+            }, {
+                'oligo_name': row['name'] + '_2nd',
+                'dna': row_0['second'].replace(barcode_dna_0, barcode_dna),
+            }]
+    return pd.DataFrame(arr)
+
+def validate_pool2_300mers(df_oligos, df_agilent):
+    """Compare new parsed oligos to original Agilent assembly table.
+    """
+    assert not df_oligos['assembly_aa'].duplicated().any()
+    assert df_oligos['assembly_aa'].isin(df_agilent['CDS']).all()
+
+
+def prepare_overlap_subpools(df_agilent, nterm_subpool_size, cterm_subpool_size,
+                             nterm_first_adaptor=1, cterm_first_adaptor=13):
+    """Adaptor indexes are hard-coded into adaptor table for OligoOverlapOpt...
+    """
+    a = nterm_first_adaptor
+    b = cterm_first_adaptor
+
+    def prep(df):
+        return (df.assign(CDS_length=lambda x: x['CDS'].str.len())
+                .sort_values('CDS_length', ascending=False)
+                .drop_duplicates('design')
+               )
+
+
+    A = (df_agilent
+     .pipe(prep)
+     .query('vector == "pT12"')
+     .assign(assembly_subpool=lambda x: 
+             a + (np.arange(len(x)) / nterm_subpool_size).astype(int))
+    )
+
+    B = (df_agilent
+     .pipe(prep)
+     .query('vector == "pT13"')
+     .assign(assembly_subpool=lambda x: 
+             b + (np.arange(len(x)) / cterm_subpool_size).astype(int))
+    )
+
+    return pd.concat([A, B])
+
+
+def generate_overlap_opt(input_table, adapter_ix):
+    overlap_opt = 'python -u /home/dfeldman/packages/LA_OligoOverlapOpt/two_oligo_assembly.v2.py'
+    adapter_table = '/home/dfeldman/flycodes/pool2/overlap/adapters.tab'
+    flags = [f'-adaptor_number {adapter_ix}',
+             '-min_melt_temp 65',
+             '-max_oligo_size 300',
+             '-codontable_fname /home/dfeldman/packages/LA_OligoOverlapOpt/codontable.tab',
+             f'-adaptor_fname {adapter_table}',
+             f'-input_list {input_table}',
+            ]
+
+    cmd = f'{overlap_opt} {" ".join(flags)}'
+    return cmd
+
+
+def prepare_OligoOverlapOpt(df_for_overlaps, overlap_dir, limit=1000000):
+    # write input files and overlap commands
+    cols = ['name', 'CDS', 'CDS_dna']
+    it = df_for_overlaps.groupby(['vector', 'assembly_subpool'])
+    cmds = []
+    for (vector, subpool), df in it:
+        run_dir = os.path.abspath(f'{overlap_dir}/run_{vector}_{subpool}')
+        input_table = f'{run_dir}/input.tab'
+        os.makedirs(run_dir, exist_ok=True)
+        df[cols][:limit].to_csv(input_table, index=None, header=None, sep=' ')
+        cmds += [f'cd {run_dir}; ' + generate_overlap_opt(input_table, subpool)]
+
+    pd.Series(cmds).to_csv(f'{overlap_dir}/commands.list', index=None, header=None)
+
+
+fwd_nterm = 'AGCAGTGGCAGTCGC'
+fwd_cterm = 'TAAGAAGGAGATATA'
+rev_nterm = 'AGCTCGAGCACCACCA'
+rev_cterm = 'CGCAGTAGCGGCAGTC'
+
+def write_adapter_table(home='flycodes/pool2/overlap'):
+    """Make a new adapter table with Jason inner primers and pool2 outer primers.
+    """
+    
+    f = '/home/dfeldman/packages/LA_OligoOverlapOpt/pool_adaptors_short_list.txt'
+
+    df_adaptors = pd.read_csv(f, sep='\s+')
+
+    df_jason = (df_adaptors
+    .loc[lambda x: x['name'].str.contains('jason')][:12]
+    )
+
+    A = (df_jason
+    .assign(oligoA_5prime=fwd_nterm, oligoB_3prime=rev_nterm)
+    .assign(name=[f'pool2_nterm_{i}' for i in range(1,13)])
+    )
+
+    B = (df_jason
+    .assign(oligoA_5prime=fwd_cterm, oligoB_3prime=rev_cterm)
+    .assign(name=[f'pool2_cterm_{i}' for i in range(1,13)])
+    )
+
+    pd.concat([A, B]).to_csv(f'{home}/adapters.tab', sep=' ', index=None)
+
+
+def collect_and_fix_output(home='flycodes/pool2/overlap_medium2/'):
+    from postdoc.scripts import app
+
+    # need to remove pETCON adaptors which are added by default
+    yeast_primer5 = 'GGGTCGGCTTCGCATATG'
+    yeast_primer3 = 'CTCGAGGGTGGAGGTTCC'
+
+    f = f'{home}/run_pT12*/final_order_large_pool_*.tab'
+    A = (csv_frame(f, sep='\s+', header=None)
+    .rename(columns={0: 'oligo_name', 1: 'dna'})            
+    .assign(dna=lambda x: x['dna'].str.replace('^' + yeast_primer5, fwd_nterm))
+    .assign(dna=lambda x: x['dna'].str.replace(yeast_primer3 + '$', rev_nterm))
+    )
+
+    f = f'{home}/run_pT13*/final_order_large_pool_*.tab'
+    B = (csv_frame(f, sep='\s+', header=None)
+    .rename(columns={0: 'oligo_name', 1: 'dna'})            
+    .assign(dna=lambda x: x['dna'].str.replace('^' + yeast_primer5, fwd_cterm))
+    .assign(dna=lambda x: x['dna'].str.replace(yeast_primer3 + '$', rev_cterm))
+    )
+
+    df_collected = pd.concat([A, B])
+
+    f = f'{home}/overlap_oligos.csv'
+    df_collected.to_csv(f)
+
+    print('Running app.sh parse-overlap-oligos')
+    app.parse_overlap_oligos(f, name_col='oligo_name', dna_col='dna', 
+                             oligo_A_5=len(fwd_nterm), oligo_B_3=len(rev_nterm))
