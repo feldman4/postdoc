@@ -49,7 +49,7 @@ def parse_fasta(txt):
 
 def write_fasta(filename, list_or_records):
     with open(filename, 'w') as fh:
-        format_fasta(list_or_records)
+        fh.write(format_fasta(list_or_records))
 
 
 def format_fasta(list_or_records):
@@ -62,7 +62,7 @@ def format_fasta(list_or_records):
             records += [(fmt.format(i), s)]
     else:
         records = list_or_records
-
+    
     lines = []
     for name, seq in records:
         lines.extend([f'>{name}', seq])
