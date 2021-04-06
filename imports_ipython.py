@@ -1,11 +1,17 @@
-from .sequence import print_alignment
-from .sequence import read_fasta, read_fastq, write_fasta
 from .imports import *
-from .utils import ls_df
-from .scripts import app
 
-from postdoc.sequence import reverse_complement as rc
-from postdoc.sequence import translate_dna, try_translate_dna
+from .scripts import app
+from .sequence import print_alignment, translate_dna, try_translate_dna
+from .sequence import read_fasta, read_fastq, write_fasta
+from .utils import ls_df
+
+from .sequence import reverse_complement as rc
+
+from . import helpers
+df_aa, aa_legend = helpers.load_aa_legend()
+
+aa_3_1 = df_aa.set_index('res_name')['Letter'].to_dict()
+aa_1_3 = {v: k for k, v in aa_3_1.items()}
 
 try:
     from .drive import Drive
@@ -17,6 +23,7 @@ import scipy.stats
 from scipy.spatial.distance import pdist
 from math import ceil
 from pandas import IndexSlice as pdx
+from tqdm.auto import tqdm
 
 import IPython
 from IPython.display import display
@@ -30,21 +37,13 @@ IPython.get_ipython().run_line_magic('matplotlib', 'inline')
     # .run_line_magic('config', "InlineBackend.figure_format = 'retina'")
 )
 
+plt.rcParams['savefig.facecolor'] = 'white'
+
 import warnings
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', '', category=FutureWarning)
     import tqdm.notebook
     tqdm.notebook.tqdm.pandas()
-
-from tqdm.auto import tqdm
-
-
-from . import helpers
-df_aa, aa_legend = helpers.load_aa_legend()
-
-aa_3_1 = df_aa.set_index('res_name')['Letter'].to_dict()
-aa_1_3 = {v: k for k, v in aa_3_1.items()}
-
 
 
 def patch_assign(cls):
