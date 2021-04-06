@@ -9,14 +9,14 @@ from ..utils import csv_frame, predict_ransac, codify, set_cwd, nglob
 
 mz_diff_tolerance = 2.5e-5
 mz_tolerance = mz_diff_tolerance * 1000 # for merge_asof
-rt_fit_query = '500 < intensityApex'
+rt_fit_min_intensityApex = 500
 rt_fit_threshold = 0.6
 rt_fit_plot_min_intensityApex = 500
 
 SEC_min_intensityApex = 6000
 SEC_run = 'MSLIB5.1 001'
 
-home = '/home/dfeldman/flycodes/ms/20210316_DF_CR'
+home = '/home/dfeldman/flycodes/ms/20210315_DF_CR'
 
 
 def prepare_dinosaur(home=home):
@@ -86,6 +86,7 @@ def load_features(home=home):
 
     rubbish = ['charge', 'mass', 'massCalib', 'mostAbundantMz', 'rtStart', 'rtEnd']
     sample_pat = f'{home}/(?P<sample>.*).filt.features.tsv'
+    rt_fit_query = f'{rt_fit_min_intensityApex} < intensityApex'
     return (csv_frame(f'{home}/*features.tsv', sep='\t', file_pat=sample_pat)
     .sort_values('mz')
     .drop(rubbish, axis=1)
@@ -111,6 +112,16 @@ def plot_and_save(df_features, home=home):
 
         fg = plot_SEC_reconstruction(df_features)
         fg.savefig('figures/SEC_reconstruction.jpg')
+
+        fg = plot_SEC_reconstruction(df_features, log_scale=True)
+        fg.savefig('figures/SEC_reconstruction_log.jpg')
+
+        (df_features
+         .assign(filtered=filter_features)
+         .to_csv('matched_features.csv', index=None)
+        )
+        
+
 
 
 def load_metadata(home=home):
@@ -183,12 +194,26 @@ def plot_err_cutoffs(df_features, figsize=(5, 6)):
 
     xlim = ax0.get_xlim()
     ax0.plot(xlim, [mz_diff_tolerance, mz_diff_tolerance], ls='--', color='red')
+    ax1.plot(xlim, [rt_fit_threshold, rt_fit_threshold], ls='--', color='red')
 
     fig.tight_layout()
     return fig
 
 
-def plot_SEC_reconstruction(df_features):
+def filter_features(df_features):
+    df = df_features.reset_index(drop=True)
+    keep_index = (df
+        .sort_values('intensityApex', ascending=False)
+        .query('rt_fit_err < @rt_fit_threshold')
+        .query('mz_diff < @mz_diff_tolerance')
+        .drop_duplicates(['mz_theoretical', 'sample'])
+        .index
+    )
+    return df.index.isin(keep_index)
+
+
+
+def plot_SEC_reconstruction(df_features, log_scale=False):
     def plot(data, color, label):
         ax = plt.gca()
         for _, df in data.groupby('mz_theoretical'):
@@ -197,10 +222,7 @@ def plot_SEC_reconstruction(df_features):
         pass
 
     fg = (df_features
-    .sort_values('intensityApex', ascending=False)
-    .query('rt_fit_err < @rt_fit_threshold')
-    .query('mz_diff < @mz_diff_tolerance')
-    .drop_duplicates(['mz', 'sample'])
+    .loc[filter_features]
     .query('sample_class == "SEC"')
     .assign(sample_id=lambda x: x['sample'].str[2:].astype(int))
     .query('intensityApex > @SEC_min_intensityApex')
@@ -213,7 +235,8 @@ def plot_SEC_reconstruction(df_features):
     for ax in fg.axes.flat[:]:
         ax.set_xlabel('Elution volume')
         ax.set_ylabel('Apex intensity')
-        ax.set_yscale('log')
+        if log_scale:
+            ax.set_yscale('log')
         ax.set_xlim([7, 23])
 
     fg.fig.tight_layout()
