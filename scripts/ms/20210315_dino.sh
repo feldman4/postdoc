@@ -11,9 +11,6 @@
 # FileInfo etc are from OpenMS, installed using conda install openms -c bioconda -c conda-forge
 # Dinosaur is installed from https://github.com/fickludd/dinosaur (conda could work too?)
 
-INPUT="expdata/DF1_10uL.mzdata.xml"
-INPUT="expdata/DF1_1uL.mzdata.xml"
-INPUT="expdata/CR08.mzdata.xml"
 INPUT=$1
 
 SAMPLE_NAME=`basename $INPUT .mzdata.xml`
