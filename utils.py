@@ -33,7 +33,7 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
 
 
 def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None, sort=True, 
-              include_cols=None, exclude_cols=None, **kwargs):
+              include_cols=None, exclude_cols=None, keep_index=False, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
     """
@@ -70,7 +70,11 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
     else:
         files = files_or_search
 
-    return pd.concat([read_csv(f) for f in progress(files)], sort=sort)
+    df = pd.concat([read_csv(f) for f in progress(files)], sort=sort)
+    if keep_index:
+        return df
+    else:
+        return df.reset_index(drop=True)
 
 
 def read_list(filename):
@@ -457,10 +461,42 @@ def count_lines_wc(filename):
 
 @contextlib.contextmanager
 def set_cwd(working_dir):
-    """Based on 
+    """Use to temporarily change the working directory, e.g.,
+    with set_cwd('/path/to/dir'):
+        # work with relative paths
+    # back to previous directory
+
+    Based on 
     https://stackoverflow.com/questions/169070/how-do-i-write-a-decorator-that-restores-the-cwd
     """
-    curdir = os.getcwd()
+    current_dir = os.getcwd()
     os.chdir(working_dir)
-    try: yield
-    finally: os.chdir(curdir)
+    try: 
+        yield
+    finally: 
+        os.chdir(current_dir)
+
+
+def join_within(df_left, df_right, left_on, right_on, tolerance):
+    """Performs an inner join where numerical values `left_on` and `right_on` are within
+    tolerance.
+    """
+    from scipy.spatial import cKDTree
+    left = df_left[[left_on]]
+    right = df_right[[right_on]]
+    kdt_left = cKDTree(left)
+    kdt_right = cKDTree(right)
+    neighbors = kdt_left.query_ball_tree(kdt_right, tolerance)
+    
+    left_index = []
+    right_index = []
+    for i, xs in enumerate(neighbors):
+        for j in xs:
+            left_index.append(i)
+            right_index.append(j)
+            
+    return (pd.DataFrame({'__left': left_index, '__right': right_index})
+     .join(df_left.reset_index(drop=True), on='__left')
+     .join(df_right.reset_index(drop=True), on='__right')
+     .drop(['__left', '__right'], axis=1)
+    )
