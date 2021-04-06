@@ -6,39 +6,40 @@ from natsort import natsorted
 import numpy as np
 import subprocess
 import pandas as pd
+from path import Path
 from tqdm.auto import tqdm
 from .assembly import get_allowed_swaps, polish_snowflakes
 from .design import make_cterm_linker, add_mz_resolution_bins
 from ..sequence import (aa_to_dna_re, translate_dna, read_fasta, write_fasta)
 from ..sequence import reverse_complement as rc
 from ..pyrosetta import diy
-from ..utils import DivPath, read_list, assert_unique, hash_set, nglob, csv_frame, assign_format
+from ..utils import read_list, assert_unique, hash_set, nglob, csv_frame, assign_format
 from ..constants import AA_1
 from . import pool2
 
-home = DivPath('flycodes/pool4')
+home = Path('flycodes/pool4')
 barcode_source = 'flycodes/run_007/barcodes_ms1_1000000.csv'
 barcode_gate = '0 < iRT < 100 & ilv_count < 3'
 
 input_sources = 'ordered_designs_control', 'protease_stable_chip_designs'
-input_designs = home / 'input/designs.csv'
-input_designs_random = home / 'input/designs_random.csv'
-barcode_table = home / 'process/cterm_barcodes.csv'
+input_designs = 'input/designs.csv'
+input_designs_random = 'input/designs_random.csv'
+barcode_table = 'process/cterm_barcodes.csv'
 
-dnaworks_input = home / 'process/DNAworks/DNA_input.list'
-dnaworks_output = home / 'process/DNAworks/DNA_sequence.list'
-rtrobby_output = home / 'process/rtrobby_output.csv'
-codonharmony_input = home / 'process/codonharmony_input.fa'
-codonharmony_output = home / 'process/codonharmony_output.fa'
+dnaworks_input = 'process/DNAworks/DNA_input.list'
+dnaworks_output = 'process/DNAworks/DNA_sequence.list'
+rtrobby_output = 'process/rtrobby_output.csv'
+codonharmony_input = 'process/codonharmony_input.fa'
+codonharmony_output = 'process/codonharmony_output.fa'
 
 # input designs
-design_table_0 = home / 'process/design_table_0.csv'
+design_table_0 = 'process/design_table_0.csv'
 # after reverse translation
-design_table_1 = home / 'process/design_table_1.csv'
+design_table_1 = 'process/design_table_1.csv'
 # after oligo design
-design_table_2 = home / 'process/design_table_2.csv'
+design_table_2 = 'process/design_table_2.csv'
 
-agilent_order = home / 'agilent_oligos.txt'
+agilent_order = 'agilent_oligos.txt'
 
 barcodes_per_design = 18
 mz_resolution = 20000
@@ -62,6 +63,8 @@ avoid_sites = bamhi, bsai
 fwd_adapter = 'CTATCATTCGGTCTCcTACC'
 rev_adapter = 'AGTCTAATTGGTCTCcTGCG'
 
+hash_width = 8
+
 
 def add_adapters():
     df_designs = pd.read_csv(design_table_1)
@@ -78,11 +81,11 @@ def add_adapters():
 def prepare_DNAworks():
     seq_list = os.path.abspath(dnaworks_input)
 
-    d = home / 'process/DNAworks'
+    d = 'process/DNAworks'
     os.makedirs(d, exist_ok=True)
     [os.remove(f) for f in glob(d + '/*')]
     
-    (csv_frame(home / 'process/*DNAworks*csv')
+    (csv_frame('process/*DNAworks*csv')
     [['cds_name', 'cds']]
      .to_csv(seq_list, header=None, index=None, sep='\t')
     )
@@ -93,7 +96,7 @@ def prepare_DNAworks():
     subprocess.run(cmd, cwd=d, shell=True)
 
     print(f"""DNAworks steps
-    1. submit: sh {os.path.abspath(home / 'process/DNAworks/submition_commands.list')}
+    1. submit: sh {os.path.abspath('process/DNAworks/submition_commands.list')}
     2. monitor: watch sq
     3. collect: python2 /home/longxing/bin/DNAWorks/2_collect_dnaseq.py
     4. verify: python /home/longxing/bin/DNAWorks/3_check_seq.py DNA_sequence.list
@@ -102,7 +105,7 @@ def prepare_DNAworks():
 
 def reverse_translate_robby(repeats=1, enzymes=('bsai', 'bamhi')):
     from rtRosetta.reverse_translate_robby import main
-    df_designs = csv_frame(home / 'process/rt_rtrobby*csv')
+    df_designs = csv_frame('process/rt_rtrobby*csv')
     aa_sequences = df_designs['cds']
     dna_sequences = [main(x, num_times_to_loop=repeats, enzymes=enzymes)
                      for x in tqdm(aa_sequences)]
@@ -113,7 +116,7 @@ def reverse_translate_robby(repeats=1, enzymes=('bsai', 'bamhi')):
 
 
 def run_codon_harmony():
-    df = csv_frame(home / 'process/*codonharmony*csv')[['cds_name', 'cds']]
+    df = csv_frame('process/*codonharmony*csv')[['cds_name', 'cds']]
     write_fasta(codonharmony_input, df.values)
 
     cmd = f"""packages/codon_harmony/runner.py 
@@ -224,7 +227,7 @@ def setup_reverse_translation():
     for cds, (rt, rna_opt) in zip(df_designs['cds'], protocols):
         sequences[(rt, rna_opt)].append(cds)
     for (rt, rna_opt), seqs in sequences.items():
-        list_name = home / 'process' / f'rt_{rt}_rna_{rna_opt}.csv'
+        list_name = f'process/rt_{rt}_rna_{rna_opt}.csv'
         names = [cds_to_name[x] for x in seqs]
         (pd.DataFrame({'cds_name': names, 'cds': seqs})
          [['cds_name', 'cds']]
@@ -237,7 +240,7 @@ def make_random_designs(num_sequences=100, design_length=65):
     sequences = rs.choice(AA_1, size=(num_sequences, design_length))
     sequences = [''.join(x) for x in sequences]
 
-    (pd.DataFrame({'design': sequences, 'name': hash_set(sequences, 6)})
+    (pd.DataFrame({'design': sequences, 'name': hash_set(sequences, hash_width)})
      .to_csv(input_designs_random, index=None)
     )
 
@@ -245,7 +248,7 @@ def make_random_designs(num_sequences=100, design_length=65):
 def load_designs(num_limit=1e10):
     files = []
     for source in input_sources:
-        for f in nglob(home / 'input' / source / '*pdb'):
+        for f in nglob(os.path.join('input', source, '*pdb')):
             files += [(f, source)]
     arr = []
 
@@ -253,11 +256,10 @@ def load_designs(num_limit=1e10):
 
     for f, source in files:
         chains = diy.read_pdb_sequences(f)
-        assert len(chains) == 1
         arr += [{'pdb_file': f, 'design': chains['A'], 'source': source}]
     (pd.DataFrame(arr)
      .drop_duplicates('design')
-     .assign(name=lambda x: hash_set(x['design'], 8))
+     .assign(name=lambda x: hash_set(x['design'], hash_width))
      .to_csv(input_designs, index=None)
     )
 
@@ -279,14 +281,14 @@ def plot_selected_barcodes():
     import seaborn as sns
     df_barcodes = pd.read_csv(barcode_table)
     jg = sns.jointplot(data=df_barcodes, x='mz', y='iRT', joint_kws=dict(s=5))
-    jg.savefig(home / 'figures/barcode_table_mz_iRT.jpg')
+    jg.savefig('figures/barcode_table_mz_iRT.jpg')
     return jg
 
 
 def makedirs():
     dirs = 'figures', 'process', 'input'
     for d in dirs:
-        os.makedirs(home / d, exist_ok=True)
+        os.makedirs(d, exist_ok=True)
 
 
 def assign_barcodes():
