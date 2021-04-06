@@ -5,14 +5,13 @@ https://developers.google.com/drive/api/v3/quickstart/python
 Use python3 to execute quickstart.py and edit SCOPES to include
 'https://www.googleapis.com/auth/drive.readonly' 
 """
-
-
 import io
 import os
 import pickle
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+import numpy as np
 import pandas as pd
 
 
@@ -50,7 +49,9 @@ class Drive():
                      drop_unnamed=drop_unnamed)
     
     @staticmethod
-    def clean(df, dropna='all', normalize=True, fix_int=True, drop_unnamed=True):
+    def clean(df, dropna='all', normalize=True, fix_int=True, drop_unnamed=True, fix_value=True):
+        if fix_value:
+            df[df == '#VALUE!'] = np.nan
         if dropna:
             df = df.dropna(how=dropna, axis=0)
             df = df.dropna(how=dropna, axis=1)
