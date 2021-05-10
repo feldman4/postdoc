@@ -2,6 +2,7 @@
 *.DS_Store
 resources/._*
 resources/pdb_db.csv
+resources/rule_sets.csv
 resources/pdbs/
 scripts/external/
 external/
