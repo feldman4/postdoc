@@ -92,7 +92,8 @@ def update_resources():
     from .constants import RULE_SETS
     
     drive = Drive()
-    df_rules = drive('mass spec barcoding/rule sets', header=[0, 1])
+    df_rules = drive('MS barcoding/rule sets', header=[0, 1])
+    df_rules.columns = pd.MultiIndex.from_tuples(df_rules.columns.to_list())
     df_rules.fillna('').to_csv(RULE_SETS, index=None)
 
 
