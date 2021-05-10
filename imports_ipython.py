@@ -42,8 +42,9 @@ plt.rcParams['savefig.facecolor'] = 'white'
 import warnings
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', '', category=FutureWarning)
-    import tqdm.notebook
-    tqdm.notebook.tqdm.pandas()
+    import tqdm.notebook as tqdm_notebook
+    tqdm_notebook.tqdm.pandas()
+    del tqdm_notebook
 
 
 def patch_assign(cls):
@@ -77,4 +78,4 @@ except Exception:
 
 
 def jointplot(df, x, y, **kwargs):
-    return sns.jointplot(df[x], df[y], **kwargs)
+    return sns.jointplot(data=df, x=x, y=y, **kwargs)
