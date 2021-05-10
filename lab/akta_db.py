@@ -544,9 +544,10 @@ def search_app(*terms, output='', after=None, before=None, hdf_path=default_loca
         print(f'Exported absorbance data to {f3}')
 
 
-def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, volume_range=(5, 22), 
-              palette=None, description_as_name=False, no_description_id=True, 
-              remove_junk=' 001', strip_prefix=False, strip_suffix=True):
+def plot(uv_data, output='', overlay=False, normalize=False, volume_range=(5, 22), channels=None,
+              fractions=None, palette=None, filetype='png', description_as_name=False, 
+              no_description_id=True, remove_junk=' 001', strip_prefix=False, strip_suffix=True, 
+              hdf_path=default_location):
     """Plot each SEC run in exported data table.
 
     A few heuristics are optionally used to simplify the run description (disable with 
@@ -555,10 +556,13 @@ def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, vol
     :param uv_data: exported UV absorbance data table (e.g., from `export` command)
     :param output: path to save plots
     :param overlay: if true, overlay curves of each type
-    :param filetype: extension for saved plot (png, jpg, pdf, etc)
     :param normalize: if true, normalize each trace to its maximum
     :param volume_range: limits for plot x-axis (e.g., --volume_range=8,20)
+    :param channels: filter channels with regular expression (e.g., "230|280")
+    :param fractions: if true, plot fractions from the first sample; default is to plot if overlay
+        is not requested
     :param palette: matplotlib palette for coloring curves (default is "bright" followed by 
+    :param filetype: extension for saved plot (png, jpg, pdf, etc)
         "pastel")
     :param description_as_name: if true, uses original description as filename (disables 
         following options)
@@ -567,7 +571,8 @@ def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, vol
     :param remove_junk: filename excludes this string
     :param slugify: filename substitutes unfriendly characters (e.g., parentheses)
     :param strip_prefix: filename excludes common prefixes 
-    :param strip_suffix: filename excludes common suffixes 
+    :param strip_suffix: filename excludes common suffixes
+    :param hdf_path: path to exported AKTA database 
     """
     import pandas as pd
     import seaborn as sns
@@ -578,6 +583,8 @@ def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, vol
 
     v0, v1 = volume_range
     df_uv = pd.read_csv(uv_data).query('@v0 < volume < @v1')
+    if channels is not None:
+        df_uv = df_uv[df_uv['channel'].str.contains(str(channels))]
 
     directory, _ = os.path.split(output)
     if directory:
@@ -607,10 +614,17 @@ def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, vol
         df_uv['curve_min'] = df_uv.groupby(['ChromatogramID', 'channel'])['amplitude'].transform('min')
         df_uv[y_var] = df_uv.eval('(amplitude - curve_min)/ (curve_max - curve_min)')
         
-        
+    if fractions is None:
+        fractions = not overlay
+    if fractions:
+        df_fractions = pd.read_hdf(os.path.join(hdf_path, 'fractions.hdf'))
+
     if overlay:
+        aspect = 1.6 if fractions else 1
         fg = (df_uv
-         .pipe(sns.FacetGrid, col='channel', hue='name', sharey=False, palette=palette)
+         .pipe(sns.FacetGrid, col='channel', hue='name', sharey=False, palette=palette,
+                aspect=aspect,
+               )
          .map(plt.plot, 'volume', y_var)
          .add_legend()
         )
@@ -619,9 +633,12 @@ def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, vol
             ax.set_xlim(volume_range)
 
         f1 = f'{output}overlay.{filetype}'
+        if fractions:
+            for ax in fg.axes.flat[:]:
+                chr_id = df_uv['ChromatogramID'].iloc[0]
+                add_fractions(df_fractions, chr_id, ax)
         fg.savefig(f1)
         plt.close(fg.fig)
-
     else:
         for chr_id, df in df_uv.groupby('ChromatogramID'):
             name = df['name'].iloc[0]
@@ -635,9 +652,29 @@ def plot(uv_data, output='', overlay=False, filetype='png', normalize=False, vol
                 ax = fg.axes.flat[0]
                 ax.set_xlim(volume_range)
             f1 = f'{output}{name}.{filetype}'
+
+            if fractions:
+                for ax in fg.axes.flat[:]:
+                    add_fractions(df_fractions, chr_id, ax)
             fg.savefig(f1)
             plt.close(fg.fig)
 
+
+def add_fractions(df_fractions, chr_id, ax):
+    df = df_fractions
+    xlim = ax.get_xlim()
+    low, high = ax.get_ylim()
+    
+    it = (df_fractions.query('ChromatogramID == @chr_id')
+      [['volume', 'fraction']].values)
+    for v, f in it:
+        fontsize = ax.get_window_extent().width/40
+        # top = np.interp(v, top_line.index, top_line)
+        bottom = high*-0.3*((fontsize+2)/13)
+        top = 0
+        ax.annotate(f, (v, 0), rotation=90, va='top', ha='left')
+        ax.plot([v, v], [bottom, top], ls=':', color='gray', zorder=-10)
+    ax.set_xlim(xlim)
 
 
 def simplify_names(descriptions, no_description_id, remove_junk, strip_prefix, strip_suffix):
