@@ -1,13 +1,8 @@
 import fire
 import postdoc.lab.sanger_app
-# delay imports for speed
+import postdoc.flycodes.ms_app
 
-
-def dataframe_to_csv_string(df):
-    import io
-    s = io.StringIO()
-    df.to_csv(s, index=None)
-    return s.getvalue()
+# non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
 
 def parse_overlap_oligos(filename, output_prefix=None,
@@ -175,6 +170,8 @@ def calculate_distances(filename, header=None, col=0, sep=None):
     """Calculate distribution of Levenshtein distances.
     """
     import pandas as pd
+    from postdoc.utils import dataframe_to_csv_string
+
     sequences = read_table(filename, col=col, header=header, sep=sep)
     distances = _calculate_distances(sequences)
     df_distances = pd.Series(arr).value_counts().reset_index()
@@ -327,6 +324,7 @@ def reverse_translate(filename, enzymes=('NdeI', 'XhoI', 'BamHI', 'BsaI'), repea
     from tqdm.auto import tqdm
     import random
     import pandas as pd
+    from postdoc.utils import dataframe_to_csv_string
 
     random.seed(seed)
     
@@ -493,6 +491,8 @@ def find_nearest_sequence(
     import sys
     import pandas as pd
     from postdoc.sequence import add_design_matches
+    from postdoc.utils import dataframe_to_csv_string
+
     if keep_query_table:
         df_query = read_table(
             filename_query, col=None, header=header_query, sep=sep_query)
@@ -531,7 +531,8 @@ def find_nearest_sequence(
 
 
 def submit_from_command_list(filename, array=None, name=None, queue='short', 
-                             memory='4g', num_cpus=1, stdout='default', stderr='default', 
+                             memory='4g', num_cpus=1, with_gpu=None,
+                             stdout='default', stderr='default', 
                              dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
@@ -541,9 +542,10 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     :param queue: sbatch queue (-p)
     :param memory: sbatch memory (--mem)
     :param num_cpus: sbatch number of cpus (-c)
+    :param with_gpu: sbatch --gres=gpu:1 to request a GPU, defaults to true if using gpu queue
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
-    :param dry_run: print command instead of submitting
+    :param dry_run: output command instead of submitting
     """
     import os
     import sys
@@ -562,31 +564,44 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     if stderr is 'default':
         stderr = f'logs/{name}_%A{little_a}.err'
 
+    if with_gpu is None:
+        if queue == 'gpu':
+            print('Requested gpu queue but no GPUs, including 1 GPU by default', 
+                  file=sys.stderr)
+            with_gpu = True
+        else:
+            with_gpu = False
+
+    if with_gpu:
+        gpu_flag = '--gres=gpu:1'
+    else:
+        gpu_flag = ''
+
     for x in (stdout, stderr):
         os.makedirs(os.path.dirname(x), exist_ok=True)
     
     base_command = (f'sbatch -p {queue} -J {name} --mem={memory} '
-                    f'-c {num_cpus} -o {stdout} -e {stderr}')
+                    f'-c {num_cpus} {gpu_flag} -o {stdout} -e {stderr}')
+    final_commands = []
+    plural = 's' if len(commands) > 1 else ''
     if array:
-        print(f'Submitting array of {len(commands)} tasks...')
+        submit_message = f'Submitting array of {len(commands)} task{plural} to {queue} queue...'
         flag = f'--array=1-{len(commands)}'
         if isinstance(array, int):
             flag += f'%{int(array)}'
         cmd = f'--wrap="sed -n ${{SLURM_ARRAY_TASK_ID}}p {filename} | bash"'
-        final = ' '.join([base_command, flag, cmd])
-        if dry_run:
-            print(final)
-        else:
-            subprocess.Popen(final, shell=True, stdout=sys.stdout, stderr=sys.stderr)
-
+        final_commands += [' '.join([base_command, flag, cmd])]
     else:
-        print(f'Submitting {len(commands)} jobs...')
+        submit_message = f'Submitting {len(commands)} job{plural} to {queue} queue...'
         for cmd in commands:
-            final = base_command + f' --wrap="{cmd}"'
-            if dry_run:
-                print(final)
-            else:
-                subprocess.Popen(final, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            final_commands += [base_command + f' --wrap="{cmd}"']
+
+    if dry_run:
+        return final_commands
+    else:
+        print(submit_message, file=sys.stderr)
+        for command in final_commands:
+            subprocess.Popen(command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
 
 def fasta_to_table(filename):
@@ -597,6 +612,7 @@ def fasta_to_table(filename):
     import pandas as pd
     from postdoc.sequence import parse_fasta
     import sys
+    from postdoc.utils import dataframe_to_csv_string
     
     if filename == 'stdin':
         text = sys.stdin.read()
@@ -649,6 +665,9 @@ if __name__ == '__main__':
         'parse_overlap_oligos',
         
         'count_inserts_NGS',
+
+        # gpu commands
+        'predict_iRT',
         
         # utility commands
         'read_table', 'fix_fire_completion', 'chunk',
@@ -658,7 +677,9 @@ if __name__ == '__main__':
         ]
     # if the command name is different from the function name
     named = {'submit': submit_from_command_list,
-             'match_sanger': postdoc.lab.sanger_app.main}
+             'match_sanger': postdoc.lab.sanger_app.main,
+             'predict_iRT': postdoc.flycodes.ms_app.predict_iRT,
+             }
 
     final = {}
     for k in commands:
