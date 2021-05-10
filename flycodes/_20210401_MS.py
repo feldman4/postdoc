@@ -5,6 +5,8 @@ import pandas as pd
 import os
 import contextlib
 
+from tqdm.auto import tqdm
+
 from ..utils import csv_frame, predict_ransac, codify, set_cwd, nglob, join_within
 
 # prior to joining candidate barcodes
@@ -246,12 +248,12 @@ def export_one_design(df):
     plt.close(fig)
     
 
-def extract_and_plot(df_analysis):
+def extract_and_plot(df_analysis, barcode_to_design, datasets, dataset_to_label, palette):
     """One plot per barcode. Input table already contains barcode retention times. Peak values
     (first isotope) are extracted in a narrow window around the target retention time.
     """
     rt_left, rt_right = -0.2, 0.5
-    mz_left, mz_right = -0.5, 2.5
+    mz_left, mz_right = -1.2, 2.5
 
     arr = []
     for bc, mz, rt in tqdm(df_analysis[['barcode', 'mz', 'RT']].values):
@@ -272,7 +274,8 @@ def extract_and_plot(df_analysis):
             ax0.plot(times, peaks, label=dataset_to_label[dataset], color=palette[dataset])
             ymax = max(ymax, max(peaks))
             
-            ax1.plot(mz_all[scan_rt], intensity_all[scan_rt], label=dataset_to_label[dataset], color=palette[dataset])
+            ax1.plot(mz_all[scan_rt], intensity_all[scan_rt], 
+                     label=dataset_to_label[dataset], color=palette[dataset])
             
             peak_ix = np.argmin(np.abs(mz_all[scan_rt] - mz))
             apex_intensity = intensity_all[scan_rt][peak_ix]
@@ -306,5 +309,5 @@ def extract_and_plot(df_analysis):
         fig.savefig(f)
         plt.close(fig)
 
-        return pd.DataFrame(arr).sort_values(['design', 'barcode', 'dataset'])
+    return pd.DataFrame(arr).sort_values(['design', 'barcode', 'dataset'])
 
