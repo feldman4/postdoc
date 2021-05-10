@@ -1,7 +1,9 @@
 from ..utils import tqdm, cast_cols
 from ..constants import resources
 
+import contextlib
 import io
+import sys
 import os
 import numpy as np
 import pandas as pd
@@ -468,7 +470,7 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
 def rule_set_to_options(rule_set, length):
     from ..constants import RULE_SETS
     rules = pd.read_csv(RULE_SETS, header=[0, 1])[rule_set]
-    n_term =rules['Nterm'].dropna().pipe(list)
+    n_term = rules['Nterm'].dropna().pipe(list)
     middle = rules['middle'].dropna().pipe(list)
     c_term = rules['Cterm'].dropna().pipe(list)
     return (n_term,) + (middle,) * (length - 2) + (c_term,)
@@ -562,35 +564,37 @@ def load_prosit_models(irt_dir, spectra_dir, gpu_mem_fraction=1):
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_fraction)
     session_kwargs = dict(config=tf.ConfigProto(gpu_options=gpu_options))
-    d_spectra["graph"] = tf.Graph()
-    with d_spectra["graph"].as_default():
-        d_spectra["session"] = tf.Session(**session_kwargs)
-        with d_spectra["session"].as_default():
-            d_spectra["model"], d_spectra["config"] = model.load(
+    d_spectra['graph'] = tf.Graph()
+    with d_spectra['graph'].as_default():
+        d_spectra['session'] = tf.Session(**session_kwargs)
+        with d_spectra['session'].as_default():
+            d_spectra['model'], d_spectra['config'] = model.load(
                 spectra_dir,
                 trained=True
             )
-            d_spectra["model"].compile(optimizer="adam", loss="mse")
-    d_irt["graph"] = tf.Graph()
-    with d_irt["graph"].as_default():
-        d_irt["session"] = tf.Session(**session_kwargs)
-        with d_irt["session"].as_default():
-            d_irt["model"], d_irt["config"] = model.load(irt_dir,
+            d_spectra['model'].compile(optimizer='adam', loss='mse')
+    d_irt['graph'] = tf.Graph()
+    with d_irt['graph'].as_default():
+        d_irt['session'] = tf.Session(**session_kwargs)
+        with d_irt['session'].as_default():
+            d_irt['model'], d_irt['config'] = model.load(irt_dir,
                     trained=True)
-            d_irt["model"].compile(optimizer="adam", loss="mse")
+            d_irt['model'].compile(optimizer='adam', loss='mse')
             
     return d_spectra, d_irt
 
 
-def predict_prosit(peptides, d_spectra, d_irt, collision_energy=27):
-    """Not sure if the spectra and intensities are meaningful.
+def predict_prosit(peptides, d_spectra, d_irt, collision_energy=27, stdout_to=sys.stderr):
+    """Redirect prosit's internal progress bar to `stdout_to`.
     """
     import prosit
     from prosit import tensorize, prediction
     df = format_for_prosit(peptides, collision_energy)
     data = tensorize.csv(df)
-    prediction.predict(data, d_irt)
-    prediction.predict(data, d_spectra)
+    
+    with contextlib.redirect_stdout(stdout_to):
+        prediction.predict(data, d_irt)
+        prediction.predict(data, d_spectra)
     return data
 
 
@@ -961,7 +965,8 @@ def bin_by_resolution(xs, resolution):
         bins = np.array([0 for _ in xs])
         return bins, centers, edges
 
-    return np.digitize(xs, edges), centers, edges
+    bins = np.digitize(xs, edges)
+    return bins, centers, edges
 
 
 def add_mz_resolution_bins(df_barcodes, resolution):
@@ -1007,3 +1012,26 @@ def make_cterm_linker(length, base='GS', repeat='GGS', cap='G'):
 
 def make_nterm_linker(length, base='GS', repeat='GGS', cap='G'):
     return make_linker(length, base[::-1], repeat[::-1], cap)[::-1]
+
+
+levy_2012 = dict([('A', 0.0062),
+('C', 1.0372),
+('D', -0.7485),
+('E', -0.7893),
+('F', 1.2727),
+('G', -0.1771),
+('H', 0.1204),
+('I', 1.1109),
+('K', -1.1806),
+('L', 0.9138),
+('M', 1.0124),
+('N', -0.2693),
+('P', -0.1799),
+('Q', -0.4114),
+('R', -0.0876),
+('S', 0.1376),
+('T', 0.1031),
+('V', 0.7599),
+('W', 0.7925),
+('Y', 0.8806),])
+
