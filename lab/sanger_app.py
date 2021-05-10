@@ -18,6 +18,11 @@ def strip_common_prefix(xs):
         i -= 1
 
 
+def strip_common_suffix(xs):
+    flip = lambda ys: [y[::-1] for y in ys]
+    return flip(strip_common_prefix(flip(xs)))
+
+
 def parse_files(files, pat):
     from natsort import natsorted
     import os
@@ -27,7 +32,7 @@ def parse_files(files, pat):
 
     files = natsorted(files)
     names = strip_common_prefix(files)
-    names = [os.path.splitext(x)[0] for x in names]
+    names = strip_common_suffix(names)
     arr = []
     for file, name in zip(files, names):
         seq = load_sanger(file)
