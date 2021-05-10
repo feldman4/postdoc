@@ -17,8 +17,7 @@ from ..utils import read_list, assert_unique, hash_set, nglob, csv_frame, assign
 from ..constants import AA_1
 from . import pool2
 
-home = Path('flycodes/pool4')
-barcode_source = 'flycodes/run_007/barcodes_ms1_1000000.csv'
+barcode_source = '/home/dfeldman/flycodes/run_007/barcodes_ms1_1000000.csv'
 barcode_gate = '0 < iRT < 100 & ilv_count < 3'
 
 input_sources = 'ordered_designs_control', 'protease_stable_chip_designs'
