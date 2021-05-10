@@ -454,6 +454,7 @@ def xr_open_dataset(f):
     xr.open_dataset(f).close()
     return xr.open_dataset(f)
 
+
 def count_lines_wc(filename):
     cmd = f'wc -l {filename}'
     return int(subprocess.check_output(cmd, shell=True).split()[0])
@@ -500,3 +501,13 @@ def join_within(df_left, df_right, left_on, right_on, tolerance):
      .join(df_right.reset_index(drop=True), on='__right')
      .drop(['__left', '__right'], axis=1)
     )
+
+
+def dataframe_to_csv_string(df):
+    s = io.StringIO()
+    df.to_csv(s, index=None)
+    txt = s.getvalue()
+    # remove final line break
+    if txt[-1] == '\n':
+        txt = txt[:-1]
+    return txt
