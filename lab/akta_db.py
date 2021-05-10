@@ -661,6 +661,9 @@ def plot(uv_data, output='', overlay=False, normalize=False, volume_range=(5, 22
 
 
 def add_fractions(df_fractions, chr_id, ax):
+    """Plot fraction starting volumes and labels. Guess the label locations from axis
+    dimensions. Could use a second x axis with tick labels instead.
+    """
     df = df_fractions
     xlim = ax.get_xlim()
     low, high = ax.get_ylim()
@@ -670,9 +673,11 @@ def add_fractions(df_fractions, chr_id, ax):
     for v, f in it:
         fontsize = ax.get_window_extent().width/40
         # top = np.interp(v, top_line.index, top_line)
-        bottom = high*-0.3*((fontsize+2)/13)
-        top = 0
-        ax.annotate(f, (v, 0), rotation=90, va='top', ha='left')
+        top = low
+        height = (high - low)*0.3*((fontsize+2)/13)
+        bottom = top - height
+        print(top, bottom, height)
+        ax.annotate(f, (v, top), rotation=90, va='top', ha='left')
         ax.plot([v, v], [bottom, top], ls=':', color='gray', zorder=-10)
     ax.set_xlim(xlim)
 
