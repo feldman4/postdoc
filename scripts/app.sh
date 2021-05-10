@@ -1,8 +1,15 @@
 #!/bin/sh
 
-if [ "$CONDA_PREFIX" != "/home/dfeldman/.conda/envs/df-pyr-tf" ]
+ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
+case $1 in 
+    --env=prosit)
+        ENV="/home/dfeldman/.conda/envs/prosit5"
+        shift
+esac
+
+if [ "$CONDA_PREFIX" != "$ENV" ]
 then
-    source activate /home/dfeldman/.conda/envs/df-pyr-tf
+    source activate $ENV
 fi
 
 PYTHONPATH=/home/dfeldman/packages python /home/dfeldman/packages/postdoc/scripts/app.py "$@"
