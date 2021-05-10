@@ -53,7 +53,7 @@ AA_1_3 = {'A': 'ALA',
 
 
 # icosahedral symframes are the same for I53, I3, I5
-# symframes_I = rpxdock.geom.symframes('I') 
+symframes_I = rpxdock.geom.symframes('I') 
 symframe_info = {
     'I3': {'neighbors': [2],
            'subunit': [0, 3, 6],
