@@ -243,7 +243,7 @@ def expand_bcp_data(df, num_samples=512):
 
 
 def export_hdf(path=default_location):
-    """Write chromatogram and fraction tables.
+    """Write full chromatogram and fraction tables from UNICORN database.
     
     Chromatogram table actually has one row per included Curve (one trace on a Chromatogram).
 
@@ -382,7 +382,6 @@ def search(*terms, output=None, after=None, before=None, hdf_path=default_locati
         filt |= df_chroma['Description'].str.contains(term)
         df_chroma = df_chroma[filt]
     
-    cols = ['']
     chromatogram_ids = list(df_chroma['ChromatogramID'])
     df_fractions = df_fractions.query('ChromatogramID == @chromatogram_ids')
 
@@ -425,7 +424,11 @@ def add_user_info(df):
             continue
         arr += [{'user': slugify(path[1]), 
                  'user_path': '/'.join(path[2:])}]
-    return pd.concat([df, pd.DataFrame(arr)], axis=1)
+
+    # avoid relying on or changing index
+    new_info = pd.DataFrame(arr).values
+    return df.assign(user=new_info[:, 0], user_path=new_info[:, 1])
+
 
 def maybe_a_user(df):
     """Throw out "user names" that are clearly not.
@@ -449,6 +452,7 @@ def maybe_a_user(df):
         'standard',
         'training',
         'maverick',
+        'junk',
         ]
     return ~(df['user'].str.contains('\d') 
              | df['user'].str.contains('|'.join(stop_words))
@@ -481,7 +485,6 @@ def strip_common_prefix(xs):
 def strip_common_suffix(xs):
     flip = lambda ys: [y[::-1] for y in ys]
     return flip(strip_common_prefix(flip(xs)))
-
 
 
 def search_app(*terms, output='', after=None, before=None, hdf_path=default_location, 
@@ -718,7 +721,6 @@ def simplify_names(descriptions, no_description_id, remove_junk, strip_prefix, s
     return
 
 
-
 def export(search_result, num_samples=512):
     """Extract UV absorbance data from chromatogram search result.
 
@@ -752,11 +754,20 @@ def export(search_result, num_samples=512):
     )
 
 
-def split_experiments(search_result, export_folder='export', time_between_experiments='6 hours'):
-    """
+def split_experiments(search_result, export_folder='export', time_between_experiments='6 hours',
+                      after=None):
+    """Split chromatograms table into smaller tables in subdirectories, grouped by experiment.
+
+    Experiments are defined by "user" and "SystemName" (UNICORN parameter). However subdirectories
+    are based on "parent_folder", the first folder in the saved result file name. This reflects
+    the file tree in the UNICORN software, but not necessarily the actual machine used! To find out 
+    which instrument was actually used, check the "SystemName" column in any chromatograms.csv 
+    table.
+
     :param search_result: "chromatograms.csv" table
     :param time_between_experiments: runs by the same user on the same system within this interval
     are grouped into one experiment
+    :param after: only include results after this date
     """
     import numpy as np
     import pandas as pd
@@ -771,10 +782,23 @@ def split_experiments(search_result, export_folder='export', time_between_experi
          .assign(MethodStartTime=lambda x: pd.to_datetime(x['MethodStartTime']))
         )
 
+    if after is not None:
+        after = parse_human_date(after)
+        filt = df_chroma['MethodStartTime'] > after
+        df_chroma = df_chroma[filt]
+
+    if len(df_chroma) == 0:
+        raise SystemExit('ERROR: No chromatograms found')
+
     df_chroma_with_user = (df_chroma
      .pipe(add_user_info)
      .query('user == user')
      .loc[maybe_a_user]
+    )
+    if len(df_chroma_with_user) == 0:
+        raise SystemExit('ERROR: No chromatograms with defined users found')
+
+    df_chroma_with_user = (df_chroma_with_user
      .groupby(['user', 'SystemName'])
       .apply(add_experiment, time_between_experiments=time_between_experiments)
      .reset_index(drop=True)
@@ -832,7 +856,7 @@ def export_and_plot(search_result, num_samples=512):
 
 if __name__ == '__main__':
     # order is preserved
-    commands = ['search', 'export', 'plot','split_experiments', 'export_and_plot']
+    commands = ['search', 'export', 'plot','split_experiments', 'export_and_plot', 'export_hdf']
     # if the command name is different from the function name
     named = {
         'search': search_app,
