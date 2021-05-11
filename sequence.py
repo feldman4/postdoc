@@ -448,6 +448,8 @@ def match_and_check(queries, reference, window, k, ignore_above=40, progress=lam
 def load_abi_zip(filename):
     """Extract Bio.SeqIO records from sanger zip file.
     """
+    import zipfile
+    from io import BytesIO
     zh = zipfile.ZipFile(filename, 'r')
     arr = []
     for zi in zh.filelist:
