@@ -767,7 +767,7 @@ def split_experiments(search_result, export_folder='export', time_between_experi
     :param search_result: "chromatograms.csv" table
     :param time_between_experiments: runs by the same user on the same system within this interval
     are grouped into one experiment
-    :param after: only include results after this date
+    :param after: only include experiments with runs after this date
     """
     import numpy as np
     import pandas as pd
@@ -782,23 +782,10 @@ def split_experiments(search_result, export_folder='export', time_between_experi
          .assign(MethodStartTime=lambda x: pd.to_datetime(x['MethodStartTime']))
         )
 
-    if after is not None:
-        after = parse_human_date(after)
-        filt = df_chroma['MethodStartTime'] > after
-        df_chroma = df_chroma[filt]
-
-    if len(df_chroma) == 0:
-        raise SystemExit('ERROR: No chromatograms found')
-
     df_chroma_with_user = (df_chroma
      .pipe(add_user_info)
      .query('user == user')
      .loc[maybe_a_user]
-    )
-    if len(df_chroma_with_user) == 0:
-        raise SystemExit('ERROR: No chromatograms with defined users found')
-
-    df_chroma_with_user = (df_chroma_with_user
      .groupby(['user', 'SystemName'])
       .apply(add_experiment, time_between_experiments=time_between_experiments)
      .reset_index(drop=True)
@@ -807,8 +794,17 @@ def split_experiments(search_result, export_folder='export', time_between_experi
         x.groupby(['user', 'SystemName', 'experiment']).ngroup())
     )
 
+
     num_chromatograms = len(set(df_chroma['ChromatogramID']))
     num_chromatograms_with_user = len(set(df_chroma_with_user['ChromatogramID']))
+
+    if after is not None:
+        after = parse_human_date(after)
+        filt = df_chroma_with_user['MethodStartTime'] > after
+        # experiments with any run after this date
+        experiment_ids = sorted(set(df_chroma_with_user[filt]['experiment_id']))
+        df_chroma_with_user = df_chroma_with_user.query('experiment_id == @experiment_ids')
+
     num_experiments = df_chroma_with_user['experiment_id'].max() + 1
 
     print(f'Assigned user to {num_chromatograms_with_user} / {num_chromatograms} chromatograms')
