@@ -225,18 +225,6 @@ def plot_heatmap_with_seq(df_or_array, seq, **kwargs):
     return ax
 
 
-def expand_listlike(df, col):
-    """
-    From https://stackoverflow.com/questions/27263805/pandas-column-of-lists-create-a-row-for-each-list-element
-    
-    Expand a list-like column.
-    """
-    return pd.DataFrame({
-          col_: np.repeat(df[col_].values, df[col].str.len())
-          for col_ in df.columns.drop(col)}
-        ).assign(**{col: np.concatenate(df[col].values)})[df.columns]
-
-
 def flatten_cols(df, f='underscore'):
     """Flatten column multi index.
     """
@@ -511,3 +499,9 @@ def dataframe_to_csv_string(df):
     if txt[-1] == '\n':
         txt = txt[:-1]
     return txt
+
+
+def pd_display_all(df, max_rows=10000):
+    from IPython.display import display
+    with pd.option_context('display.max_rows', max_rows):
+        display(df)
