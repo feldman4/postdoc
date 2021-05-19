@@ -548,9 +548,9 @@ def search_app(*terms, output='', after=None, before=None, hdf_path=default_loca
 
 
 def plot(uv_data, output='', overlay=False, normalize=False, volume_range=(5, 22), channels=None,
-              fractions=None, palette=None, filetype='png', description_as_name=False, 
-              no_description_id=True, remove_junk=' 001', strip_prefix=False, strip_suffix=True, 
-              hdf_path=default_location):
+              fractions=None, palette=None, filetype='png', hdf_path=default_location, 
+              description_as_name=False, no_description_id=True, remove_junk=' 001', 
+              strip_prefix=False, strip_suffix=True):
     """Plot each SEC run in exported data table.
 
     A few heuristics are optionally used to simplify the run description (disable with 
@@ -565,8 +565,9 @@ def plot(uv_data, output='', overlay=False, normalize=False, volume_range=(5, 22
     :param fractions: if true, plot fractions from the first sample; default is to plot if overlay
         is not requested
     :param palette: matplotlib palette for coloring curves (default is "bright" followed by 
+        "pastel" for a total of 20 colors)
     :param filetype: extension for saved plot (png, jpg, pdf, etc)
-        "pastel")
+    :param hdf_path: path to exported AKTA database 
     :param description_as_name: if true, uses original description as filename (disables 
         following options)
     :param no_description_id: filename excludes unique IDs at end of description (long 
@@ -575,7 +576,6 @@ def plot(uv_data, output='', overlay=False, normalize=False, volume_range=(5, 22
     :param slugify: filename substitutes unfriendly characters (e.g., parentheses)
     :param strip_prefix: filename excludes common prefixes 
     :param strip_suffix: filename excludes common suffixes
-    :param hdf_path: path to exported AKTA database 
     """
     import pandas as pd
     import seaborn as sns
