@@ -35,13 +35,15 @@ INSERT_DNA_MATCH = 'insert_dna_match' # matched DNA insert from design table
 INSERT_DNA_DISTANCE = 'insert_dna_distance' # Levenshtein distance to matched DNA insert
 INSERT_HAS_STOP = 'insert_has_stop' # is there a stop codon in the insert?
 
+# if including barcodes
 BARCODE = 'barcode' # amino acid barcode in design table
 INSERT_BARCODE = 'barcode' # barcode expected after peptide purification at given terminus
 MATCH_BARCODE = 'match_barcode' # barcode of matched insert
 MISMAPPED_BARCODE = 'mismapped_barcode' # true if the barcode matches exactly, but not the insert
 
 # optional
-SUBPOOL = 'subpool'
+SUBPOOL = 'subpool' # column in designs.csv
+DESIGN_NAME = 'design_name' # column in designs.csv
 
 def setup(design_table=design_table, sample_table=sample_table, min_counts=2, 
           include_barcodes=None):
@@ -102,7 +104,6 @@ def setup(design_table=design_table, sample_table=sample_table, min_counts=2,
     # 3_plot
     cmd = f'{ngs_app} plot {" ".join(expected_results)} --output=figures/'
     pd.Series([cmd]).to_csv(command_lists['plot'], header=None, index=None)
-    
 
 
 def validate_sample_table(df_samples, include_barcodes):
@@ -321,7 +322,7 @@ def stats(*matched_tables):
     """Calculate summary statistics from result of `match` command.
 
     Example:
-        $NGS_APP stats "*matched.csv" > stats.csv
+        $NGS_APP stats results/*matched.csv > stats.csv
 
     :param matched_tables: filename or pattern for match result tables; be sure to quote wildcards
     """
@@ -361,7 +362,7 @@ def stats(*matched_tables):
                 num_barcodes = df[filt]['match_barcode'].drop_duplicates().shape[0]
                 info[f'num_barcodes_over_{cutoff:.0e}'] = num_barcodes
             
-            if 'design_name' in df and 'match_barcode' in df:
+            if DESIGN_NAME in df and 'match_barcode' in df:
                 barcode_counts = df[filt]['design_name'].value_counts()
                 info[f'num_designs_with_1_barcode_over_{cutoff:.0e}'] = len(barcode_counts)
                 info[f'num_designs_with_3_barcodes_over_{cutoff:.0e}'] = sum([x >= 3 for x in barcode_counts])
@@ -384,6 +385,19 @@ def load_matched_tables(*matched_tables):
 
 
 def plot(*matched_tables, output='figures/', filetype='png'):
+    """Generate QC plots from result of `match` command.
+
+    The design-barcode count and barcode purity plots require "design_name" and "match_barcode" 
+    columns. The sample cross mapping plot requires "subpool" column. Data used in plotting 
+    is saved to a .csv table.
+
+    Example:
+        $NGS_APP stats results/*matched.csv
+
+    :param matched_tables: filename or pattern for match result tables; be sure to quote wildcards
+    :param output: prefix of saved figures and figure data
+    :param filetype: extension for saved plot (png, jpg, pdf, etc)
+    """
     import pandas as pd
     from postdoc.sequence import read_fastq
     import seaborn as sns
@@ -400,9 +414,16 @@ def plot(*matched_tables, output='figures/', filetype='png'):
 
         fig, df_plot = plot_distance_distribution(df_matches)
         f = f'{output}distance_distribution.{filetype}'
-        fig.savefig(f)
+        fig.savefig(f, bbox_inches='tight')
         df_plot.to_csv(f'{output}distance_distribution.csv', index=None)
         print(f'Saved edit distance distribution heatmap to {f}', file=sys.stderr)
+
+        fg, df_plot = plot_length_distribution(df_matches)
+        f = f'{output}insert_length.{filetype}'
+        fg.savefig(f)
+        df_plot.to_csv(f'{output}insert_length.csv', index=None)
+        print(f'Saved insert length histogram to {f}', file=sys.stderr)
+
 
 
         if 'subpool' in df_matches:
@@ -570,6 +591,45 @@ def plot_distance_distribution(df_matches):
     fig.tight_layout()
 
     return fig, df_plot
+
+
+def plot_length_distribution(df_matches, focus_window=50):
+    import pandas as pd
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    xlabel = 'Insert DNA length'
+
+    cols = [SAMPLE, xlabel]
+    if SUBPOOL in df_matches:
+        df_matches = df_matches.assign(subpool=lambda x: x[SUBPOOL].fillna('unmapped'))
+        cols += [SUBPOOL]
+
+    df_plot = (df_matches
+    .assign(**{xlabel: lambda x: x[INSERT_DNA].str.len()})
+    .groupby(cols)[COUNT].sum().reset_index()
+    .assign(sample_max=lambda x: x.groupby(SAMPLE)[xlabel].transform('max'))
+    .assign(sample_index=lambda x: x['sample'].astype('category').cat.codes)
+    )
+
+    fg = (pd.concat([
+        df_plot.assign(focus='full'),
+        df_plot.loc[lambda x: x[xlabel] >= x['sample_max'] - focus_window].assign(focus='top'),
+    ])
+    .pipe(sns.FacetGrid, aspect=1.5, row=SAMPLE, col='focus', col_order=['top', 'full'], 
+        hue=SUBPOOL, sharex=False)
+    .map(plt.bar, xlabel, COUNT, alpha=0.6)
+    # .pipe((sns.catplot, 'data'), x=xlabel, y=COUNT,
+    # kind='bar', aspect=1.5, row=SAMPLE, col='focus', col_order=['top', 'full'], 
+    #     hue=SUBPOOL, sharex=False)
+    .add_legend()
+    )
+
+    fg.axes.flat[0].set_yscale('log')
+    for ax in fg.axes[:, 0]:
+        ax.set_ylabel('Read count')
+
+    return fg, df_plot
 
 if __name__ == '__main__':
 
