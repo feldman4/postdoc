@@ -59,8 +59,9 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
 
     Looks for sequence between `start` and `end` in sanger data (.ab1 or .seq). Attempts to match 
     both sense and antisense. Provide `output_prefix` to export matched DNA, protein translations,
-    and the full results table. If both `output_prefix` and the `align` flag are provided, 
-    ClustalW is used to align protein sequences (MSA can be viewed with http://msa.biojs.net/app/).
+    and the full results table with all matches. If both `output_prefix` and the `align` are 
+    true, ClustalW is used to align protein sequences (MSA can be viewed with 
+    http://msa.biojs.net/app/).
 
     :param files: any number of files to analyze (e.g., "*.ab1")
     :param start: pattern at start of matched sequence (can be regex). Default="TACATATG|ATCATATG"
@@ -126,6 +127,7 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
         show(num_aa_matches, num_dna_matches, 'translated in frame')
         show(num_no_stop, num_aa_matches, 'have no stop codon')
         show(num_unique, num_no_stop, 'unique protein sequences')
-        print(
-            f'Min protein length={int(len_stats["min"])}, max={int(len_stats["max"])}')
+        if num_aa_matches > 0:
+            print(
+                f'Min protein length={int(len_stats["min"])}, max={int(len_stats["max"])}')
 
