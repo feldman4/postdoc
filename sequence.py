@@ -21,6 +21,22 @@ watson_crick = {'A': 'T',
 watson_crick.update({k.lower(): v.lower()
                      for k, v in watson_crick.items()})
 
+iupac = {'A': ['A'],
+ 'C': ['C'],
+ 'G': ['G'],
+ 'T': ['T'],
+ 'M': ['A', 'C'],
+ 'R': ['A', 'G'],
+ 'W': ['A', 'T'],
+ 'S': ['C', 'G'],
+ 'Y': ['C', 'T'],
+ 'K': ['G', 'T'],
+ 'V': ['A', 'C', 'G'],
+ 'H': ['A', 'C', 'T'],
+ 'D': ['A', 'G', 'T'],
+ 'B': ['C', 'G', 'T'],
+ 'N': ['G', 'A', 'T', 'C']}
+
 
 codon_maps = {}
 
