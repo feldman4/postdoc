@@ -679,7 +679,7 @@ def add_fractions(df_fractions, chr_id, ax):
         top = low
         height = (high - low)*0.3*((fontsize+2)/13)
         bottom = top - height
-        print(top, bottom, height)
+        # print(top, bottom, height)
         ax.annotate(f, (v, top), rotation=90, va='top', ha='left')
         ax.plot([v, v], [bottom, top], ls=':', color='gray', zorder=-10)
     ax.set_xlim(xlim)
