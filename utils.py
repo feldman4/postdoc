@@ -505,3 +505,15 @@ def pd_display_all(df, max_rows=10000):
     from IPython.display import display
     with pd.option_context('display.max_rows', max_rows):
         display(df)
+
+
+def relabel_array(arr, new_label_dict):
+    """Map values in integer array based on `new_labels`, a dictionary from
+    old to new values.
+    """
+    n = arr.max()
+    arr_ = np.zeros(n+1)
+    for old_val, new_val in new_label_dict.items():
+        if old_val <= n:
+            arr_[old_val] = new_val
+    return arr_[arr]
