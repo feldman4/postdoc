@@ -88,7 +88,6 @@ def add_overlaps(df_agilent):
     return df_agilent.assign(overlap_length=overlap_lengths, 
                              overlap=overlaps,
                              assembly=assemblies,
-                             assembly_aa=[translate(x) for x in assemblies]
                              )
 
 
@@ -134,19 +133,24 @@ def GC_fraction(x):
     return (x.count('G') + x.count('C')) / len(x)
 
 
-def parse_agilent_oligos(oligos_fwd, oligos_rev, primers):
+def parse_agilent_oligos(oligos_fwd, oligos_rev, primers, with_aa=True):
     from Bio.SeqUtils.MeltingTemp import Tm_NN
-    cols = ['assembly_aa', 'assembly', 
+    cols = ['assembly', 
     'overlap', 'overlap_length', 'overlap_tm',
     'primer_1', 'primer_2', 'primer_3', 'primer_4',
     'first', 'second', 'first_insert', 'second_insert']
-    return (pd.DataFrame({'first': list(oligos_fwd), 'second': list(oligos_rev)})
+    df = (pd.DataFrame({'first': list(oligos_fwd), 'second': list(oligos_rev)})
             .pipe(add_primers, **primers)
             .pipe(add_overlaps)
-            .assign(assembly_aa=lambda x: x['assembly'].apply(translate_dna))
             .assign(overlap_tm=lambda x: x['overlap'].apply(Tm_NN))
             [cols]
             )
+    if with_aa:
+        return (df.assign(assembly_aa=lambda x: x['assembly'].apply(translate_dna))
+        [['assembly_aa'] + cols])
+    else:
+        return df[cols]
+
 
 
 def load_order(name):
