@@ -7,7 +7,8 @@ import postdoc.flycodes.ms_app
 
 def parse_overlap_oligos(filename, output_prefix=None,
     oligo_A_5=18, oligo_A_3=19, oligo_B_5=19, oligo_B_3=18,
-    header=None, sep=None, name_col=None, dna_col=0,
+    with_aa=True,
+    header=None, sep=None, name_col=None, dna_col=0, 
     ):
     """Analyze list of oligo pairs designed for overlap assembly.
     
@@ -29,6 +30,7 @@ def parse_overlap_oligos(filename, output_prefix=None,
     :param oligo_A_3: length of 3' adapter for oligo A
     :param oligo_B_5: length of 5' adapter for oligo B
     :param oligo_B_3: length of 3' adapter for oligo B
+    :param with_aa: whether or not to translate assembly between adapters
     :param header: to load a table with headers, use --header flag
     :param dna_col: column name if there's a header, or zero-indexed column position if not; if 
         this is a string then --header is assumed
@@ -65,7 +67,7 @@ def parse_overlap_oligos(filename, output_prefix=None,
     # parse oligos A and B, automatically detecting overlaps
     a, b = oligos[::2], oligos[1::2]
     cols = ['primer_2', 'primer_3', 'overlap']
-    df_agilent = (assembly.parse_agilent_oligos(a, b, primers)
+    df_agilent = (assembly.parse_agilent_oligos(a, b, primers, with_aa=with_aa)
      .assign(name=names)
      .pipe(lambda x:
            x.join(x.groupby(cols).size().rename('overlap_repeats'),
@@ -122,7 +124,7 @@ def parse_overlap_oligos(filename, output_prefix=None,
 
 
 def update_sanger():
-    """Update sanger database based on "sanger/cloning" spreadsheet.
+    """Update sanger database based on "cloning/sanger" spreadsheet.
     
     Downloads cloning/sanger with sanger dataset information and .ab1 paths. Extract 
     sequences from .ab1 files and write to database csv.
@@ -646,8 +648,6 @@ def table_to_fasta(filename, sequence_col, name_col=None, header=None, sep=None)
         name_col = 'name_col'
         
     return format_fasta(df.loc[:, [name_col, sequence_col]].values)
-    
-
 
 
 if __name__ == '__main__':
