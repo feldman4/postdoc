@@ -36,6 +36,7 @@ export VISUAL=$EDITOR
 alias sstatus='clusterstatus | (head -n 31; grep $USER)'
 alias wstatus="watch 'clusterstatus | (head -n 31; grep $USER)'"
 alias sq='squeue --user `whoami`'
+alias sqh='sjob' 
 alias fname='readlink -f'
 
 ########################### EXTRA ############################
