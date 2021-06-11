@@ -305,7 +305,7 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
 
     assembled_fastq = f'assembled/{row["sample"]}.assembled.fastq'
     pat = f'{row["adapter_5"]}([ACGT]*){row["adapter_3"]}'
-    
+
     df_matches = (parse_inserts(assembled_fastq, pat)
     .query('count > @min_counts')
     .assign(sample=row[SAMPLE])
@@ -558,10 +558,11 @@ def plot_crossmapping(df_matches):
     df_plot = (df_matches
     .query(f'{INSERT_DNA_DISTANCE} == 0')
     .pivot_table(index=SAMPLE, columns=SUBPOOL, values=COUNT, aggfunc='sum')
+    .fillna(0).astype(int)
     )
 
-    sns.heatmap(df_plot, square=True, annot=True, fmt='d', xticklabels=True, yticklabels=True, 
-                cbar=False)
+    sns.heatmap(df_plot, square=True, annot=True, fmt='d', 
+                xticklabels=True, yticklabels=True, cbar=False)
 
     plt.xticks(rotation=30)
     plt.yticks(rotation=0)
