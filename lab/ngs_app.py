@@ -9,6 +9,7 @@ import sys
 
 sample_table = 'samples.csv'
 design_table = 'designs.csv'
+stats_table = 'stats.csv'
 
 command_lists = {
     'assemble': 'commands/0_assemble.list',
@@ -98,7 +99,7 @@ def setup(design_table=design_table, sample_table=sample_table, min_counts=2,
     (pd.Series(arr).to_csv(command_lists['match'], header=None, index=None))
 
     # 2_stats
-    cmd = f'{ngs_app} stats {" ".join(expected_results)} > stats.csv'
+    cmd = f'{ngs_app} stats {" ".join(expected_results)} > {stats_table}'
     pd.Series([cmd]).to_csv(command_lists['stats'], header=None, index=None)
     
     # 3_plot
@@ -183,13 +184,15 @@ def write_sample_table_from_drive(libraries=['L015']):
 def write_design_table_from_chip(include_barcodes=True):
     """Test function.
     """
+    chip_table = '/home/dfeldman/flycodes/chip_orders/chip137_design.csv'
     import pandas as pd
-    sources = ['foldit_monomers', 'foldit_oligomers', 'DK_beta_barrels']
+    sources = ['foldit_monomers', 'foldit_oligomers', 'DK_beta_barrels', 'TS_variants', 
+    'CD98_binders', 'BH_IL6R_variants']
     cols = ['subpool', DESIGN_NAME, INSERT_DNA]
     if include_barcodes:
         cols += ['barcode']
-    f = '/home/dfeldman/flycodes/chip_orders/chip137_design.csv'
-    (pd.read_csv(f)            
+    
+    (pd.read_csv(chip_table)
     .query('source == @sources')
     .assign(insert_dna=get_chip_insert)
     .rename(columns={'source': 'subpool'})
@@ -370,7 +373,10 @@ def stats(*matched_tables):
         info = {k: info[k] for k in col_order + cutoff_cols}
         arr += [info]
 
-    return pd.DataFrame(arr).pipe(dataframe_to_csv_string)
+    # format so it's easy to read
+    df_stats = pd.DataFrame(arr).astype(str).T
+    df_stats.index.name = 'index'
+    return df_stats.pipe(dataframe_to_csv_string, index=True)
 
 
 def load_matched_tables(*matched_tables):
@@ -439,7 +445,7 @@ def plot(*matched_tables, output='figures/', filetype='png'):
                 fig, df_plot = plot_detection_cutoffs_barcode(df)
                 f = f'{output}design_barcode_counts_{sample}.{filetype}'
                 fig.savefig(f, bbox_inches='tight')
-                df_plot.to_csv(f'{output}design_barcode_counts_{sample}.csv', index=None)
+                df_plot.to_csv(f'{output}design_barcode_counts_{sample}.csv')
                 print(f'Saved design-barcode count heatmap ({sample}) to {f}', file=sys.stderr)
 
             fg, df_plot = plot_barcode_purity(df_matches)
@@ -512,8 +518,11 @@ def plot_detection_cutoffs_barcode(df_matches):
     .iloc[:, ::-1].cumsum(axis=1).iloc[:, ::-1]
     )
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    sns.heatmap(df_plot, xticklabels=True, annot=True, square=True, ax=ax, cbar=False)
+    figsize = np.array([0.8, 0.8]) * df_plot.shape[::-1]
+    fig, ax = plt.subplots(figsize=figsize)
+
+    sns.heatmap(df_plot, xticklabels=True, annot=True, ax=ax, 
+                cbar=False, fmt='d')
     ax.set_xlabel('Number of barcodes')
     ax.set_ylabel('Read cutoff')
     ax.set_title('Number of designs with >= N barcodes')
@@ -574,20 +583,26 @@ def plot_distance_distribution(df_matches):
     import matplotlib.pyplot as plt
     import seaborn as sns
     import pandas as pd
+    import numpy as np
 
     threshold = 5
     df_plot = (df_matches
     .query('~insert_has_stop')
-    .pivot_table(index='sample', columns='insert_distance', values='count', aggfunc='sum')
+    .assign(**{SUBPOOL: lambda x: x[SUBPOOL].fillna('not matched')})
+    .pivot_table(index=[SAMPLE, SUBPOOL], 
+                 columns=INSERT_DISTANCE, 
+                 values='count', aggfunc='sum')
     .fillna(0).astype(int).T
     )
     df_counts = (pd.concat([
         df_plot[df_plot.index <= threshold].T, 
         df_plot[df_plot.index > 5].sum().rename(f'>{threshold}')], axis=1).T
-    .rename({-1: 'not mapped'})
+    .rename({-1: 'not matched'})
+    .T
     )
 
-    fig, ax = plt.subplots()
+    figsize = np.array([1.3, 0.4]) * df_counts.shape[::-1]
+    fig, ax = plt.subplots(figsize=figsize)
     df_counts.pipe(sns.heatmap, annot=True, fmt='d', ax=ax)
     fig.tight_layout()
 
