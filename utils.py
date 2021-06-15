@@ -491,9 +491,9 @@ def join_within(df_left, df_right, left_on, right_on, tolerance):
     )
 
 
-def dataframe_to_csv_string(df):
+def dataframe_to_csv_string(df, index=None):
     s = io.StringIO()
-    df.to_csv(s, index=None)
+    df.to_csv(s, index=index)
     txt = s.getvalue()
     # remove final line break
     if txt[-1] == '\n':
