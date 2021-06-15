@@ -46,8 +46,8 @@ def parse_files(files, pat):
                 aa = translate_dna(dna)
             except AssertionError:
                 aa = None
-            arr += [{'sample': name, 'aa_match': aa, 'dna_match': dna,
-                    'sequence': seq, 'file': file}]
+            arr += [{'sample': name, 'file': file, 'aa_match': aa, 'dna_match': dna,
+                    'sequence': seq}]
     return pd.DataFrame(arr)
 
 
