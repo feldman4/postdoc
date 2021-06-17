@@ -1,19 +1,19 @@
-PROCESS_DIRECTORY: 'process_C3'
+PROCESS_DIRECTORY: 'process_C3_short'
 REQUESTED_FILES: []
 REQUESTED_TAGS: [
-  # 'phenotype_aligned.tif',
+  'phenotype.csv',
   'cells.csv',
   'annotate_SBS.tif',
-  # 'phenotype.csv',
-  # 'annotate_SBS_extra.tif',
+  'annotate_segment.tif',
+  'phenotype_aligned.tif',
 ]
 # discarded after processing to save space
 TEMP_TAGS: ['maxed.tif', 'peaks.tif', 'std.tif']
-# TEMP_TAGS: [] 
 
 ### INPUT TO ANALYSIS
 INPUT_DIRECTORY: 'input'
-WELL_TILE_LIST: 'tiles_C3.csv'
+# WELL_TILE_LIST: 'tiles_C3.csv'
+WELL_TILE_LIST: 'tiles_C3_short.csv'
 
 BARCODE_TABLE: 'barcodes.csv'
 MAGNIFICATION: '20X'
@@ -29,11 +29,32 @@ THRESHOLD_READS: 150  # threshold for detecting reads
 NUCLEUS_PHENOTYPE_FEATURES: [
     'label', # required to join SBS and phenotype data
     'i', 'j', 'area', 
-    'dapi_gfp_corr', 
-    'dapi_max', 'dapi_mean', 'dapi_median',
-    'gfp_max', 'gfp_mean', 'gfp_median',
+    ['c0_mean', 'dapi_mean'],
+    ['c1_mean', 'gfp_mean'],
+    ['c2_mean', 'rfp_mean'],
+    ['c0_median', 'dapi_median'],
+    ['c1_median', 'gfp_median'],
+    ['c2_median', 'rfp_median'],
+    ['c0_max', 'dapi_max'],
+    ['c1_max', 'gfp_max'],
+    ['c2_max', 'rfp_max'],
+    ['c0_min', 'dapi_min'],
+    ['c1_min', 'gfp_min'],
+    ['c2_min', 'rfp_min'],
+    ['c0c1_corr', 'dapi_gfp_corr'],
+    ['c0c2_corr', 'dapi_rfp_corr'],
+    ['c1c2_corr', 'gfp_rfp_corr'],
   ]
-CELL_PHENOTYPE_FEATURES: ['label', 'area']
+CELL_PHENOTYPE_FEATURES: [
+  'label', 'area',
+    ['c1_mean', 'gfp_mean'],
+    ['c2_mean', 'rfp_mean'],
+    ['c1_median', 'gfp_median'],
+    ['c2_median', 'rfp_median'],
+    ['c1_max', 'gfp_max'],
+    ['c2_max', 'rfp_max'],
+    ['c1c2_corr', 'gfp_rfp_corr'],
+]
 
 ### DISPLAY OPTIONS
 DISPLAY_RANGES:
@@ -57,5 +78,7 @@ SBS_INPUT_TAG: 'tif'
 PHENOTYPE_INPUT_TAG: 'tif'
 MAXED_WIDTH: 5
 
-NUCLEAR_SEGMENT: 'cell_2019'
-NUCLEAR_SEGMENT: 'cellpose'
+SEGMENT_METHOD: 'cellpose'
+CELLPOSE_CYTO_CHANNEL: 4 # 0-indexed, 4="C" channel from sequencing
+CELLPOSE_DIAMETER: 22
+AUTOSCALE_PHENOTYPE: True
