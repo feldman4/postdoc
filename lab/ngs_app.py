@@ -310,7 +310,7 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     pat = f'{row["adapter_5"]}([ACGT]*){row["adapter_3"]}'
 
     df_matches = (parse_inserts(assembled_fastq, pat)
-    .query('count > @min_counts')
+    .query('count >= @min_counts')
     .assign(sample=row[SAMPLE])
     .pipe(annotate_inserts, df_designs)
     )
@@ -350,7 +350,7 @@ def stats(*matched_tables):
             SAMPLE: sample,
             'total_reads': num_reads,
             'fraction_assembled': num_assembled/num_reads,
-            'fraction_with_adapters': num_with_adapters/num_reads,
+            'fraction_with_adapters_over_min_count': num_with_adapters/num_reads,
             'fraction_in_frame': num_no_stop/num_with_adapters,
             'fraction_exact_mapped': num_exact/num_with_adapters,
             'fraction_exact_dna_mapped': num_exact_dna/num_with_adapters,
