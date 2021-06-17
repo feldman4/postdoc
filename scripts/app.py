@@ -533,7 +533,7 @@ def find_nearest_sequence(
 
 
 def submit_from_command_list(filename, array=None, name=None, queue='short', 
-                             memory='4g', num_cpus=1, with_gpu=None,
+                             memory='4g', cpus=1, with_gpu=None,
                              stdout='default', stderr='default', 
                              dry_run=False):
     """Submit SLURM jobs from a list of commands.
@@ -543,7 +543,7 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     :param name: sbatch job name (-J), defaults to `filename`
     :param queue: sbatch queue (-p)
     :param memory: sbatch memory (--mem)
-    :param num_cpus: sbatch number of cpus (-c)
+    :param cpus: sbatch number of cpus (-c)
     :param with_gpu: sbatch --gres=gpu:1 to request a GPU, defaults to true if using gpu queue
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
@@ -583,7 +583,7 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
         os.makedirs(os.path.dirname(x), exist_ok=True)
     
     base_command = (f'sbatch -p {queue} -J {name} --mem={memory} '
-                    f'-c {num_cpus} {gpu_flag} -o {stdout} -e {stderr}')
+                    f'-c {cpus} {gpu_flag} -o {stdout} -e {stderr}')
     final_commands = []
     plural = 's' if len(commands) > 1 else ''
     if array:
