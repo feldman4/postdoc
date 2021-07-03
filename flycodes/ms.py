@@ -126,10 +126,12 @@ def load_mzml_data(filename, progress=lambda x: x):
     for spectrum in progress(reader):
         scan = spectrum['scanList']['scan'][0]
         start = scan['scan start time']
-        inject = scan['ion injection time']
+        # inject = scan['ion injection time']
         mz_arr = spectrum['m/z array']
         int_arr = spectrum['intensity array']
-        info += [{'scan': start, 'inject': inject}]
+        info += [{'scan': start, 
+        # 'inject': inject
+        }]
         mz += [mz_arr]
         intensity += [int_arr]
 
