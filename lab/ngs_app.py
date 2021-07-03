@@ -632,7 +632,7 @@ def plot_length_distribution(df_matches, focus_window=50):
         df_plot.assign(focus='full'),
         df_plot.loc[lambda x: x[xlabel] >= x['sample_max'] - focus_window].assign(focus='top'),
     ])
-    .pipe(sns.FacetGrid, aspect=1.5, row=SAMPLE, col='focus', col_order=['top', 'full'], 
+    .pipe(sns.FacetGrid, aspect=1.5, row=SAMPLE, col='focus', col_order=['full', 'top'], 
         hue=SUBPOOL, sharex=False)
     .map(plt.bar, xlabel, COUNT, alpha=0.6)
     # .pipe((sns.catplot, 'data'), x=xlabel, y=COUNT,
