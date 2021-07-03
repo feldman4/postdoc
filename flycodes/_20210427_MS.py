@@ -40,6 +40,7 @@ home = '/home/dfeldman/flycodes/ms/20210427_DF/profile'
 expdata = '/net/expdata/mass-spec/20210427_DF/v2_update'
 dino_sh = '/home/dfeldman/packages/postdoc/scripts/ms/20210427_dino.sh'
 chip_table = '/home/dfeldman/flycodes/chip_orders/chip137_design.csv'
+sources = ['foldit_monomers']
 
 # local
 dino_commands = 'dino_commands.list'
@@ -79,7 +80,7 @@ def prepare_dinosaur():
     pd.Series(cmds).to_csv(dino_commands, index=None, header=None)
 
     print('Run MS1 deconvolution with bash command:')
-    print(f'/home/dfeldman/s/app.sh submit {dino_commands} --num_cpus=2 --memory=16g')
+    print(f'/home/dfeldman/s/app.sh submit {dino_commands} --cpus=2 --memory=16g')
 
 
 def load_sample_info():
@@ -118,7 +119,7 @@ def load_pool_info():
     """
     cols = ['barcode', 'mz', 'iRT', 'design_name', 'pdb_file']
     return (pd.read_csv(chip_table)
-     .query('source == "foldit_monomers"')
+     .query('source == @sources')
      [cols]
     )
 
@@ -158,11 +159,11 @@ def add_sec_fractions(df_features, offset=0.25):
     """Add SEC fraction volumes based on sample info metadata (MS barcoding/protein samples) and
     AKTA database.
 
-    Should add this to sample info instead of to features table...
+    Should add this to sample info table instead of features table...
     """
     df_sample_info = pd.read_csv(sample_info)
 
-    sec_runs = df_sample_info['SEC'].pipe(list)
+    sec_runs = df_sample_info['SEC'].dropna().pipe(list)
 
     f = '/home/dfeldman/for/akta_db/chroma.hdf'
     df_chroma = pd.read_hdf(f).query('Description == @sec_runs').drop_duplicates('ChromatogramID')
