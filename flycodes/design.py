@@ -965,7 +965,7 @@ def bin_by_resolution(xs, resolution):
         bins = np.array([0 for _ in xs])
         return bins, centers, edges
 
-    bins = np.digitize(xs, edges)
+    bins = np.digitize(xs, edges) - 1
     return bins, centers, edges
 
 
