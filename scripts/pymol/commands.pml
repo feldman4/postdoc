@@ -108,7 +108,7 @@ def find_polar(selection='all', mode='nobb', name=None):
     cmd.select(tmp_B, selection_B)
 
     if name is None:
-        name = '{}_polar_conts'.format('_'.join(selection_A.split()))
+        name = '{}_hb'.format('_'.join(selection_A.split()))
     if mode == 'all':
         cmd.dist(
             name,
@@ -116,11 +116,13 @@ def find_polar(selection='all', mode='nobb', name=None):
             f'({tmp_B}) and not (solvent)',
             quiet=1,mode=2,label=0,reset=1);
     elif mode == 'nobb':
+        # sidechain to sidechain
         cmd.dist(
             name + 'A',
             f'({tmp_A}) and not (solvent) and not bb.',
             f'({tmp_B}) and not (solvent) and not bb.',
             quiet=1,mode=2,label=0,reset=1);
+        # backbone to sidechain
         cmd.dist(
             name + 'B',
             f'({tmp_A}) and not (solvent) and bb.',
@@ -131,7 +133,7 @@ def find_polar(selection='all', mode='nobb', name=None):
             f'({tmp_A}) and not (solvent) and not bb.',
             f'({tmp_B}) and not (solvent) and bb.',
             quiet=1,mode=2,label=0,reset=1);
-        # how to merge distance (?) objects?
+        cmd.do(f'group {name}, {name}*')
         #cmd.do(f'create {name}, {name}*')
         #cmd.do(f'delete {name}A')
         #cmd.do(f'delete {name}B')
@@ -156,6 +158,36 @@ def color_not_carbon(selection='all'):
 def color_by_chain(selection='all'):
     util.color_chains(selection);
 
+def color_by_sequence(selection='all', start_at=0, verbose=False):
+    start_at = int(start_at)
+    records = parse_fasta(cmd.get_fastastr(selection))
+    sequences = [s for _, s in records]
+
+    unique_sequences = sorted(set(sequences), key=sequences.index)
+    color_map = {s: pymol.util._color_cycle[i + start_at] 
+                 for i, s in enumerate(unique_sequences)}
+    if verbose:
+        print('color map:', color_map)
+
+    for name, seq in records:
+        chain = name.split('_')[-1]
+        rest = '_'.join(name.split('_')[:-1])
+        color = color_map[seq]
+        if verbose:
+            print('coloring', name, rest, chain, 'color', color)
+        cmd.color(str(color), f'(chain {chain} and ({selection}))')
+
+
+def parse_fasta(txt):
+    entries = []
+    txt = '\n' + txt.strip()
+    for raw in txt.split('\n>'):
+        name = raw.split('\n')[0].strip()
+        seq = ''.join(raw.split('\n')[1:]).replace(' ', '')
+        if name:
+            entries += [(name, seq)]
+    return entries
+
 def color_yang(selection='all'):
     """Rosetta colors from Yang Hsia
     """
@@ -178,7 +210,6 @@ def color_yang(selection='all'):
     for color, resn in colors:
         cmd.do(f'color {color}, {selection} and resn {resn}')
 
-
 def run_script(name=None):
     if name == 'last' and hasattr(stored, 'last_script'):
         name = stored.last_script
@@ -194,7 +225,6 @@ def run_script(name=None):
         print(f'Running {script}')
         stored.last_script = name
         cmd.run(script)
-
 
 def list_scripts():
     files = glob.glob(os.path.join(scripts_dir, '*pml'))
@@ -400,22 +430,29 @@ def axes_at_origin(scale=3):
     # then we load it into PyMOL
     cmd.load_cgo(obj,'axes')
 
-def show_interface(a, b, cutoff=3.5):
+def show_interface(a, b, cutoff=3.5, name=None, stick_width=1):
+    interface_name = 'intf'
+    if name:
+        interface_name = name
     name_a = a.replace(' ', '_')
     name_b = b.replace(' ', '_')
-    cmd.do(f'select interface_{name_a}, byres {a} within {cutoff} of {b}')
-    cmd.do(f'select interface_{name_b}, byres {b} within {cutoff} of {a}')
-    cmd.do(f'show sticks, interface_{name_a}')
-    cmd.do(f'show sticks, interface_{name_b}')
-    cmd.do(f'findpolar interface_{name_a} to interface_{name_b}')
-    both = f'interface_{name_a} or interface_{name_b}'
+    cmd.do(f'select {interface_name}_{name_a}, byres {a} within {cutoff} of {b}')
+    cmd.do(f'select {interface_name}_{name_b}, byres {b} within {cutoff} of {a}')
+    if name:
+        cmd.do(f'findpolar {interface_name}_{name_a} to {interface_name}_{name_b}, name={name}')
+    else:
+        cmd.do(f'findpolar {interface_name}_{name_a} to {interface_name}_{name_b}')
+    both = f'{interface_name}_{name_a} or {interface_name}_{name_b}'
     cmd.do(f'cnc {both}')
     cmd.do(f'orient {both}')
     cmd.do(f'zoom {both}')
-    cmd.do(f'set stick_radius, 0.15, ({both}) and bb.')
-    cmd.do(f'set stick_radius, 0.25, ({both}) and (not bb. or name CA)')
+    cmd.do(f'show sticks, {interface_name}_{name_a}')
+    cmd.do(f'show sticks, {interface_name}_{name_b}')
+    r1 = 0.15 * float(stick_width)
+    r2 = 0.25 * float(stick_width)
+    cmd.do(f'set stick_radius, {r1}, ({both}) and bb.')
+    cmd.do(f'set stick_radius, {r2}, ({both}) and (not bb. or name CA)')
     cmd.do(f'set cartoon_transparency, 0.8, {both}')
-
 
 def show_stubs(selection='all', knobs=True):
     cmd.do(f'hide sticks, {selection}')
@@ -437,17 +474,28 @@ def external_wire(selection):
     color_not_carbon(f'{selection} and {external}')
     cmd.do(f'color {gray}, {selection} and {external} and elem H')
 
+def external_wire2(selection):
+    """Keep chain color and CA/CB.
+    """
+    #gray = 'gray40'
+    external = 'not bb. or name CA'
+    cmd.do(f'show wire, {selection} and {external}')
+    #show_polar_h(f'{selection} and {external}')
+    #cmd.do(f'color {gray}, {selection} and {external}')
+    color_not_carbon(f'{selection} and {external}')
+    #cmd.do(f'color {gray}, {selection} and {external} and elem H')
+
+
 
 def view_one(selection='all'):
     cmd.do(f'hide everything, {selection}')
     cmd.do(f'show cartoon, {selection}')
-    color_by_chain(selection)
+    #color_by_chain(selection)
     show_stubs_fancy(selection)
     ligands = f'({selection}) and (not polymer.protein)'
     cmd.do(f'show sticks, {ligands}')
     cmd.do(f'color white, {ligands}')
     color_not_carbon(ligands)
-
 
 def view_two(selection='all'):
     cmd.do(f'hide everything, {selection}')
@@ -456,6 +504,16 @@ def view_two(selection='all'):
     show_stubs_fancy(selection)
     external_wire(selection)
     find_polar(selection)
+    ligands = f'({selection}) and (not polymer.protein)'
+    cmd.do(f'show sticks, {ligands}')
+    cmd.do(f'color white, {ligands}')
+    color_not_carbon(ligands)
+
+def view_three(selection='all'):
+    cmd.do(f'hide everything, {selection}')
+    cmd.do(f'show cartoon, {selection}')
+    color_by_chain(selection)
+    external_wire2(selection)
     ligands = f'({selection}) and (not polymer.protein)'
     cmd.do(f'show sticks, {ligands}')
     cmd.do(f'color white, {ligands}')
@@ -471,8 +529,24 @@ def align_all(object_selection='all', align_selection='all', aligner='align'):
     for mobile in rest:
         cmd.do(f'{aligner} {mobile}, {target} and {align_selection}')
 
+def load_af2_alignments(design):
+    home = f'{os.environ["HOME"]}/flycodes/af2/{design}'
+    terms = 'design_pdb', 'design_barcode', 'full_barcode'
+    pdbs = []
+    for i, term in enumerate(terms):
+        files = sorted(glob.glob(f'{home}*/{term}/*pdb'))
+        names = []
+        for f in files:
+            name = os.path.basename(f).replace('.tmalign.pdb', '')
+            name += f'_{i}'
+            cmd.load(f, name)
+            names += [name]
+            cmd.do(f'remove {name} and chain B')
+        cmd.do(f'group {design}_{term}, {" ".join(names)}')
+    
 
 commands = [
+# load_commands reloads this file (defined in pymolrc.pml)
 # aliases
 ('rename', rename_selection),
 # describe
@@ -486,10 +560,12 @@ commands = [
 ('stubs', show_stubs_fancy),
 ('v1', view_one),
 ('v2', view_two),
+('v3', view_three),
 # coloring
 ('chainbow', chainbow),
 ('cnc', color_not_carbon),
 ('cbc', color_by_chain),
+('cbs', color_by_sequence),
 ('crt', color_by_residue_type),
 ('cyang', color_yang),
 ('glyballs', glycine_ca_spheres),
@@ -504,6 +580,7 @@ commands = [
 ('rcsb', fetch_with_defaults),
 ('pdbload', load_local_pdb),
 ('globload', load_pdb_grid),
+('af2load', load_af2_alignments),
 # script management
 ('pmlrun', run_script),
 ('cml', list_commands),
