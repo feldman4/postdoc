@@ -12,7 +12,8 @@ then
     source activate $ENV
 fi
 
-PYTHONPATH=/home/dfeldman/packages python /home/dfeldman/packages/postdoc/scripts/app.py "$@"
+SCRIPTS_DIR=`dirname "$0"`
+PYTHONPATH=/home/dfeldman/packages python "${SCRIPTS_DIR}"/app.py "$@"
 
 <<'###EXAMPLES'
 

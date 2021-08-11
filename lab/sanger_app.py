@@ -54,7 +54,9 @@ def parse_files(files, pat):
 def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
          output=None, summarize=True, 
          min_aa=None, max_aa=None,
-         align=True, use_file_as_sample=False):
+         align=True, use_file_as_sample=False,
+         fake_fastq=None,
+         ):
     """Match protein/DNA sequences from sanger data.
 
     Looks for sequence between `start` and `end` in sanger data (.ab1 or .seq). Attempts to match 
@@ -73,9 +75,10 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
     :param max_aa: maximum protein length to include in `aa_fasta`. Default=None
     :param use_file_as_sample: use the complete filename instead of removing common prefixes. 
         Default=False
+    :param fake_fastq: name of output fastq file containing DNA matches
     """
     # fire bug where *args prevents displaying default for other arguments
-    from postdoc.sequence import write_fasta
+    from postdoc.sequence import write_fasta, write_fake_fastq
     import subprocess
     import os
 
@@ -109,6 +112,11 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
             os.remove(output + '_aa.dnd')
 
         df_sequences.to_csv(result_table, index=False)
+
+    if fake_fastq is not None:
+        os.makedirs(os.path.dirname(fake_fastq), exist_ok=True)
+        records = df_sequences.dropna(subset=['dna_match'])[[sample_col, 'dna_match']].values
+        write_fake_fastq(fake_fastq, records)
 
     if summarize:
         num_traces = len(df_sequences)

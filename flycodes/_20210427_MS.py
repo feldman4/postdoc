@@ -294,6 +294,8 @@ def extract_and_plot(df_analysis, datasets, dataset_to_label, prefix=''):
 
             
         ax0.plot([rt, rt], [0, ymax * 1.1], color='black', zorder=-1, alpha=0.8)
+        ax0.plot([rt+rt_left, rt+rt_left], [0, ymax * 1.1], color='black', ls=':', zorder=-1, alpha=0.8)
+        ax0.plot([rt+rt_right, rt+rt_right], [0, ymax * 1.1], color='black', ls=':', zorder=-1, alpha=0.8)
         ax0.set_ylim([100, ymax * 1.1])
         ax0.set_ylim([100, 1e7])
         ax0.set_yscale('log')
@@ -338,7 +340,7 @@ def add_bk_ids(df):
     )
 
 
-def export_one_design(df, design_col='design_name', df_ref=None, prefix=''):
+def export_one_design(df, design_col='design_name', df_ref=None, prefix='', ylim=(1e2, 1e7)):
     """df_direct.groupby('design_name').apply(export_one_design)
     """
     design = df[design_col].iloc[0]
@@ -352,7 +354,6 @@ def export_one_design(df, design_col='design_name', df_ref=None, prefix=''):
         ref_y = ref_y - ref_y.min()
         ref_y = ref_y / ref_y.max()
         ref_y[ref_y < 1e-3] = np.nan
-    
 
     fig, ((ax0, ax1), (ax2, ax_leg)) = plt.subplots(ncols=2, nrows=2, figsize=(7, 6))
     for bc, df_ in df.groupby('barcode'):
@@ -362,7 +363,7 @@ def export_one_design(df, design_col='design_name', df_ref=None, prefix=''):
         
         ax_leg.plot(0, 0, label=bc)
     ax1.set_yscale('log')
-    ax1.set_ylim([1e2, 1e7])
+    ax1.set_ylim(ylim)
     ax0.set_title('Apex intensity')
     ax1.set_title('Apex intensity, log scale')
     ax2.set_title('Normalized')
@@ -373,7 +374,6 @@ def export_one_design(df, design_col='design_name', df_ref=None, prefix=''):
         for key, ax in keys.items():
             ax.plot(ref_x, ref_y * df[key].max(), color='black')
             ax.set_xlim([7, 20])
-    
 
     ax_leg.legend(loc='upper left')
     ax_leg.axis('off')

@@ -33,6 +33,7 @@ def read_pdb(filename, add_info=True, reorder_cols=True):
 
 def read_pdb_string(pdb_string, reorder_cols=True, add_info=True):
     models = pdb_string.split('ENDMDL')
+    models = [m for m in models if 'ATOM' in m]
     if len(models) > 1:
         msg = f'{len(models)} models detected, loading the first one'
         logger.warning(msg)

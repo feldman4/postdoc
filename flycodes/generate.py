@@ -155,11 +155,10 @@ def train_linear_iRT_model(df):
     assert((Y_pred - Y_pred_manual).mean() < 1e-10)
 
 
-    fig, ax = plt.subplots(figsize=(10, 10))
+    fig, ax = plt.subplots(figsize=(8, 8))
     ax.scatter(Y, Y_pred, s=1, color='k', alpha=0.1)
-    ax.set_xlabel('Y')
-    ax.set_ylabel('Y_pred')
+    ax.set_xlabel('iRT')
+    ax.set_ylabel('iRT predicted by linear model')
     ax.set_title(f'correlation = {np.corrcoef(Y, Y_pred)[0, 1]}')
-    # plt.gca().set_ylim([-50, 0])
 
     return model

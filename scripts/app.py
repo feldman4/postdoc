@@ -1,6 +1,6 @@
 import fire
 import postdoc.lab.sanger_app
-import postdoc.flycodes.ms_app
+import postdoc.flycodes.prosit_app
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
@@ -678,7 +678,7 @@ if __name__ == '__main__':
     # if the command name is different from the function name
     named = {'submit': submit_from_command_list,
              'match_sanger': postdoc.lab.sanger_app.main,
-             'predict_iRT': postdoc.flycodes.ms_app.predict_iRT,
+             'predict_iRT': postdoc.flycodes.prosit_app.predict_iRT,
              }
 
     final = {}

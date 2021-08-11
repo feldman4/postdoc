@@ -1,0 +1,41 @@
+samples:
+  gate: date == "2021-08-06" & "MS_191" <= sample <= "MS_229"
+
+designs:
+  table: /home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv
+  gate: vector == "pT12"
+
+convert_raw:
+  flags: [
+    # '--noPeakPicking'
+    ]
+
+comet:
+  params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
+
+skyline:
+  gate: >-
+    17.5 < retention_time
+    & -5 < mass_error_ppm < 0
+    & 0.9 < isotope_dot_product
+
+plot:
+  by_design:
+    job_size: 100
+
+
+python:
+  mz_correction: [[500, -0.11], [850, -0.141]]
+  mz_diff_tolerance: 3.0e-5
+  mz_tolerance_search: 1.0e-2 # for merge_asof
+  min_intensityApex: 500
+  rt-fit:
+    min_intensityApex: 5.0e+4
+    max_mz_diff: 1.0e-5
+    min_isotopes: 3
+    plot_min_intensityApex: 500
+  filters:
+    min_rt_fit: 0.75
+    min_averagineCorr: 0.95
+
+

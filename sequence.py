@@ -68,14 +68,36 @@ def write_fasta(filename, list_or_records):
         fh.write(format_fasta(list_or_records))
 
 
+def write_fake_fastq(filename, list_or_records):
+    with open(filename, 'w') as fh:
+        fh.write(format_fake_fastq(list_or_records))
+
+
+def format_fake_fastq(list_or_records):
+    if isinstance(list_or_records[0], str):
+        records = list_to_records(list_or_records)
+    else:
+        records = list_or_records
+
+    lines = []
+    for name, seq in records:
+        lines.extend([name, seq, '+', '+'])
+    return '\n'.join(lines)
+
+
+def list_to_records(xs):
+    n = len(xs)
+    width = int(np.ceil(np.log10(n)))
+    fmt = '{' + f':0{width}d' + '}'
+    records = []
+    for i, s in enumerate(xs):
+        records += [(fmt.format(i), s)]
+    return records
+
+
 def format_fasta(list_or_records):
     if isinstance(list_or_records[0], str):
-        n = len(list_or_records)
-        width = int(np.ceil(np.log10(n)))
-        fmt = '{' + f':0{width}d' + '}'
-        records = []
-        for i, s in enumerate(list_or_records):
-            records += [(fmt.format(i), s)]
+        records = list_to_records(list_or_records)
     else:
         records = list_or_records
     
@@ -84,7 +106,6 @@ def format_fasta(list_or_records):
         lines.extend([f'>{name}', seq])
     return '\n'.join(lines)
 
-    
 
 def fasta_frame(files_or_search):
     """Convenience function, pass either a list of files or a 
