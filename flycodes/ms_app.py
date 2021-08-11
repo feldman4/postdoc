@@ -9,18 +9,30 @@ import sys
 
 # global
 akta_db = '/home/dfeldman/for/akta_db/'
+thermorawfileparser = '/home/dfeldman/.conda/envs/df-pyr-tf/bin/thermorawfileparser'
+comet = '/home/dfeldman/.conda/envs/tpp/bin/comet'
+ms_app = '/home/dfeldman/packages/postdoc/scripts/ms_app.sh'
 
 # local
 config_file = 'config.yaml'
 sample_table = 'samples.csv'
 design_table = 'designs.csv'
+barcodes_by_design = 'barcodes_by_design.fa'
+barcode_results = 'skyline/barcode_results.csv'
+skyline_table = 'skyline_intensities.csv'
+dino_feature_table = 'dino_features.csv'
+
 direct_table = 'direct_intensities.csv'
 target_table = 'dinosaur/targets.tsv'
+
 dinosaur_params = 'dinosaur/advParams.txt'
-command_list_0 = 'commands/0_openms_dinosaur.list'
+command_list_dino = 'commands/0_openms_dinosaur.list'
+command_list_convert_raw = 'commands/1_convert_raw.list'
+command_list_comet = 'commands/2_comet.list'
+command_list_skyline = 'commands/3_skyline.list'
+command_list_plot = 'commands/4_plot.list'
 BARCODE = 'barcode'
 feature_output = 'dinosaur/{sample}/{sample}.filt.features.tsv'
-
 
 def setup():
     """Set up analysis directory.
@@ -35,11 +47,12 @@ def setup():
         params = yaml.safe_load(fh)
     
     with contextlib.suppress(FileNotFoundError):
-        for f in glob('input/*mzData'):
+        for f in glob('input/*'):
             os.unlink(f)
         shutil.rmtree('commands')
-    os.makedirs('dinosaur', exist_ok=True)
+    os.makedirs('convert', exist_ok=True)
 
+    print('Downloading sample info from MS barcoding gsheet...', file=sys.stderr)
     df_samples = (load_sample_info(params['samples']['gate'])
      .pipe(assert_unique, 'sample', 'file', 'short_name')
      .pipe(add_sec_fractions)
@@ -53,9 +66,76 @@ def setup():
     symlink_input(df_samples)
 
     df_designs = load_designs(**params['designs'])
+    num_designs = df_designs.shape[0]
+    print(f'Loaded {num_designs:,} designs from {params["designs"]["table"]}')
+    df_designs = validate_designs(df_designs)
+    dropped = num_designs - df_designs.shape[0]
+    if dropped:
+        print(f'  Dropped {dropped:,} duplicate (barcode, design_name) pairs', file=sys.stderr)
     df_designs.to_csv(design_table, index=None)
-    print(f'Wrote {len(df_designs):,} designs to {design_table}', file=sys.stderr)
+    print(f'  Wrote {len(df_designs):,} designs to {design_table}', file=sys.stderr)
 
+    if 'convert_raw' in params:
+        setup_convert_raw(df_samples, params)
+        print('Run Thermo .raw conversion with bash command:', file=sys.stderr)
+        print(f'  /home/dfeldman/s/app.sh submit {command_list_convert_raw} '
+            '--cpus=2 --memory=10g', file=sys.stderr)
+
+    if 'comet' in params:
+        setup_comet(df_samples, df_designs, params)
+        print('Run Comet MS/MS search with bash command:', file=sys.stderr)
+        print(f'  /home/dfeldman/s/app.sh submit {command_list_comet} '
+            '--cpus=2 --memory=10g', file=sys.stderr)
+
+    if 'dinosaur' in params:
+        setup_dinosaur(df_samples, df_designs, params)
+        print('Run Dinosaur MS1 deconvolution with bash command:', file=sys.stderr)
+        print(f'  /home/dfeldman/s/app.sh submit {command_list_dino} '
+            '--cpus=2 --memory=16g', file=sys.stderr)
+
+    if 'plot' in params:
+        setup_plots(df_designs, params)
+        print('Plot results with bash command:', file=sys.stderr)
+        print(f'  /home/dfeldman/s/app.sh submit {command_list_plot} '
+            '--cpus=1 --memory=4g', file=sys.stderr)
+
+
+def setup_convert_raw(df_samples, params):
+    import pandas as pd
+    
+    os.makedirs('convert', exist_ok=True)
+    flags = ' '.join(params['convert_raw']['flags'])
+    arr = []
+    for sample in df_samples['sample']:
+        arr += [f'{thermorawfileparser} -o convert/ {flags} -i input/{sample}.raw']
+
+    os.makedirs('commands', exist_ok=True)
+    pd.Series(arr).to_csv(command_list_convert_raw, index=None, header=None)
+
+
+def setup_comet(df_samples, df_designs, params):
+    import pandas as pd
+
+    write_barcode_fa(df_designs)
+    comet_params = params['comet']['params']
+
+    arr = []
+    for sample in df_samples['sample']:
+        f_input = f'convert/{sample}.mzML'
+        f_output = f'convert/{sample}.pep.xml'
+        f_final = f'convert/{sample}.pepXML'
+
+        cmd = (f'{comet} -D{barcodes_by_design} -P{comet_params} {f_input}'
+               f' && mv {f_output} {f_final}')
+        arr += [cmd]
+
+    pd.Series(arr).to_csv(command_list_comet, header=None, index=None)
+
+
+def setup_dinosaur(df_samples, df_designs, params):
+    import pandas as pd
+
+    os.makedirs('dinosaur', exist_ok=True)
     targets = params['dinosaur']['targets']
     try:
         targets = df_designs[:int(targets)][BARCODE]
@@ -67,21 +147,47 @@ def setup():
 
     dino_base = format_dinosaur_command(**params['dinosaur'])
     scripts = write_openms_dinosaur_commands(df_samples['sample'], dino_base, params['openms'])
-    pd.Series([f'sh {x}' for x in scripts]).to_csv(command_list_0, index=None, header=None)
-
-    print('Run MS1 deconvolution with bash command:', file=sys.stderr)
-    print(f'  /home/dfeldman/s/app.sh submit {command_list_0} '
-           '--cpus=2 --memory=16g', file=sys.stderr)
+    (pd.Series([f'sh {x}' for x in scripts])
+     .to_csv(command_list_dino, index=None, header=None))
 
 
-def symlink_input(df_samples):
+def setup_plots(df_designs, params):
+    import pandas as pd
+
+    designs_per_job = params['plot']['by_design']['job_size']
+    num_designs = df_designs['design_name'].drop_duplicates().shape[0]
+    arr = []
+    for i in range(0, num_designs + 1, designs_per_job):
+        arr += [f'{ms_app} plot_design_range {i} {designs_per_job}']
+    pd.Series(arr).to_csv(command_list_plot, index=None, header=None)
+
+
+def symlink_input(df_samples, extension=None):
     os.makedirs('input', exist_ok=True)
+    extensions = []
     for sample, filename in df_samples[['sample', 'file']].values:
         if not os.path.exists(filename):
             raise SystemExit(f'File not found: {filename}')
-        os.symlink(filename, f'input/{sample}.mzData')
+        if filename.endswith('mzdata.xml'):
+            extension = 'mzData'
+        else:
+            extension = filename.split('.')[-1]
+        os.symlink(filename, f'input/{sample}.{extension}')
+        extensions.append('.' + extension)
     
-    print(f'Linked mzData files in input/', file=sys.stderr)
+    print(f'Linked {",".join(set(extensions))} files in input/', file=sys.stderr)
+
+
+def write_barcode_fa(df_designs):
+    """Create fake proteins by concatenating barcodes. In Skyline, these should be loaded
+    with Enzyme: Trypsin/P [KR | -]
+    """
+    from postdoc.sequence import write_fasta
+    records = []
+    for design_name, df in df_designs.groupby('design_name'):
+        fake_protein = ''.join(df['barcode'])
+        records += [(design_name, fake_protein)] 
+    write_fasta(barcodes_by_design, records)
 
 
 def format_dinosaur_targets(targets, mz_tolerance, min_intensityApex):
@@ -245,6 +351,8 @@ def load_features(file_template=feature_output):
     .assign(mz_corr=lambda x: mz_corrector(x['mz']))
     )
 
+    print('raw features', df_features_raw.shape)
+
     df_features = (df_features_raw
     .pipe(join_within, df_designs, 
           'mz_corr', 'mz_theoretical', params['mz_tolerance_search'])
@@ -256,7 +364,7 @@ def load_features(file_template=feature_output):
     .assign(intensityApex_log10=lambda x: np.log10(x['intensityApex']))
     .sort_values(['short_name', 'barcode', 'rtApex'])
     )
-    df_features.to_csv('features.csv', index=None)
+    df_features.to_csv(dino_feature_table, index=None)
 
     n = df_features['rt_fit_gate'].sum()
     print(f'{n} features passed retention time fit gate\n-- {rt_fit_query}')
@@ -283,6 +391,15 @@ def load_designs(table, gate):
     import pandas as pd
     cols = ['barcode', 'mz', 'iRT', 'design_name', 'pdb_file']
     return pd.read_csv(table).query(gate)[cols]
+
+
+def validate_designs(df_designs):
+    from postdoc.utils import assert_unique
+
+    return (df_designs
+     .drop_duplicates(['barcode', 'design_name'])
+     .pipe(assert_unique, 'barcode')
+    )
 
 
 def add_sec_fractions(df_sample_info):
@@ -360,10 +477,196 @@ def add_uv_data(df_sample_info, df_uv_data):
     )
 
 
+def process_skyline():
+    import pandas as pd
+    import numpy as np
+    from postdoc.utils import assert_unique
+
+    cols = ['barcode', 'pdb_name', 'iRT']
+    barcode_info = (pd.read_csv(design_table)
+    .assign(pdb_name=lambda x: x['pdb_file'].str.split('/').str[-1])
+    [cols].pipe(assert_unique, 'barcode')
+    )
+
+    sample_info = (pd.read_csv(sample_table)
+    [['sample', 'stage', 'short_name', 'volume']]
+    )
+
+    # not sure where these duplicate entries are coming from...
+    unique_cols = ['Protein', 'Peptide', 'Replicate', 'Transition']
+    df_sky_raw = (pd.read_csv(barcode_results)
+    .query('Transition == "precursor++"')
+    .drop_duplicates(unique_cols)
+    )
+
+    df_sky = (df_sky_raw
+    .rename(columns=fix_skyline_col)
+    .merge(barcode_info)
+    .merge(sample_info)
+    .assign(log_area_ms1=lambda x: x['area_ms1'].apply(np.log10))
+    .assign(barcode_area_max=lambda x: 
+            x.groupby('barcode')['area_ms1'].transform('max'))
+    .assign(barcode_area_norm=lambda x: x.eval('area_ms1 / barcode_area_max'))
+    .pipe(format_skyline_results)
+    )
+
+    assert df_sky.shape[0] == df_sky_raw.shape[0]
+    df_sky = df_sky.query('area_ms1 > 0')
+    df_sky.to_csv(skyline_table, index=None)
+    print(f'Wrote {df_sky.shape[0]:,} / {df_sky_raw.shape[0]:,} non-zero entries'
+          f' to {skyline_table}', file=sys.stderr)
+
+
+def fix_skyline_col(col):
+    from slugify import slugify
+    col = slugify(col, separator='_')
+    skyline_rename = {
+        'replicate': 'sample',
+        'protein': 'design_name',
+        'peptide': 'barcode',
+        'area': 'area_ms1', 
+        # theoretical mz of precursor
+        'precursor_mz': 'mz',
+    }
+    return skyline_rename.get(col, col)
+
+
+def format_skyline_results(df_sky):
+    cols = [
+    # design and barcode info
+    'design_name', 'barcode', 'short_name', 'stage', 'sample', 'volume',
+    # intensity
+     'barcode_area_norm',
+     'area_ms1', # area for this transition (e.g., first doubly-charged isotope)
+     'log_area_ms1',
+     'total_area_ms1', # area for all transitions
+     'barcode_area_max',
+    # match quality
+     'isotope_dot_product', 'mass_error_ppm', 'library_probability_score',
+    # detection info
+     'mz', 'iRT',
+     'retention_time', 'start_time', 'fwhm', 'end_time',
+     'max_fwhm',
+    # barcode and design info
+    'pdb_name',
+    ]
+
+    sort_by = ['design_name', 'barcode', 'sample']
+    return df_sky[cols].sort_values(sort_by)
+
+
+# PLOTTING
+
+
+def remap_volumes(df_plot, df_samples):
+    """Assign fake volumes to non-SEC stages for plotting.
+    """
+    other_stages = [x for x in df_samples['stage'].drop_duplicates() if x != 'SEC']
+    first_volume = int(df_samples['volume'].min())
+    stage_to_volume = {s: first_volume - i - 1 for i, s in enumerate(other_stages[::-1])}
+
+    arr = []
+    for stage, volume in df_plot[['stage', 'volume']].values:
+        arr.append(stage_to_volume.get(stage, volume))
+
+    return df_plot.assign(volume=arr)
+
+
+def get_titles(df, width=60):
+    import textwrap
+
+    seen = {}
+    arr = []
+    for key in df[['design_name', 'pdb_name']].values:
+        key = tuple(key)
+        if key not in seen:
+            design_name, pdb_name = key
+            seen[key] = '\n'.join([design_name] + textwrap.wrap(pdb_name, width))
+        arr.append(seen[key])
+    return arr
+
+
+def plot_design_range(first_design, num_to_plot):
+    import yaml
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    df_designs = pd.read_csv(design_table)
+    df_samples = pd.read_csv(sample_table)
+    df_sky = pd.read_csv(skyline_table)
+    with open(config_file, 'r') as fh:
+        params = yaml.safe_load(fh)['plot']['by_design']
+
+    designs = list(df_designs['design_name'].drop_duplicates())
+    designs = designs[first_design:first_design + num_to_plot]
+
+    df_plot = (df_sky
+    .query('design_name == @designs')
+    .pipe(remap_volumes, df_samples)
+    .assign(title=get_titles)
+    )
+    actual_designs = df_plot['design_name'].drop_duplicates().pipe(list)
+
+    print(f'Plotting {len(actual_designs)} designs '
+          f'({actual_designs[0]} to {actual_designs[-1]})', file=sys.stderr)
+
+    os.makedirs('figures/by_design', exist_ok=True)
+    for design_name, df in df_plot.groupby('design_name'):
+        fig = plot_one_design(df, df_samples)
+        f = f'figures/by_design/{design_name}.png'
+        fig.savefig(f)
+        plt.close(fig)
+
+
+def plot_one_design(df_plot, df_samples, normalized='barcode_area_norm', 
+                    raw='area_ms1', log_lim=(1e5, 1e10)):
+    """Plot normalized, raw, and log-scale raw values across samples. The x-axis value
+    reflects elution volume for SEC samples.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    legend_cols = 4
+    figsize = 8, 11
+
+    # abbreviated labels for non-SEC stages
+    short_form = {'soluble': 'sol.', 'insoluble': 'insol.', 'injection': 'inj.'}
+    
+    fig, axs = plt.subplots(nrows=4, figsize=figsize)
+    ax_norm, ax_lin, ax_log, ax_leg = axs
+    for barcode, df in df_plot.groupby('barcode'):
+        ax_norm.plot(df['volume'], df[normalized], marker='.', markersize=6)
+        ax_lin.plot(df['volume'], df[raw], marker='.', markersize=6)
+        ax_log.plot(df['volume'], df[raw], marker='.', markersize=6)
+        ax_leg.plot(0, 0, label=barcode)
+    ax_log.set_yscale('log')
+    ax_log.set_ylabel('Raw MS1 area')
+    ax_lin.set_ylabel('Raw MS1 area')
+    axs[0].set_title(df['title'].iloc[0])
+    ax_norm.set_ylabel('Normalized MS1 area')
+    axs[-2].set_xlabel('SEC Volume')
+    ax_log.set_ylim(log_lim)
+
+    # fix labels
+    first_volume = int(df_samples['volume'].min())
+    last_volume = int(df_samples['volume'].max() + 1)
+    non_sec = df_samples.query('volume != volume')['stage'].map(short_form)
+    tick_labels = list(non_sec) + list(np.arange(first_volume, last_volume))
+    tick_positions = first_volume - len(non_sec) + np.arange(len(tick_labels))
+    for ax in ax_norm, ax_log, ax_lin:
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+        ax.set_xlim(tick_positions[[0, -1]])
+    ax_leg.legend(loc='center', ncol=legend_cols, frameon=False)
+    ax_leg.axis('off')
+    fig.tight_layout()
+    return fig
+
+
 if __name__ == '__main__':
 
     # order is preserved
-    commands = ['setup', 'load_features',
+    commands = ['setup', 'load_features', 'process_skyline', 'plot_design_range',
     # , 'match', 'stats', 'plot'
     ]
     # if the command name is different from the function name
