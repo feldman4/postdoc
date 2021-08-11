@@ -3,7 +3,7 @@ samples:
   gate: 'date == "2021-07-16" & ("MS_233" <= sample <= "MS_259")'
 
 designs:
-  table: '/projects/ms/analysis/4_IPD_pH192_0431_L1/designs.csv'
+  table: '/projects/ms/analysis/4_IPD_pH192_0431_L1/designs_barcode_dedupe.csv'
   gate: 'barcode == barcode'
 
 # PARAMETERS for analysis steps
