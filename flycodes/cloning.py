@@ -1,5 +1,5 @@
 from Bio.Seq import Seq
-from Bio.Alphabet import generic_dna, generic_protein
+# from Bio.Alphabet import generic_dna
 from Bio.SeqUtils.MeltingTemp import Tm_NN
 
 
