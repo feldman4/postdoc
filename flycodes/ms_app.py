@@ -30,7 +30,8 @@ command_list_dino = 'commands/0_openms_dinosaur.list'
 command_list_convert_raw = 'commands/1_convert_raw.list'
 command_list_comet = 'commands/2_comet.list'
 command_list_skyline = 'commands/3_skyline.list'
-command_list_plot = 'commands/4_plot.list'
+command_list_plot_designs = 'commands/4_plot_designs.list'
+command_list_plot_qc = 'commands/5_plot_QC.list'
 BARCODE = 'barcode'
 feature_output = 'dinosaur/{sample}/{sample}.filt.features.tsv'
 
@@ -95,9 +96,12 @@ def setup():
 
     if 'plot' in params:
         setup_plots(df_designs, params)
-        print('Plot results with bash command:', file=sys.stderr)
-        print(f'  /home/dfeldman/s/app.sh submit {command_list_plot} '
+        print('Plot design SEC with bash command:', file=sys.stderr)
+        print(f'  /home/dfeldman/s/app.sh submit {command_list_plot_designs} '
             '--cpus=1 --memory=4g', file=sys.stderr)
+            
+        print('Plot design SEC with bash command:', file=sys.stderr)
+        print(f'  sh {command_list_plot_qc}')
 
 
 def setup_convert_raw(df_samples, params):
@@ -159,7 +163,13 @@ def setup_plots(df_designs, params):
     arr = []
     for i in range(0, num_designs + 1, designs_per_job):
         arr += [f'{ms_app} plot_design_range {i} {designs_per_job}']
-    pd.Series(arr).to_csv(command_list_plot, index=None, header=None)
+    pd.Series(arr).to_csv(command_list_plot_designs, index=None, header=None)
+
+    cmds = [
+        f'{ms_app} plot_skyline_QC', 
+        f'{ms_app} plot_barcode_coverage',
+    ]
+    pd.Series(cmds).to_csv(command_list_plot_qc, index=None, header=None)
 
 
 def symlink_input(df_samples, extension=None):
@@ -663,10 +673,120 @@ def plot_one_design(df_plot, df_samples, normalized='barcode_area_norm',
     return fig
 
 
+def plot_skyline_QC(prefix='figures/skyline_QC'):
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import seaborn as sns
+    import yaml
+
+    with open(config_file, 'r') as fh:
+        params = yaml.safe_load(fh)
+
+    def save(fig, suffix, description):
+        f = f'{prefix}_{suffix}.png'
+        fig.tight_layout()
+        fig.savefig(f)
+        print(f'Saved {description} to {f}', file=sys.stderr)
+
+    df_sky = pd.read_csv(skyline_table)
+    df_sky['mean_rt'] = df_sky.groupby('barcode')['retention_time'].transform('mean')
+    df_sky['rt_offset'] = df_sky['retention_time'] - df_sky['mean_rt']
+
+    fig, ax = plt.subplots(figsize=(4, 5))
+    (df_sky
+    .pipe((sns.boxplot, 'data'), y='sample', x='rt_offset', 
+        orient='h', ax=ax, showfliers=False)
+    )
+    ax.set_xlabel('Retention time offset\nrelative to average across samples\n(minutes)')
+    save(fig, 'sample_rt_offset', 'retention time offsets')
+
+    fig, ax = plt.subplots(figsize=(4, 5))
+    (df_sky
+    .pipe((sns.boxplot, 'data'), y='sample', x='fwhm', 
+        orient='h', ax=ax, showfliers=False)
+    )
+    ax.set_xlabel('Elution width (FWHM of MS1 peak)')
+    save(fig, 'sample_elution_widths', 'barcode elution widths')
+
+    gate = params['skyline']['gate']
+    fig, ax = plt.subplots(figsize=(5, 5))
+    df_sky.query(gate).plot.scatter(y='iRT', x='retention_time', 
+        s=1, alpha=0.3, color='black', ax=ax)
+    ax.set_xlabel('Retention time (minutes)')
+    ax.set_ylabel('Prosit iRT')
+    save(fig, 'iRT_vs_retention_time', 'predicted (iRT) vs detected retention times')
+
+    fig, ax = plt.subplots(figsize=(4, 5))
+    (df_sky
+    .pipe((sns.boxplot, 'data'), y='sample', x='mass_error_ppm', 
+        orient='h', ax=ax, showfliers=False)
+    )
+    ax.set_xlabel('Mass error (PPM)')
+    save(fig, 'sample_mass_error', 'per-sample barcode mz errors')
+
+
+def plot_barcode_coverage(prefix='figures/barcode_coverage'):
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import seaborn as sns
+    import yaml
+
+    with open(config_file, 'r') as fh:
+        params = yaml.safe_load(fh)
+
+    df_designs = pd.read_csv(design_table)
+    df_sky = pd.read_csv(skyline_table)
+
+    cutoff = params['plot']['barcode_stats']['detected_cutoff']
+    detected_barcodes = (df_sky.groupby('barcode').size()
+    .loc[lambda x: x > cutoff].pipe(lambda x: list(x.index)))
+
+    df_designs['detected'] = df_designs['barcode'].isin(detected_barcodes)
+    df_designs['iRT_bin'] = df_designs['iRT'].round(-1).astype(int)
+    df_designs['mz_bin'] = ((df_designs['mz'] * 2).round(-2) / 2).astype(int)
+    df_designs['barcode_length'] = df_designs['barcode'].str.len()
+
+    def save(fg, suffix, description):
+        ax = fg.axes.flat[0]
+        legend = ax.get_legend()
+        legend.set_title(f'Detected in\n>= {cutoff} samples')
+        ax.set_ylabel('Barcode count')
+        
+        f = f'{prefix}_{suffix}.png'
+        fg.savefig(f)
+        print(f'Saved {description} to {f}', file=sys.stderr)
+
+    with sns.plotting_context('notebook'):
+        fg = (df_designs
+            .pipe((sns.catplot, 'data'), 
+                x='iRT_bin', hue='detected', kind='count', 
+                    aspect=2, height=3, legend_out=False)
+            )
+        fg.axes.flat[0].set_xlabel('iRT bin')
+        save(fg, 'by_iRT', 'barcode coverage by iRT bin')
+
+        fg = (df_designs
+            .pipe((sns.catplot, 'data'), 
+                x='mz_bin', hue='detected', kind='count', 
+                    aspect=1.2, height=3, legend_out=False)
+            )
+        fg.axes.flat[0].set_xlabel('mz bin')
+        save(fg, 'by_mz', 'barcode coverage by mz bin')
+
+        fg = (df_designs
+            .pipe((sns.catplot, 'data'), 
+                x='barcode_length', hue='detected', kind='count', 
+                    aspect=1.2, height=3, legend_out=False)
+            )
+        fg.axes.flat[0].set_xlabel('Barcode length')
+        save(fg, 'by_length', 'barcode coverage by length')
+
+
 if __name__ == '__main__':
 
     # order is preserved
-    commands = ['setup', 'load_features', 'process_skyline', 'plot_design_range',
+    commands = ['setup', 'load_features', 'process_skyline', 
+    'plot_design_range', 'plot_skyline_QC', 'plot_barcode_coverage',
     # , 'match', 'stats', 'plot'
     ]
     # if the command name is different from the function name
