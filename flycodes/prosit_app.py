@@ -3,9 +3,9 @@ from time import time
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
-MODEL_IRT = ('/home/dfeldman/flycodes/prosit_models/'
+MODEL_IRT = ('/home/dfeldman/flycodes/ref/prosit_models/'
         'model_irt_prediction/')
-MODEL_SPECTRA = ('/home/dfeldman/flycodes/prosit_models/'
+MODEL_SPECTRA = ('/home/dfeldman/flycodes/ref/prosit_models/'
                 'model_fragmentation_prediction/')
 
 
@@ -36,7 +36,8 @@ def predict_iRT(filename, header=None, sep=None, col=0, model_irt=MODEL_IRT,
     initialize_tf(verbose=True)
 
     import postdoc.flycodes as fly
-    from postdoc.scripts.app import read_table, dataframe_to_csv_string
+    from postdoc.scripts.app import read_table
+    from postdoc.utils import dataframe_to_csv_string
     import pandas as pd
 
     last_time = {0: time()}
