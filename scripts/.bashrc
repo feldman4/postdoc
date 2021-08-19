@@ -36,7 +36,7 @@ export VISUAL=$EDITOR
 alias sstatus='clusterstatus | (head -n 31; grep $USER)'
 alias wstatus="watch 'clusterstatus | (head -n 31; grep $USER)'"
 alias sq='squeue --user `whoami`'
-alias sqh='sjob' 
+alias sqh='sjob | less' 
 alias fname='readlink -f'
 
 ########################### EXTRA ############################
@@ -70,4 +70,9 @@ export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_
 # csvkit uses tabulate, which is slow and lacks a streaming option
 function csvless() {
     cat <(head -400 $1 | csvlook "${@:2}") <(csvlook $1 "${@:2}" | tail -n +402) | less
+}
+
+# get typical digs paths
+function real() {
+    readlink -f $@ | sed 's/\/mnt//'
 }
