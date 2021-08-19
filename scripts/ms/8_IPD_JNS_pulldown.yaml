@@ -1,0 +1,45 @@
+# METADATA for setting up run
+samples:
+  gate: 'date == "2021-08-13" & ("MS_284" <= sample <= "MS_287")'
+
+designs:
+  table: '/home/dfeldman/flycodes/chip_orders/chip137_design.csv'
+  gate: 'source == "CD98_binders" | source == "TS_variants" | source == "BH_IL6R_variants"'
+
+
+# PARAMETERS for analysis steps
+
+# filter mzData by retention time (seconds), mz range, and 
+# minimum intensity
+openms:
+  path: /home/dfeldman/.conda/envs/proteowizard/bin
+  filters: "-rt 300:1020 -mz 500:850 -int 50:"
+
+dinosaur:
+  executable: "java -jar /home/dfeldman/misc/Dinosaur-1.2.0.free.jar"
+  options: "--verbose --profiling --writeHills --concurrency=2 --nReport=100 --reportSeed=1"
+  filters: "--minCharge=2 --maxCharge=2"
+  targets: 2
+  advParams:
+    hillMinLength: 5
+    hillMaxMissing: 5
+    hillPeakFactorMinLength: 1000
+    hillPeakFactor: 100
+    averagineCorr: 0.95
+    averagineExplained: 0.75
+
+python:
+  mz_correction: [[500, 0], [850, 0]]
+  mz_diff_tolerance: 3.0e-5
+  mz_tolerance_search: 1.0e-2 # for merge_asof
+  min_intensityApex: 500
+  rt-fit:
+    min_intensityApex: 5.0e+3
+    max_mz_diff: 1.0e-5
+    min_isotopes: 3
+    plot_min_intensityApex: 500
+  filters:
+    min_rt_fit: 0.75
+    min_averagineCorr: 0.95
+
+
