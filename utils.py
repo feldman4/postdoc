@@ -351,7 +351,7 @@ def assert_unique(df, *cols):
     for col in cols:
         b = ~df[col].duplicated()
         if a != b.sum():
-            raise ValueError(f'{b.sum()} / {a} entries are unique for column {col}')
+            raise ValueError(f'{b.sum()} / {a} entries are unique for column(s) {col}')
     return df
 
 
@@ -517,3 +517,37 @@ def relabel_array(arr, new_label_dict):
         if old_val <= n:
             arr_[old_val] = new_val
     return arr_[arr]
+
+
+def gb_apply_parallel(df, cols, func, n_jobs=None, progress=lambda x: x):
+    if isinstance(cols, str):
+        cols = [cols]
+
+    from joblib import Parallel, delayed
+    if n_jobs is None:
+        import multiprocessing
+        n_jobs = multiprocessing.cpu_count()
+
+    grouped = df.groupby(cols)
+    names, work = zip(*grouped)
+    results = Parallel(n_jobs=n_jobs)(delayed(func)(w) for w in progress(work))
+
+    if isinstance(results[0], pd.DataFrame):
+        arr = []
+        for labels, df in zip(names, results):
+            (df.assign(**{c: l for c, l in zip(cols, labels)})
+                .pipe(arr.append))
+        results = pd.concat(arr)
+    elif isinstance(results[0], pd.Series):
+        if len(cols) == 1:
+            results = (pd.concat(results, axis=1).T
+                .assign(**{cols[0]: names}))
+        else:
+            labels = zip(*names)
+            results = (pd.concat(results, axis=1).T
+                .assign(**{c: l for c,l in zip(cols, labels)}))
+
+    elif isinstance(results[0], dict):
+        results = pd.DataFrame(results, index=pd.Index(names, name=cols)).reset_index()
+
+    return results
