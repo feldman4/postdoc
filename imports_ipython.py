@@ -17,7 +17,9 @@ try:
     from .drive import Drive
     drive = Drive()
 except ImportError:
-    print('Skipping .drive due to missing packages.')
+    print('Skipping .drive due to missing packages', file=sys.stderr)
+except FileNotFoundError:
+    print('Skipping .drive due to missing configuration', file=sys.stderr)
 
 import scipy.stats
 from scipy.spatial.distance import pdist
