@@ -22,7 +22,17 @@ skyline:
 plot:
   by_design:
     job_size: 100
+  barcode_stats:
+    detected_cutoff: 5
 
+sec:
+  fraction_classes:
+    aggregate: '9 < volume <= 13.6'
+    oligomer: '13.6 < volume <= 16.6'
+    monomer: '16.6 < volume <= 21'
+    # degraded: 
+  export_gate: '3 <= num_barcodes <= 5 & mean_deviation_count < 0.25 & median_l1 < 3'
+  deviation_threshold: 0.2
 
 python:
   mz_correction: [[500, -0.11], [850, -0.141]]
