@@ -40,7 +40,6 @@ iupac = {'A': ['A'],
 
 codon_maps = {}
 
-
 def read_fasta(f):
     if f.endswith('gz'):
         fh = gzip.open(f)
@@ -149,7 +148,10 @@ def load_codons(organism):
     f = os.path.join(resources, 'codon_usage', 'organisms.csv')
     taxids = pd.read_csv(f).set_index('organism')['taxid'].to_dict()
     
+    if organism.lower() == 'yeast':
+        organism = 's_cerevisiae'
     organism = organism.lower().replace('.', '').replace(' ', '_')
+    
     try:
         table = f'{organism}_{taxids[organism]}.csv'
     except KeyError:
@@ -223,6 +225,19 @@ def reverse_translate_max(aa_seq, organism='e_coli'):
         ) 
     codon_map = codon_maps[organism]
     return ''.join([codon_map[x] for x in aa_seq])
+
+
+def reverse_translate_random(aa_seq, organism='e_coli', seed='input', cutoff=0.12):
+    if seed == 'input':
+        seed = hash(aa_seq) % 10**8
+    if (organism, cutoff) not in codon_maps:
+        codon_maps[(organism, cutoff)] = (load_codons(organism)
+        .query('relative_frequency > @cutoff')
+        .groupby('amino_acid')['codon_dna'].apply(list).to_dict()
+        )
+    codon_map = codon_maps[(organism, cutoff)]
+    rs = np.random.RandomState(seed=seed)
+    return ''.join([rs.choice(codon_map[x]) for x in aa_seq])
 
 
 def get_genbank_features(f):
