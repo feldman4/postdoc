@@ -12,8 +12,8 @@ export PYTHONPATH=/home/dfeldman/packages:$PYTHONPATH
 
 RUN=$1
 
-mkdir -p flycodes/$RUN
-cd flycodes/$RUN
+mkdir -p flycodes/runs/$RUN
+cd flycodes/runs/$RUN
 
 # may want to add -k to ignore errors
 FLAGS="--resources gpu_mem_tenths=6 --cores"
