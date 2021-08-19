@@ -554,7 +554,10 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     import subprocess
     import pandas as pd
 
-    commands = pd.read_csv(filename, header=None)[0]
+    if filename == 'stdin':
+        commands = sys.stdin.read().strip().split('\n')
+    else:
+        commands = pd.read_csv(filename, header=None)[0]
     
     if name is None:
         name = os.path.basename(filename)
@@ -606,10 +609,12 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
             subprocess.Popen(command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
 
-def fasta_to_table(filename):
+def fasta_to_table(filename, name='name', sequence='sequence'):
     """Turn a fasta file into a delimited table.
 
     :param filename: fasta file or "stdin"
+    :param name: first column name
+    :param sequence: second column name
     """
     import pandas as pd
     from postdoc.sequence import parse_fasta
@@ -622,7 +627,7 @@ def fasta_to_table(filename):
         with open(filename, 'r') as fh:
             text = fh.read()
 
-    return (pd.DataFrame(parse_fasta(text), columns=('name', 'sequence'))
+    return (pd.DataFrame(parse_fasta(text), columns=(name, sequence))
             .pipe(dataframe_to_csv_string))
 
 
