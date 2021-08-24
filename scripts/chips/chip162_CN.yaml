@@ -1,0 +1,89 @@
+fetch:
+  layout_table: 
+    source: 'drive:chipmunk/chip162_CN'
+    skiprows: 2
+  adapter_table:
+    source: 'drive:chipmunk/adapters'
+    gate: 'kind == ["outer", "inner"]'
+
+layout:
+  nterm_padded: [spacer, R, barcode, linker, design]
+  nterm_padded_CN: [R, barcode, spacer, linker, design]
+  parts:
+    spacer: 
+      aa: GSSGSGSSGSGSSGSGSSGSSGSGSSSGSSGSSSGSSSGSSSGSSGSSSGSSGSSGSSGS
+      reverse_translation: random
+      expand_from: left
+    linker:
+      aa: GS
+      reverse_translation: random
+    R:
+      aa: R
+      reverse_translation: max
+    K:
+      aa: K
+      reverse_translation: max
+
+barcodes:
+  - name: nterm_filtered_CN_1
+    terminus: 'N'
+    source:
+      - /net/scratch/dfeldman/flycodes/runs/run_011/all_barcodes.csv
+      - /net/scratch/dfeldman/flycodes/runs/run_012/all_barcodes.csv
+    gate: "hydro_levy2012 < 2.5 \
+           & 450 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -10 < iRT < 115 \
+           & -4 < charge_pH7 \
+           "
+    mz_resolution: 80000
+    iRT_separation: 5
+  - name: nterm_filtered_CN_2
+    terminus: 'N'
+    source:
+      - /net/scratch/dfeldman/flycodes/runs/run_011/all_barcodes.csv
+      - /net/scratch/dfeldman/flycodes/runs/run_012/all_barcodes.csv
+    gate: "hydro_levy2012 < 2.5 \
+           & 450 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -10 < iRT < 115 \
+           & -4 < charge_pH7 \
+           "
+    mz_resolution: 80000
+    iRT_separation: 5
+  - name: nterm_filtered_CN_3
+    terminus: 'N'
+    source:
+      - /net/scratch/dfeldman/flycodes/runs/run_011/all_barcodes.csv
+      - /net/scratch/dfeldman/flycodes/runs/run_012/all_barcodes.csv
+    gate: "hydro_levy2012 < 2.5 \
+           & 450 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -10 < iRT < 115 \
+           & -4 < charge_pH7 \
+           "
+    mz_resolution: 50000
+    iRT_separation: 10
+
+dna_design:
+  oligo_length: [300, 300]
+
+reverse_translation:
+  method: DNAworks
+
+assembly:
+  max_per_pool: 800
+
+validate:
+    cloning:
+        vector: input/vectors/
+        # [restriction sites] inferred
+        upstream:
+        downstream:
+        method: BsaI golden gate
+    barcodes:
+        mz_resolution:
+        iRT_resolution:
+
+constants:
+    

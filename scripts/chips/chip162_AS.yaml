@@ -1,0 +1,68 @@
+fetch:
+  layout_table: 
+    source: 'drive:chipmunk/chip162_AS'
+    skiprows: 2
+  adapter_table:
+    source: 'drive:chipmunk/adapters'
+    gate: 'kind == ["outer", "inner"]'
+
+layout:
+  nterm_padded_AS: [R, barcode, linker, design, spacer]
+  nterm_padded_AS_long: [R, barcode, short_linker, design, spacer]
+  parts:
+    spacer: 
+      aa: GSSGSGSSGSGSSGSGSSG
+      reverse_translation: random
+      expand_from: left
+    linker:
+      aa: GS
+      reverse_translation: random
+    R:
+      aa: R
+      reverse_translation: max
+    K:
+      aa: K
+      reverse_translation: max
+    short_linker:
+      aa: S
+      reverse_translation: random
+
+barcodes:
+  - name: nterm_filtered_AS
+    terminus: 'N'
+    source:
+      - /net/scratch/dfeldman/flycodes/runs/run_011/all_barcodes.csv
+      - /net/scratch/dfeldman/flycodes/runs/run_012/all_barcodes.csv
+    gate: "hydro_count_norm < 0.4 \
+           & hydro_levy2012 < 2.5 \
+           & 450 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -10 < iRT < 115 \
+           & -4 < charge_pH7 \
+           "
+    mz_resolution: 90000
+    iRT_separation: 6
+
+dna_design:
+  oligo_length: [300, 300]
+  target_assembly_length: subpool_max
+
+reverse_translation:
+  method: DNAworks
+
+assembly:
+  max_per_pool: 500
+
+validate:
+    cloning:
+        vector: input/vectors/
+        # [restriction sites] inferred
+        upstream:
+        downstream:
+        method: BsaI golden gate
+    barcodes:
+        mz_resolution:
+        iRT_resolution:
+
+constants:
+    
