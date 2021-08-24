@@ -11,6 +11,8 @@ source activate /home/dfeldman/.conda/envs/prosit5
 export PYTHONPATH=/home/dfeldman/packages:$PYTHONPATH
 
 RUN=$1
+shift
+USER_FLAGS=$@
 
 mkdir -p flycodes/runs/$RUN
 cd flycodes/runs/$RUN
@@ -21,4 +23,4 @@ SNAKEFILE="-s /home/dfeldman/packages/postdoc/scripts/fly/flycodes.smk"
 TIMESTAMP=`date +%y%M%d_%H%M%S`
 
 # snakemake $SNAKEFILE --unlock
-snakemake $SNAKEFILE $FLAGS --config run=$RUN timestamp='"'$TIMESTAMP'"'
+snakemake $SNAKEFILE $FLAGS $USER_FLAGS --config run=$RUN timestamp='"'$TIMESTAMP'"'

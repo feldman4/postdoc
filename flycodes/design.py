@@ -1,5 +1,7 @@
 from ..utils import tqdm, cast_cols
 from ..constants import resources
+from pyteomics.mass import fast_mass
+calc_mz = fast_mass
 
 import contextlib
 import io
@@ -9,6 +11,7 @@ import numpy as np
 import pandas as pd
 import re
 import functools
+from itertools import product
 
 import matplotlib.pyplot as plt
 import pyteomics.mass
@@ -156,7 +159,7 @@ def enumerate_ions(df_precursors, first_ion=2, last_ion=1):
 
     df_ions = (pd.concat([df_b_ions, df_y_ions])
             .assign(ion_mz=lambda x: 
-                    x['ion'].apply(calc_mz))
+                    x['ion'].apply(fast_mass, charge=1))
               )
 
     # count the number of fragments with the same (mz, ion_mz)
@@ -188,22 +191,6 @@ def filter_distinct_ions(df_ions, num_fragments):
      .groupby(['mz', 'orig_seq', 'sequence']).head(num_fragments)
      .sort_values(['mz', 'orig_seq'])
     )
-
-
-amino_acids = 'RHKDESTNQCGPAVILMFYW'
-masses_c1 = {x: pyteomics.mass.calculate_mass(x) for x in amino_acids}
-@functools.lru_cache(maxsize=None)
-def calc_mz(s, charge=1):
-    edges = 18.01056468370001
-    proton = 1.0072764667700085
-    if charge == 1:
-        base = sum([masses_c1[x] for x in s]) - (len(s) - 1) * edges
-        return base + proton
-    elif charge == 2:
-        base = sum([masses_c1[x] for x in s]) - (len(s) - 1) * edges
-        return (base + 2*proton)/2
-    else:
-        return pyteomics.mass.calculate_mass(s, charge=charge)
 
 
 def select_barcodes(X, min_y_ions, seed):
@@ -391,7 +378,7 @@ def get_permutations(seq, num_permutations):
 def permute_precursors(precursors, num_permutations):
     arr = []
     for precursor in precursors:
-        mz = calc_mz(precursor, charge=2)
+        mz = fast_mass(precursor, charge=2)
         sequences = get_permutations(precursor, num_permutations)
         (pd.DataFrame({'mz': mz, 'orig_seq': precursor, 
                   'sequence': sequences})).pipe(arr.append)
@@ -466,6 +453,38 @@ def generate_peptides(length, num_peptides, rule_set, seed=0):
     return [''.join(x) for x in np.array(arr).T]
 
 
+def generate_all_peptides(min_length, max_length, prefix, rule_set):
+    peptides = []
+    for length in range(min_length, max_length + 1):
+        options = rule_set_to_options(rule_set, length)
+        options_fixed = [[x] for x in prefix] + list(options)[len(prefix):]
+        peptides += [''.join(x) for x in product(*options_fixed)]
+    
+    return (pd.DataFrame({'sequence': peptides})
+            .assign(mz=lambda x: x['sequence'].apply(fast_mass, charge=2))
+            .sort_values('mz')
+            )
+
+
+def generate_peptide_set(num_to_generate, min_length, max_length, rule_set, seed=None):
+    peptides = []
+    for length in range(min_length, max_length + 1):
+        num_peptides = int(num_to_generate / (max_length - min_length + 1))
+        peptides += generate_peptides(length, num_peptides, rule_set, seed)
+    peptides = sorted(set(peptides))
+    return (pd.DataFrame({'sequence': peptides})
+            .assign(mz=lambda x: x['sequence'].apply(pyteomics.mass.fast_mass, charge=2))
+            .sort_values('mz')
+            )
+
+
+def get_prefixes(rule_set):
+    """Convenience function for snakemake.
+    """
+    options = rule_set_to_options(rule_set, 10)
+    return [''.join(x) for x in product(options[0], options[1])]
+
+
 @functools.lru_cache(maxsize=None)
 def rule_set_to_options(rule_set, length):
     from ..constants import RULE_SETS
@@ -497,18 +516,6 @@ def rolling_window_sizes(values, window_size):
     return sizes
 
 
-def generate_peptide_set(num_to_generate, min_length, max_length, rule_set, seed=None):
-    peptides = []
-    for length in range(min_length, max_length + 1):
-        num_peptides = int(num_to_generate / (max_length - min_length + 1))
-        peptides += generate_peptides(length, num_peptides, rule_set, seed)
-    peptides = set(peptides)
-    mz_dict = {x: calc_mz(x, charge=2) for x in peptides}
-    peptides = np.array(sorted(peptides, key=mz_dict.get))
-    mz_list = np.array([mz_dict[x] for x in peptides])
-
-    return pd.DataFrame({'sequence': peptides, 'mz': mz_list})
-    
 
 def bin_by_value(values, bin_centers, bin_width):
     """Returns np.nan for values outside of bins.
@@ -808,7 +815,7 @@ def add_ion_properties(df):
             ion = sequence[-length:]
         if ion_type == 'b':
             ion = sequence[:length]
-        arr.append([ion, calc_mz(ion, charge=charge)])
+        arr.append([ion, fast_mass(ion, charge=charge)])
     ions, ion_mz = zip(*arr)
     return (df.assign(ion=ions, ion_mz=ion_mz))
 
@@ -1035,3 +1042,9 @@ levy_2012 = dict([('A', 0.0062),
 ('W', 0.7925),
 ('Y', 0.8806),])
 
+
+def apply_peptide_gate(df_peptides, gate):
+    if 'hydro_levy2012' in gate:
+        df_peptides['hydro_levy2012'] = [
+            sum(levy_2012[y] for y in x) for x in df_peptides['sequence']]
+    return df_peptides.query(gate)
