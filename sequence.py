@@ -140,7 +140,7 @@ def cast_cols(df, int_cols=tuple(), float_cols=tuple(), str_cols=tuple(),
 
 
 def translate_dna(s):
-    assert len(s) % 3 == 0
+    assert len(s) % 3 == 0, 'length must be a multiple of 3'
     return ''.join([codon_dict[s[i*3:(i+1)*3]] for i in range(int(len(s)/3))])
 
 
@@ -227,16 +227,16 @@ def reverse_translate_max(aa_seq, organism='e_coli'):
     return ''.join([codon_map[x] for x in aa_seq])
 
 
-def reverse_translate_random(aa_seq, organism='e_coli', seed='input', cutoff=0.12):
-    if seed == 'input':
+def reverse_translate_random(aa_seq, organism='e_coli', rs='input', cutoff=0.12):
+    if rs == 'input':
         seed = hash(aa_seq) % 10**8
+        rs = np.random.RandomState(seed=seed)
     if (organism, cutoff) not in codon_maps:
         codon_maps[(organism, cutoff)] = (load_codons(organism)
         .query('relative_frequency > @cutoff')
         .groupby('amino_acid')['codon_dna'].apply(list).to_dict()
         )
     codon_map = codon_maps[(organism, cutoff)]
-    rs = np.random.RandomState(seed=seed)
     return ''.join([rs.choice(codon_map[x]) for x in aa_seq])
 
 

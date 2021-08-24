@@ -1,4 +1,5 @@
-import collections
+from collections import defaultdict, Counter
+import contextlib
 from glob import glob
 import logging
 import io
@@ -9,7 +10,6 @@ import subprocess
 import shutil
 import sys
 import time
-import contextlib
 
 import decorator
 import matplotlib.pyplot as plt
@@ -33,7 +33,7 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
 
 
 def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None, sort=True, 
-              include_cols=None, exclude_cols=None, keep_index=False, **kwargs):
+              include_cols=None, exclude_cols=None, keep_index=False, ignore_missing=True, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
     """
@@ -70,6 +70,9 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
     else:
         files = files_or_search
 
+    if ignore_missing:
+        files = [f for f in files if os.path.exists(f)]
+        
     df = pd.concat([read_csv(f) for f in progress(files)], sort=sort)
     if keep_index:
         return df
@@ -313,7 +316,7 @@ def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None):
 
 
 def to_list_dict(series):
-    d = collections.defaultdict(list)
+    d = defaultdict(list)
     for i,x in zip(series.index, series.values):
         d[i].append(x)
     return d
@@ -411,17 +414,31 @@ def pivot_96w(df, values, index='row', columns='col'):
            )
 
 
-def hash_set(xs, width):
+def hash_set(xs, width, no_duplicates=True):
     """Nice alphanumeric names for items in a set.
     """
-    assert len(xs) == len(set(xs))
     md5 = hashlib.md5()
     arr = []
-    for x in xs:
-        md5.update(str(x).encode())
-        arr += [md5.hexdigest()[:width]]
-    assert len(arr) == len(set(arr))
-    return arr
+    if no_duplicates:
+        assert len(xs) == len(set(xs)), 'duplicates present (allow with no_duplicates=False)'
+        for x in xs:
+            md5.update(str(x).encode())
+            arr += [md5.hexdigest()[:width]]
+        assert len(arr) == len(set(arr)), 'hash not wide enough'
+        return arr
+    else:
+        key_maps = {}
+        val_maps = {}
+        for x in xs:
+            if x in val_maps:
+                continue
+            md5.update(str(x).encode())
+            key = md5.hexdigest()[:width]
+            assert key_maps.get(key, x) == x, 'hash not wide enough'
+            key_maps[key] = x
+            val_maps[x] = key
+        arr = [val_maps[x] for x in xs]
+        return arr
 
 
 def assign_format(df, **kwargs):
@@ -530,7 +547,8 @@ def gb_apply_parallel(df, cols, func, n_jobs=None, progress=lambda x: x):
 
     grouped = df.groupby(cols)
     names, work = zip(*grouped)
-    results = Parallel(n_jobs=n_jobs)(delayed(func)(w) for w in progress(work))
+    results = (Parallel(n_jobs=n_jobs)
+                (delayed(func)(w) for w in progress(work)))
 
     if isinstance(results[0], pd.DataFrame):
         arr = []
@@ -551,3 +569,89 @@ def gb_apply_parallel(df, cols, func, n_jobs=None, progress=lambda x: x):
         results = pd.DataFrame(results, index=pd.Index(names, name=cols)).reset_index()
 
     return results
+
+
+def approx_max_clique(incompatibility_matrix, group_ids=None, verbose=False):
+    """Fast approximate max clique. If vertex group IDs are provided, will try to 
+    minimize group dropout by prioritizing groups with the fewest selected vertices.
+    
+    :param incompatiblity_matrix: 1 - adjacency matrix, can be provided in CSR sparse format
+    """
+    import scipy.sparse.csr
+
+    cm = incompatibility_matrix
+    
+    if group_ids is None:
+        group_ids = [0] * len(cm)
+    if not isinstance(cm, scipy.sparse.csr.csr_matrix):
+        cm = scipy.sparse.csr.csr_matrix(cm)
+    assert cm.shape[0] == cm.shape[1]
+        
+    # counts => group_id
+    d1 = defaultdict(set)
+    for id_, counts in Counter(group_ids).items():
+        d1[counts] |= {id_}
+
+    # group_id => indices
+    d2 = defaultdict(list)
+    for i, id_ in enumerate(group_ids):
+        d2[id_] += [i]
+    # .pop() takes from the end of the list
+    d2 = {k: v[::-1] for k,v in d2.items()}
+
+    # group_id => # selected
+    d3 = Counter()
+
+    selected = []
+    available = np.array(range(len(group_ids)))
+
+    while d1:
+        if verbose and (len(selected) % 1000) == 0:
+            print(len(selected))
+    #     assert cm[selected, :][:, selected].sum() == 0
+
+        # pick a group_id from the lowest bin
+        count = min(d1.keys())
+        id_ = d1[count].pop()
+
+        # remove bin if empty
+        if len(d1[count]) == 0:
+            d1.pop(count)
+
+        # discard indices until we find a new one
+        index = None
+        while d2[id_]:
+            index = d2[id_].pop()
+            # approach 1: check for conflict every time
+            # cm[index, selected].sum() == 0
+            # approach 2: keep an array of available indices
+            if index in available:
+                break
+        else:
+            index = None
+
+        # keep index
+        if index:
+            selected.append(index)
+            d3[id_] += 1
+            available = available[available != index]
+            # get rid of incompatible barcodes
+            remove = cm[index, available].indices
+            mask = np.ones(len(available), dtype=bool)
+            mask[remove] = False
+            available = available[mask]
+
+
+        # move group_id to another bin
+        n = len(d2[id_])
+        if n > 0:
+            d1[n] |= {id_}
+
+    return selected
+
+
+def expand_repeats(df, col):
+    """Same as np.repeat for index. 
+    """
+    index = [i for i,n in enumerate(df[col]) for _ in range(n)]
+    return df.iloc[index]
