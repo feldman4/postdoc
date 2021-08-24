@@ -17,6 +17,8 @@ ms_app = '/home/dfeldman/packages/postdoc/scripts/ms_app.sh'
 config_file = 'config.yaml'
 sample_table = 'samples.csv'
 design_table = 'designs.csv'
+sec_stats_table = 'sec_stats.csv'
+sec_estimate_table = 'sec_estimates.csv'
 barcodes_by_design = 'barcodes_by_design.fa'
 barcode_results = 'skyline/barcode_results.csv'
 skyline_table = 'skyline_intensities.csv'
@@ -782,10 +784,81 @@ def plot_barcode_coverage(prefix='figures/barcode_coverage'):
         save(fg, 'by_length', 'barcode coverage by length')
 
 
+def analyze_sec():
+    """Median-based analysis seems to produce the right classifications. 
+    
+    Neural network can estimate decent pairwise distances between SEC traces, which can be 
+    used to identify outliers. However the resulting median isn't that different. A simple
+    deviation measurement (fractions differing from median by more than threshold) seems good 
+    enough at ranking designs by measurement uncertainty, though NN might be better. L1 or L2
+    norm of median trace (highly correlated) is good at ranking traces by peak sharpness.
+    """
+    from postdoc.flycodes import classify_sec
+    import yaml
+    import pandas as pd
+    import numpy as np
+
+    df_sky = pd.read_csv(skyline_table)
+
+    with open(config_file, 'r') as fh:
+        params = yaml.safe_load(fh)
+    export_gate = params['sec']['export_gate']
+    fraction_classes = params['sec']['fraction_classes']
+    deviation_threshold = params['sec']['deviation_threshold']
+
+    df_traces = (df_sky
+     .query('stage == "SEC"')
+     .pivot_table(index=['design_name', 'barcode'], columns='volume', values='log_area_ms1')
+    #  .fillna(None)
+    )
+
+    df_metadata = df_traces[[]].reset_index()
+    df_metadata['num_barcodes'] = df_metadata.groupby('design_name')['barcode'].transform('size')
+
+    df_medians = (df_traces
+     .pipe(classify_sec.normalize_from_log)
+     .groupby('design_name')
+     .apply(lambda x: x.median())
+     .pipe(lambda x: x.div(x.max(axis=1), axis=0))
+    )
+
+    fraction_widths = list(np.diff(df_medians.columns).round(2))
+    fraction_widths = np.array(fraction_widths + [fraction_widths[-1]]) 
+
+    median_l1 = (df_medians * fraction_widths).sum(axis=1).rename('median_l1')
+    median_l2 = ((df_medians**2 * fraction_widths).sum(axis=1)**0.5).rename('median_l2')
+    deviation_count = (df_traces
+     .pipe(classify_sec.normalize_from_log)
+     .pipe(lambda x: (x - df_medians).abs() > deviation_threshold)
+     .pipe(lambda x:( x * fraction_widths) / fraction_widths.sum())
+     .sum(axis=1).rename('deviation_count')
+    )
+
+    df_metadata = (df_metadata
+    .join(median_l1, on='design_name')
+    .join(median_l2, on='design_name')
+    .join(deviation_count, on=['design_name', 'barcode'])
+    .assign(mean_deviation_count=lambda x: 
+            x.groupby('design_name')['deviation_count'].transform('mean'))
+    .pipe(classify_sec.add_fraction_classes, df_medians, fraction_classes, fraction_widths)
+    .pipe(classify_sec.add_peak_centers, df_medians)
+    .pipe(classify_sec.add_scores)
+    .assign(export_gate=lambda x: x.eval(export_gate))
+    )
+
+    df_medians.columns = np.round(df_medians.columns, 1)
+    df_medians.to_csv(sec_estimate_table)
+    print(f'Wrote per-design SEC estimates to {sec_estimate_table}', file=sys.stderr)
+    df_metadata.to_csv(sec_stats_table, index=None)
+    print(f'Wrote per-barcode SEC stats to {sec_stats_table}', file=sys.stderr)
+
+
+
 if __name__ == '__main__':
 
     # order is preserved
     commands = ['setup', 'load_features', 'process_skyline', 
+    'analyze_sec',
     'plot_design_range', 'plot_skyline_QC', 'plot_barcode_coverage',
     # , 'match', 'stats', 'plot'
     ]
