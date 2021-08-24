@@ -252,6 +252,35 @@ def calculate_overlap_strip(filename, k, input='dna', output='dna', strip='GS',
           f' of sequences ({len(sequences)} total sequences)')
 
 
+def interleave_oligos(filename_A, filename_B, col_A=0, col_B=0, 
+                      header_A=None, header_B=None, sep_A=None, sep_B=None):
+    import numpy as np
+    
+    A = read_table(filename_A, col=col_A, header=header_A, sep=sep_A)
+    B = read_table(filename_B, col=col_B, header=header_B, sep=sep_B)
+
+    assert len(A) != len(B), f'both files have {len(A)} oligos, nothing to do'
+
+    A_is_longer = len(A) > len(B)
+    if A_is_longer:
+        ratio = len(A) / len(B)
+    else:
+        ratio = len(B) / len(A)
+
+    assert ratio == int(ratio), f'oligos must divide evenly: {len(A)} / {len(B)} = {ratio:.2f}'
+
+    if A_is_longer:
+        B = np.repeat(B, ratio)
+    else:
+        A = np.repeat(A, ratio)
+
+    arr = []
+    for pair in zip(A,B):
+        arr.extend(pair)
+
+    return arr
+
+
 def read_table(filename, col=0, header=None, sep=None):
     """Utility to read a list or table column from file or stdin. 
     
@@ -556,18 +585,23 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
 
     if filename == 'stdin':
         commands = sys.stdin.read().strip().split('\n')
+        # might be the command name
+        first_word = commands[0].split()[0]
+        if name is None:
+            name = 'stdin:' + first_word.split('/')[-1][:8]
     else:
         commands = pd.read_csv(filename, header=None)[0]
     
     if name is None:
         name = os.path.basename(filename)
+    clean_name = name.replace(':', '_')
 
     little_a = '_%a' if array else ''
     if stdout is 'default':
-        stdout = f'logs/{name}_%A{little_a}.out'
+        stdout = f'logs/{clean_name}_%A{little_a}.out'
 
     if stderr is 'default':
-        stderr = f'logs/{name}_%A{little_a}.err'
+        stderr = f'logs/{clean_name}_%A{little_a}.err'
 
     if with_gpu is None:
         if queue == 'gpu':
@@ -668,6 +702,7 @@ if __name__ == '__main__':
         'calculate_distances',
         'calculate_overlap', 'calculate_overlap_strip',
         'parse_overlap_oligos',
+        'interleave_oligos',
         
         'count_inserts_NGS',
 
