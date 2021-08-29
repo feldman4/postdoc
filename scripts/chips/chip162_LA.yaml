@@ -44,7 +44,8 @@ barcodes:
 
 dna_design:
   oligo_length: [300, 300]
-  target_assembly_length: subpool_max
+  restriction_sites:
+    - GGTCTC
 
 reverse_translation:
   method: DNAworks
