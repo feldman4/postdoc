@@ -20,6 +20,7 @@ from postdoc.utils import (
     hash_set, approx_max_clique, csv_frame, gb_apply_parallel, assert_unique, expand_repeats)
 from postdoc.flycodes.pool2 import remove_restriction_sites, findone
 from postdoc.pyrosetta.diy import read_pdb_sequences
+from postdoc.flycodes.pool2 import remove_restriction_sites
 
 
 config_file = 'config.yaml'
@@ -49,17 +50,21 @@ assembly_overlap_table = 'process/4_assemblies_overlap.csv'
 # assemblies are split into overlap oligos here
 overlap_dir = 'process/overlap'
 
-# annotated oligos
+# final tables
 oligo_table = 'process/5_oligos.csv'
-
-# oligos to order
-oligo_order = 'oligos.txt'
+oligo_summary = 'oligo_summary.txt'
 
 # annotated designs
-design_table = 'designs.csv'
-
-# # complete subpool table
-# subpool_table = 'output/subpools.csv'
+final_design_table = 'designs.csv'
+FINAL_DESIGNS_COLS = [
+    'chip_design_index', 'assembly_index',
+    'library', 'pool',
+    'barcode', 'design_name', 'design',
+    'source', 'source_file', 'design_name_original', 
+    'assembly_dna', 'assembly_parts',
+]
+# matches are added
+FINAL_DESIGNS_COLS_REGEX = '^overlap$|^part_*'
 
 design_name_width = 12
 
@@ -68,9 +73,9 @@ design_name_width = 12
 app_script = '/home/dfeldman/s/app.sh'
 
 
-def print(*args, **kwargs):
+def print(*args, file=sys.stderr, **kwargs):
     from builtins import print
-    print(*args, file=sys.stderr, **kwargs)
+    print(*args, file=file, **kwargs)
 
 
 def add_spacer_lengths(df, config):
@@ -296,8 +301,6 @@ def assign_barcodes(df_chip_designs, df_barcodes, plot=True):
     return df_assigned
 
 
-
-
 def create_assembly_dna(df_assemblies, design_dna_map):
     def do_rt(seq, info, design, organism):
         if info['reverse_translation'] == 'random':
@@ -341,8 +344,6 @@ def create_assembly_dna(df_assemblies, design_dna_map):
             added += [f'{part}_{dna}']
         arr += [seq]
         arr_ += [added]
-        # if barcode == 'TTIIITEPK':
-        #     assert False
     df_parts = pd.DataFrame(arr_).rename(columns='part_{}'.format)
     assembly_dna = arr
     assert len(assembly_dna) == len(df_parts)
@@ -890,6 +891,7 @@ def plot_barcode_sets():
 def reconcile_assemblies():
     if not os.path.exists(assembly_draft_table):
         raise SystemExit('No assembly drafts found!')
+    config = load_config()['dna_design']
     df_chip_designs = pd.read_csv(chip_designs_table)
     df_assemblies = pd.read_csv(assembly_draft_table).drop('assembly_dna', axis=1)
     df_layout = pd.read_csv(layout_table)
@@ -900,7 +902,7 @@ def reconcile_assemblies():
     
 
     print(f'Parsing outputs from {len(outputs)} overlap runs...')
-    for x in outputs:
+    for x in tqdm(outputs):
         if not os.path.exists(x[:-4] + '_parsed.csv'):
             cmd = [app_script, 'parse-overlap-oligos', x, '--name_col=0', '--dna_col=1']
             subprocess.check_output(cmd)
@@ -949,10 +951,16 @@ def reconcile_assemblies():
     # 2. define new first, second oligos by splitting assembly_dna at overlap
     it = df_assemblies[['barcode_prefix', 'barcode_dna', 'assembly', 'overlap']].values
     arr = []
+    rs = np.random.RandomState(seed=0)
     for prefix, barcode, assembly, overlap in it:
         i = len(prefix)
         j = len(barcode)
+        k = assembly.index(overlap)
         new_assembly = assembly[:i] + barcode + assembly[i + j:]
+        new_assembly = remove_restriction_sites(new_assembly, config['restriction_sites'], rs)
+        # the overlap might have changed
+        assert len(new_assembly[k:k+len(overlap)]) == len(overlap)
+        overlap = new_assembly[k:k+len(overlap)]
         a, b = new_assembly.split(overlap)
         first = a + overlap
         second = overlap + b
@@ -1037,8 +1045,11 @@ def export_oligos():
     df_oligos = pd.concat(arr).reset_index(drop=True)
     df_oligos.to_csv(oligo_table, index=None)
     print(f'Exported {len(df_oligos):,} oligos to table {oligo_table}')
+
+    cols = FINAL_DESIGNS_COLS + list(df_final.filter(regex=FINAL_DESIGNS_COLS_REGEX))
+    df_final[cols].to_csv(final_design_table, index=None)
+    print(f'Exported {len(df_final):,} barcoded designs to {final_design_table}')
     
-    print(f'Exporting oligo text files...')
     cols = ['library', 'pool', 'oligo_kind', 
             'outer_adapter', 'inner_adapter']
     labels = {'single': '', 'assembly_A': '_A', 'assembly_B': '_B'}
@@ -1047,7 +1058,8 @@ def export_oligos():
         f = f'output/oligos_{library}_{pool}{labels[oligo_kind]}.txt'
         df['oligo'].to_csv(f, index=None, header=None)
         arr += [f]
-
+    print(f'Exported {len(arr)} oligo text files to output/oligos_*txt')
+    
     df_summary = (df_oligos
      .fillna('')
      .assign(length=lambda x: x['oligo'].str.len())
@@ -1058,9 +1070,34 @@ def export_oligos():
      [['file'] + cols + ['count', 'min', 'max']]
      .rename(columns={'min': 'min_length', 'max': 'max_length'})
     )
-    txt = '\n'.join('  ' + line for line in df_summary.to_string(index=None).split('\n'))
+    txt = df_summary.to_string(index=None)
+    with open(oligo_summary, 'w') as fh:
+        fh.write(txt)
+    txt = '\n'.join('  ' + line for line in txt.split('\n'))
     print(txt)
 
+
+def collect_subdirectory_tables():
+    """Run from directory containing several chip_app runs.
+    """
+    df_oligos = csv_frame('*/process/5_oligos.csv')
+
+    df_barcodes = (csv_frame('*/input/barcodes.csv', sort=False)
+    .drop_duplicates('sequence').drop(['mz_group', 'barcode_set'], axis=1))
+
+    barcode_info = df_barcodes.set_index('sequence')[['iRT', 'mz']]
+
+    df_designs = (csv_frame('*/designs.csv', sort=False)
+    .join(barcode_info, on='barcode')
+    )
+
+    df_oligos.to_csv('oligos.csv', index=None)
+    print(f'Wrote {df_oligos.shape[0]} oligos to oligos.csv')
+    df_designs.to_csv('designs.csv', index=None)
+    print(f'Wrote {df_designs.shape[0]} designs to designs.csv')
+    df_barcodes.to_csv('barcodes.csv', index=None)
+    print(f'Wrote {df_barcodes.shape[0]} unique barcodes to barcodes.csv')
+    
 
 def setup_block():
     print('Creating directories...')
@@ -1108,6 +1145,7 @@ if __name__ == '__main__':
         'create_overlap_commands',
         'reconcile_assemblies',
         'export_oligos',
+        'collect_subdirectory_tables',
     ]
     # if the command name is different from the function name
     named = {
