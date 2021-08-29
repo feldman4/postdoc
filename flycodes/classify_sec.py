@@ -25,10 +25,11 @@ def make_equal_pairs(df, rs):
     y = np.array(labels)
     return X, y
 
-def prepare_pair_data(df_sky, train_fraction=0.3, seed=0, linear_norm=False):
+def prepare_pair_data(df_sky, value_col='log_area_ms1', train_fraction=0.3, seed=0, linear_norm=False):
     df_traces = (df_sky
     .query('stage == "SEC"')
-    .pivot_table(index=['design_name', 'barcode'], columns='volume', values='log_area_ms1')
+    .pivot_table(index=['design_name', 'barcode'], 
+                 columns='fraction_center', values=value_col)
     .fillna(-1)
     )
 
@@ -127,7 +128,6 @@ def add_fraction_classes(df_metadata, df_medians, fraction_classes, fraction_wid
      .pipe(lambda x: x.div(x.sum(axis=1), axis=0))
      .stack().reset_index()
     )
-
     arr = []
     for name, gate in fraction_classes.items():
         (df.query(gate).groupby('design_name').sum()
@@ -135,11 +135,13 @@ def add_fraction_classes(df_metadata, df_medians, fraction_classes, fraction_wid
 
     return df_metadata.join(pd.concat(arr, axis=1), on='design_name')
 
-def add_peak_centers(df_metadata, df_medians, threshold=0.5):
-    df = df_medians.copy() 
+def get_center_of_mass(df_traces, threshold=0.5):
+    """For peak centers, should find center of largest contiguous peak over threshold.
+    """
+    df = df_traces.copy() 
     df[df < threshold] = None
     peak_centers = (df * df.columns).sum(axis=1) / df.sum(axis=1)
-    return df_metadata.join(peak_centers.rename('peak_center'), on='design_name')
+    return peak_centers.rename('center_of_mass')
 
 def add_scores(df_metadata, num_bins=4):
     df_metadata = df_metadata.copy()
@@ -149,3 +151,24 @@ def add_scores(df_metadata, num_bins=4):
     df_metadata['score_bin'] = bins / num_bins
     return df_metadata
 
+
+def find_crap(df_traces, threshold=0.65):
+    from scipy.ndimage import minimum_filter
+    from scipy.signal import convolve
+    deltas = np.diff(df_traces, axis=1)
+    deltas_local_min = minimum_filter(np.abs(deltas), size=(1, 2)).max(axis=1)
+    deltas_opposites = convolve(deltas, [[1, -1]]).max(axis=1)
+    crap = deltas_local_min > threshold
+    return crap
+
+
+def find_peaks(df_traces, smooth=2):
+    from scipy.ndimage import convolve
+    weights = np.ones((1, 3)) / 3
+    X = df_traces.values
+    for _ in range(smooth):
+        X = convolve(X, weights, mode='nearest')
+    X = (X.T / X.max(axis=1)).T
+    # df_traces_smooth = pd.DataFrame(X, index=df_traces.index, columns=df_traces.columns)
+    peaks = pd.Series(df_traces.columns.values[np.argmax(X, axis=1)], index=df_traces.index)
+    return peaks
