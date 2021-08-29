@@ -12,7 +12,6 @@ export PYTHONPATH="$HOME/packages/NatureProtocols:$PYTHONPATH"
 alias l='ls -l --all --human-readable --no-group --color=auto --classify -v'
 alias rsyncr='rsync -Rr --progress --update'
 alias hist="sort | uniq -c | sort -r"
-alias tar='tar -zxvf'
 alias less='less -S'
 alias rgf='rg --files | rg'
 alias kol="column -s, -t"
