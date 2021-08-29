@@ -417,11 +417,11 @@ def pivot_96w(df, values, index='row', columns='col'):
 def hash_set(xs, width, no_duplicates=True):
     """Nice alphanumeric names for items in a set.
     """
-    md5 = hashlib.md5()
     arr = []
     if no_duplicates:
         assert len(xs) == len(set(xs)), 'duplicates present (allow with no_duplicates=False)'
         for x in xs:
+            md5 = hashlib.md5()
             md5.update(str(x).encode())
             arr += [md5.hexdigest()[:width]]
         assert len(arr) == len(set(arr)), 'hash not wide enough'
@@ -655,3 +655,19 @@ def expand_repeats(df, col):
     """
     index = [i for i,n in enumerate(df[col]) for _ in range(n)]
     return df.iloc[index]
+
+
+def split_by_mask(xs, mask):
+    # from SO 36517645
+    xs_ = np.array(xs)
+    mask = np.array(mask)
+    indices = np.where(mask[1:] != mask[:-1])[0] + 1
+
+    if isinstance(xs, pd.Series):
+        indices = np.split(np.arange(len(xs_)), indices)
+        splits = [xs.iloc[i] for i in indices]
+    else:
+        splits = np.split(xs_, indices)
+    
+    splits = splits[0::2] if mask[0] else splits[1::2]
+    return splits
