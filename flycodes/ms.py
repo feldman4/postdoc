@@ -11,6 +11,7 @@ import pyteomics.ms1
 import pyteomics.mzml
 import pyteomics.mzxml
 import pyteomics.pepxml
+from pyteomics.mass import fast_mass
 import numpy as np
 
 from ..constants import HOME
@@ -129,15 +130,16 @@ def load_mzml_data(filename, progress=lambda x: x):
         # inject = scan['ion injection time']
         mz_arr = spectrum['m/z array']
         int_arr = spectrum['intensity array']
-        info += [{'scan': start, 
-        # 'inject': inject
+        info += [{'scan': start, 'id': spectrum['id'], 
+        'filter_string': scan['filter string'],
         }]
         mz += [mz_arr]
         intensity += [int_arr]
 
-    mz = np.array(mz)
-    intensity = np.array(intensity)
+    mz = np.array(mz, dtype=object)
+    intensity = np.array(intensity, dtype=object)
     df_info = pd.DataFrame(info)
+    df_info['scan_id'] = df_info['id'].str.extract('scan=(\d+)').astype(int)
     return mz, intensity, df_info
 
 
@@ -182,15 +184,19 @@ def load_pepxml_data(f, progress=lambda x: x):
             # Comet
             info['score'] = hit['search_score']['spscore']
             info['expect'] = hit['search_score']['expect']
+            info['expect_log'] = np.log10(info['expect'])
+            info['ms1_mz'] = x['precursor_neutral_mass'] / x['assumed_charge']
+            info['ms1_error'] = info['ms1_mz'] - fast_mass(hit['peptide'], charge=2)
+            info['ms1_error_ppm'] = 1e6 * info['ms1_error'] / info['ms1_mz']
         else:
             raise ValueError(f'score not recognized {hit["search_score"]}')
 
         info.update({k: x[k] for k in keys})
-        info['mass_error'] = hit['massdiff'] / hit['calc_neutral_pep_mass']
-        info['abs_mass_error'] = abs(info['mass_error'])
-
+        info['mass_error_ppm'] = 1e6 * hit['massdiff'] / hit['calc_neutral_pep_mass']
+        # if info['expect'] < 0.05:
+        #     assert False
         assert x['start_scan'] - x['end_scan'] == 0
-        info['scan_num'] = x['start_scan']
+        info['scan_id'] = x['start_scan']
         info['scan_ix'] = x['start_scan'] - 1
         arr += [info]
 
