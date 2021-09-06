@@ -68,10 +68,15 @@ export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_
 
 # csvkit uses tabulate, which is slow and lacks a streaming option
 function csvless() {
-    cat <(head -400 $1 | csvlook "${@:2}") <(csvlook $1 "${@:2}" | tail -n +402) | less
+    csvlook=/home/dfeldman/.conda/envs/df-pyr-tf/bin/csvlook
+    cat <(head -400 $1 | $csvlook "${@:2}") <($csvlook $1 "${@:2}" | tail -n +402) | less
 }
 
 # get typical digs paths
 function real() {
     readlink -f $@ | sed 's/\/mnt//'
+}
+
+function wip() {
+    cd `real ~/wip`
 }
