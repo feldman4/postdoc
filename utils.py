@@ -518,9 +518,9 @@ def dataframe_to_csv_string(df, index=None):
     return txt
 
 
-def pd_display_all(df, max_rows=10000):
+def pd_display_all(df, max_rows=10000, max_cols=100):
     from IPython.display import display
-    with pd.option_context('display.max_rows', max_rows):
+    with pd.option_context('display.max_rows', max_rows, 'display.max_columns', max_cols):
         display(df)
 
 
@@ -671,3 +671,12 @@ def split_by_mask(xs, mask):
     
     splits = splits[0::2] if mask[0] else splits[1::2]
     return splits
+
+
+def add_gates(df, exist_ok=False, **gates):
+    if not exist_ok:
+        assert len(set(gates) & set(df)) == 0
+    # don't use assign so later gates can depend on earlier ones
+    for name, gate in gates.items():
+        df = df.assign(**{name: df.eval(gate)})
+    return df
