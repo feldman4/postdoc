@@ -21,6 +21,7 @@ from postdoc.utils import (
 from postdoc.flycodes.pool2 import remove_restriction_sites, findone
 from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.pool2 import remove_restriction_sites
+from postdoc.flycodes.design import add_barcode_metrics
 
 
 config_file = 'config.yaml'
@@ -698,27 +699,6 @@ def load_barcode_sets():
     print(f'Available barcodes written to {barcode_table}')
     plot_barcode_sets()
 
-
-def add_barcode_metrics(df_barcodes):
-    from postdoc.flycodes.design import levy_2012
-    df = df_barcodes.copy()
-    df['length'] = df['sequence'].str.len()
-    df['hydro_levy2012'] = [sum(levy_2012[y] for y in x) for x in df['sequence']]
-    df['hydro_levy2012_norm'] = df['hydro_levy2012'] / df['length']
-
-    # only L,Y,V actually used
-    hydrophobics = 'W|Y|F|L|I|V|M'
-    df['hydro_count'] = df['sequence'].str.count(hydrophobics)
-    df['hydro_count_norm'] = df['hydro_count'] / df['length']
-
-    def calculate_charge(peptide):
-        charges = {'D': -1, 'E': -1, 'R': 1, 'K': 1}
-        return sum(charges.get(x, 0) for x in peptide)
-
-    from pyteomics import electrochem
-    df['charge_pH7'] = df['sequence'].apply(electrochem.charge, pH=7)
-
-    return df
 
 
 def get_separated_components(xs, separation):

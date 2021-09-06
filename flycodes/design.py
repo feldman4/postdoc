@@ -1048,3 +1048,24 @@ def apply_peptide_gate(df_peptides, gate):
         df_peptides['hydro_levy2012'] = [
             sum(levy_2012[y] for y in x) for x in df_peptides['sequence']]
     return df_peptides.query(gate)
+
+
+def add_barcode_metrics(df_barcodes, col='sequence'):
+    df = df_barcodes.copy()
+    df['length'] = df[col].str.len()
+    df['hydro_levy2012'] = [sum(levy_2012[y] for y in x) for x in df[col]]
+    df['hydro_levy2012_norm'] = df['hydro_levy2012'] / df['length']
+
+    # only L,Y,V actually used
+    hydrophobics = 'W|Y|F|L|I|V|M'
+    df['hydro_count'] = df[col].str.count(hydrophobics)
+    df['hydro_count_norm'] = df['hydro_count'] / df['length']
+
+    def calculate_charge(peptide):
+        charges = {'D': -1, 'E': -1, 'R': 1, 'K': 1}
+        return sum(charges.get(x, 0) for x in peptide)
+
+    from pyteomics import electrochem
+    df['charge_pH7'] = df[col].apply(electrochem.charge, pH=7)
+
+    return df

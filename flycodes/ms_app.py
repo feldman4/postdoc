@@ -888,7 +888,8 @@ def analyze_sec():
 def get_trace_metrics(df_traces, df_intensities):
     import pandas as pd
     from itertools import groupby
-    from postdoc.flycodes import classify_sec, chip_app
+    from postdoc.flycodes.classify_sec import find_crap
+    from postdoc.flycodes.design import add_barcode_metrics
 
     def longest_true_run(xs):
         """From SO 16733236
@@ -899,7 +900,7 @@ def get_trace_metrics(df_traces, df_intensities):
     intensity = config['barcode']['intensity_metric']
     crap = (df_traces
      .interpolate(axis=1, limit_direction='both')
-     .pipe(classify_sec.find_crap, threshold=config['barcode']['crap_threshold'])
+     .pipe(find_crap, threshold=config['barcode']['crap_threshold'])
     )
     stages = pd.read_csv(sample_table)['stage'].drop_duplicates().pipe(list)
     stage_means = (df_intensities
@@ -907,7 +908,7 @@ def get_trace_metrics(df_traces, df_intensities):
      .reindex(columns=stages)
     )
     barcode_metrics = (df_traces.reset_index()[['barcode']]
-     .pipe(chip_app.add_barcode_metrics, 'barcode')
+     .pipe(add_barcode_metrics, 'barcode')
      .set_index('barcode')
     )
     return (df_traces[[]]
