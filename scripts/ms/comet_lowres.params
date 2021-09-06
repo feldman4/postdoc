@@ -22,10 +22,10 @@ isotope_error = 2                      # 0=off, 1=0/1 (C13 error), 2=0/1/2, 3=0/
 #
 # search enzyme
 #
-search_enzyme_number = 1               # choose from list at end of this params file
+search_enzyme_number = 2               # choose from list at end of this params file
 search_enzyme2_number = 0              # second enzyme; set to 0 if no second enzyme
 num_enzyme_termini = 2                 # 1 (semi-digested), 2 (fully digested, default), 8 C-term unspecific , 9 N-term unspecific
-allowed_missed_cleavage = 1            # maximum value is 5; for enzyme search
+allowed_missed_cleavage = 0            # maximum value is 5; for enzyme search
 
 #
 # Up to 9 variable modifications are supported
@@ -89,12 +89,12 @@ activation_method = ALL                # activation method; used if activation m
 # misc parameters
 #
 digest_mass_range = 600.0 5000.0       # MH+ peptide mass range to analyze
-peptide_length_range = 8 30            # minimum and maximum peptide length to analyze (default 1 63; max length 63)
+peptide_length_range = 7 30            # minimum and maximum peptide length to analyze (default 1 63; max length 63)
 num_results = 100                      # number of search hits to store internally
 max_duplicate_proteins = 20            # maximum number of protein names to report for each peptide identification; -1 reports all duplicates
 skip_researching = 1                   # for '.out' file output only, 0=search everything again (default), 1=don't search if .out exists
 max_fragment_charge = 3                # set maximum fragment charge state to analyze (allowed max 5)
-max_precursor_charge = 6               # set maximum precursor charge state to analyze (allowed max 9)
+max_precursor_charge = 2               # set maximum precursor charge state to analyze (allowed max 9)
 nucleotide_reading_frame = 0           # 0=proteinDB, 1-6, 7=forward three, 8=reverse three, 9=all six
 clip_nterm_methionine = 1              # 0=leave sequences as-is; 1=also consider sequence w/o N-term methionine
 spectrum_batch_size = 15000            # max. # of spectra to search at a time; 0 to search the entire scan range in one loop

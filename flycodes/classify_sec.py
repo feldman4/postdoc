@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from postdoc.utils import split_by_mask
 
 
 # create train and test data
@@ -25,7 +26,7 @@ def make_equal_pairs(df, rs):
     y = np.array(labels)
     return X, y
 
-def prepare_pair_data(df_sky, value_col='log_area_ms1', train_fraction=0.3, seed=0, linear_norm=False):
+def prepare_pair_data(df_sky, value_col='area_ms1', train_fraction=0.3, seed=0, linear_norm=False):
     df_traces = (df_sky
     .query('stage == "SEC"')
     .pivot_table(index=['design_name', 'barcode'], 
@@ -108,11 +109,6 @@ def normalize_from_log(x):
         return x / x.max(axis=1)[:, None]
 
 
-def predict_earth(x):
-    from scipy.stats import wasserstein_distance as earth
-    return np.array([1 - earth(a, b) for a,b in x.transpose([0, 2, 1])])
-        
-
 def predict_delta(x, cutoff=0.1):
     arr = []
     for a, b in x.transpose([0, 2, 1]):
@@ -123,7 +119,8 @@ def predict_delta(x, cutoff=0.1):
     return np.array(arr)
 
 
-def add_fraction_classes(df_metadata, df_medians, fraction_classes, fraction_widths):
+def add_fraction_classes(df_metadata, df_medians, fraction_classes):
+    fraction_widths = df_medians
     df = ((df_medians * fraction_widths)
      .pipe(lambda x: x.div(x.sum(axis=1), axis=0))
      .stack().reset_index()
@@ -135,13 +132,19 @@ def add_fraction_classes(df_metadata, df_medians, fraction_classes, fraction_wid
 
     return df_metadata.join(pd.concat(arr, axis=1), on='design_name')
 
+
 def get_center_of_mass(df_traces, threshold=0.5):
     """For peak centers, should find center of largest contiguous peak over threshold.
     """
-    df = df_traces.copy() 
-    df[df < threshold] = None
-    peak_centers = (df * df.columns).sum(axis=1) / df.sum(axis=1)
-    return peak_centers.rename('center_of_mass')
+    centers = []
+    for _, row in df_traces.iterrows():
+        peaks = split_by_mask(row, row > threshold)
+        largest = sorted(peaks, key=sum)[-1]
+        # take center of mass
+        largest /= largest.sum()
+        centers += [(largest * largest.columns).sum()]
+    return centers
+
 
 def add_scores(df_metadata, num_bins=4):
     df_metadata = df_metadata.copy()
@@ -172,3 +175,27 @@ def find_peaks(df_traces, smooth=2):
     # df_traces_smooth = pd.DataFrame(X, index=df_traces.index, columns=df_traces.columns)
     peaks = pd.Series(df_traces.columns.values[np.argmax(X, axis=1)], index=df_traces.index)
     return peaks
+
+
+def calculate_wasserstein_distance(df_consensus, df_traces):
+    from scipy.stats import wasserstein_distance
+    import numpy as np
+    import pandas as pd
+
+    arr = []
+    # broadcast consensus to match individual traces
+    it = zip((df_consensus - 0*df_traces).values, df_traces.values)
+    for u_weights, v_weights in it:
+        # completely missing
+        if np.isnan(u_weights).all() or np.isnan(v_weights).all():
+            arr += [np.nan]
+            continue
+        # get rid of missing values
+        centers = df_consensus.columns
+        # earthmover units are prob. density x bin spacing, so set the support to 0-1
+        # (roughly square)
+        centers = (centers - centers.min()) / (centers.max() - centers.min())
+        u, u_weights = zip(*[xy for xy in zip(centers, u_weights) if not np.isnan(xy[1])])
+        v, v_weights = zip(*[xy for xy in zip(centers, v_weights) if not np.isnan(xy[1])])
+        arr += [wasserstein_distance(u, v, u_weights, v_weights)]
+    return pd.Series(arr, index=df_traces.index, name='wass_distance')
