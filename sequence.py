@@ -63,6 +63,7 @@ def parse_fasta(txt):
 
 
 def write_fasta(filename, list_or_records):
+    list_or_records = list(list_or_records)
     with open(filename, 'w') as fh:
         fh.write(format_fasta(list_or_records))
 
