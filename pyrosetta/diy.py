@@ -400,18 +400,23 @@ def read_pdb_sequences(filename, first_chain_only=False):
 
     chains = defaultdict(list)
     chain_lengths = defaultdict(lambda: -1)
-    with open(filename, 'r') as fh:
-        for line in fh:
-            if line.startswith('ATOM'):
-                chain = line[chain_0:chain_1]
-                aa = AA_3_1[line[res_0:res_1]]
-                res_seq = line[res_seq_0:res_seq_1]
-                res_i = int(res_seq) - 1
-                if res_i > chain_lengths[chain]:
-                    chain_lengths[chain] = res_i
-                    chains[chain].append(aa)
-            if first_chain_only and line.startswith('TER'):
-                break
+
+    if filename.endswith('gz'):
+        fh = gzip.open(filename, 'rt')
+    else:
+        fh = open(filename, 'r')
+    for line in fh:
+        if line.startswith('ATOM'):
+            chain = line[chain_0:chain_1]
+            aa = AA_3_1[line[res_0:res_1]]
+            res_seq = line[res_seq_0:res_seq_1]
+            res_i = int(res_seq) - 1
+            if res_i > chain_lengths[chain]:
+                chain_lengths[chain] = res_i
+                chains[chain].append(aa)
+        if first_chain_only and line.startswith('TER'):
+            break
+    fh.close()
                 
     chains = {k: ''.join(v) for k,v in chains.items()}
     return chains
