@@ -109,6 +109,14 @@ def setup(design_table=design_table, sample_table=sample_table, min_counts=2,
     cmd = f'{ngs_app} plot {" ".join(expected_results)} --output=figures/'
     pd.Series([cmd]).to_csv(command_lists['plot'], header=None, index=None)
 
+    print(f"""
+Pipeline ready. Submit to digs or run directly with:
+  sh {command_lists['assemble']}
+  sh {command_lists['match']}
+  sh {command_lists['stats']}
+  sh {command_lists['plot']}
+    """[1:].strip())
+
 
 def validate_sample_table(df_samples, include_barcodes):
     from postdoc.utils import assert_unique
@@ -472,12 +480,13 @@ def plot(*matched_tables, output='figures/', filetype='png'):
             print(f'Saved cross mapping heatmap to {f}', file=sys.stderr)
 
         if 'design_name' in df_matches and 'match_barcode' in df_matches:
-            for sample, df in df_matches.groupby('sample'):
+            gate = 'insert_distance == 0 & insert_has_stop == False'
+            for (sample, subpool), df in df_matches.query(gate).groupby([SAMPLE, SUBPOOL]):
                 fig, df_plot = plot_detection_cutoffs_barcode(df)
-                f = f'{output}design_barcode_counts_{sample}.{filetype}'
+                f = f'{output}design_barcode_counts_{sample}-{subpool}.{filetype}'
                 fig.savefig(f, bbox_inches='tight')
-                df_plot.to_csv(f'{output}design_barcode_counts_{sample}.csv')
-                print(f'Saved design-barcode count heatmap ({sample}) to {f}', file=sys.stderr)
+                df_plot.to_csv(f'{output}design_barcode_counts_{sample}-{subpool}.csv')
+                print(f'Saved design-barcode count heatmap ({sample}-{subpool}) to {f}', file=sys.stderr)
 
             fg, df_plot = plot_barcode_purity(df_matches)
             f = f'{output}barcode_purity.{filetype}'
@@ -550,6 +559,7 @@ def plot_abundance(df_matches, df_designs):
 
 def plot_detection_cutoffs_barcode(df_matches):
     """Number of designs with N barcodes above abundance cutoffs for a single sample.
+    Abundance cutoffs are relative to number of inserts without stop codons.
     """
     import numpy as np
     import seaborn as sns
@@ -557,38 +567,44 @@ def plot_detection_cutoffs_barcode(df_matches):
     import matplotlib.pyplot as plt
 
     df_counts = (df_matches
-    .query('insert_distance == 0')
-    .groupby(['design_name', 'insert', 'match_barcode'])['count'].sum().reset_index()
+    .groupby([SUBPOOL, DESIGN_NAME, INSERT, MATCH_BARCODE])[COUNT].sum().reset_index()
     )
 
-    num_no_stop = df_matches.query('insert_has_stop == False')['count'].sum()
+    num_no_stop = df_matches[COUNT].sum()
 
     arr = []
-    cutoffs = 1e-2, 1e-3, 1e-4, 1e-5
-    for cutoff in cutoffs:
-        filt = (df_counts['count'] / num_no_stop > cutoff)
-        (df_counts[filt].groupby('design_name').size().value_counts().sort_index().reset_index()
-        .rename(columns={'index': 'num_barcodes', 0: 'num_designs'})
-        .assign(cutoff=f'{cutoff:.0e}')
-        .pipe(arr.append)
-        )    
+    fraction_cutoffs = 1e-2, 1e-3, 1e-4, 1e-5
+    for subpool, df in df_counts.groupby(SUBPOOL):
+        for cutoff in fraction_cutoffs:
+            count_cutoff = max(int(num_no_stop * cutoff), 1)
+            (df
+            .query('@count_cutoff <= count')
+            .groupby(DESIGN_NAME).size().value_counts().sort_index().reset_index()
+            .rename(columns={'index': 'num_barcodes', 0: 'num_designs'})
+            .assign(cutoff=f'{cutoff:.0e} ({count_cutoff} reads)')
+            .assign(count_cutoff=count_cutoff)
+            .assign(subpool=subpool)
+            .pipe(arr.append)
+            )
 
     barcode_counts = np.arange(1, pd.concat(arr)['num_barcodes'].max() + 1)
     df_plot = (pd.concat(arr)
-    .pivot_table(index='cutoff', columns='num_barcodes', values='num_designs', aggfunc='first')
+    .drop_duplicates(['num_barcodes', 'num_designs', 'count_cutoff'])
+    .pivot_table(index=['subpool', 'cutoff'], columns='num_barcodes', values='num_designs', aggfunc='first')
     .pipe(lambda x: x.reindex(columns=np.arange(1, max(x.columns) + 1)))
     .fillna(0).astype(int)
     .iloc[:, ::-1].cumsum(axis=1).iloc[:, ::-1]
     )
 
-    figsize = np.array([0.8, 0.8]) * df_plot.shape[::-1]
+    figsize = np.array([0.8, 0.8]) * df_plot.shape[::-1] + [2, 1]
     fig, ax = plt.subplots(figsize=figsize)
 
     sns.heatmap(df_plot, xticklabels=True, annot=True, ax=ax, 
                 cbar=False, fmt='d')
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
     ax.set_xlabel('Number of barcodes')
     ax.set_ylabel('Read cutoff')
-    ax.set_title('Number of designs with >= N barcodes')
+    ax.set_title(f'Number of designs with >= N barcodes\n({num_no_stop:,} reads without stop codons)')
     fig.tight_layout()
     return fig, df_plot
 
@@ -599,8 +615,8 @@ def plot_barcode_purity(df_matches):
     import numpy as np
 
     df_plot = (df_matches
-    .pivot_table(index=['sample', 'match_barcode'], 
-                columns='mismapped_barcode', values='count', aggfunc='sum')
+    .pivot_table(index=[SAMPLE, MATCH_BARCODE], 
+                columns=MISMAPPED_BARCODE, values='count', aggfunc='sum')
     .reindex(columns=[False, True]).fillna(0).astype(int)
     .rename(columns={False: 'right_insert', True: 'wrong_insert'})
     .assign(purity=lambda x: x.eval('right_insert / (right_insert + wrong_insert)'))
@@ -609,7 +625,7 @@ def plot_barcode_purity(df_matches):
     df_plot.columns.name = ''
 
     fg = (df_plot
-    .pipe(sns.FacetGrid, hue='sample')
+    .pipe(sns.FacetGrid, hue=SAMPLE)
     .map(plt.hist, 'purity', alpha=0.3, bins=np.linspace(0, 1, 30))
     .add_legend()
     )
@@ -728,6 +744,7 @@ def plot_length_distribution(df_matches, df_designs, focus_window=50):
         ax.set_ylim([1, df_lim['count'].max()])
 
     return fg, df_plot
+
 
 if __name__ == '__main__':
 
