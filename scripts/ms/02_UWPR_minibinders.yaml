@@ -1,0 +1,61 @@
+samples:
+  gate: date == "2021-06-25" & "MS_128" <= sample <= "MS_153"
+
+designs:
+  table: /home/dfeldman/flycodes/chip_orders/chip137_design.csv
+  gate: source == ["CD98_binders", "TS_variants", "BH_IL6R_variants"]
+
+convert_raw:
+  flags: [
+    # '--noPeakPicking'
+    ]
+
+process_mzml:
+  snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
+  request: '{sample}.calibratedRT.pepXML'
+  mzML_filter: -rt 600:2700 -mz 400:860
+  comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
+  idXML_filter: -score:pep 30 -mz:error 10
+  mz_calibration: -offset -2 -ms_level 1
+  rt_reference: MS_130
+  rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
+
+skyline:
+  input_tag: 'calibratedRT'
+  gui_settings:
+    peaks: 3
+    mass_accuracy: 2 ppm
+    rt_filtering: 0.5 minutes
+  gate: >-
+    17.5 < retention_time
+    & -2 < mass_error_ppm < 2
+    & 0.9 < isotope_dot_product
+  barcode_count_gate: stage == "SEC" & 3e5 < area_ms1
+
+intensities:
+  # TODO: not implemented yet for skyline
+  rt-fit:
+    fit_gate: '-2 < mass_error_ppm < 2 0 & 0.92 < isotope_dot_product & 2e6 < area_ms1'
+  gates: 
+    # barcode measurements outside this gate are shown as hollow circles in SEC plots
+    plot_barcode: >-
+      17.5 < retention_time
+      & -2 < mass_error_ppm < 2
+      & 0.85 < isotope_dot_product
+
+plot:
+  by_design:
+    job_size: 100
+  barcode_stats:
+    detected_cutoff: 5
+
+sec:
+  volume_windows:
+    aggregate: [10.3, 13.6]
+    oligomer: [13.6, 16.6]
+    monomer: [16.6, 19]
+    # degraded: 
+  export_gate: '3 <= num_barcodes <= 5 & mean_deviation_count < 0.25 & median_l1 < 3'
+  deviation_threshold: 0.2
+
+
