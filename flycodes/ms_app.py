@@ -56,6 +56,7 @@ def setup():
         for f in glob('input/*'):
             os.unlink(f)
         shutil.rmtree('commands')
+    os.makedirs('figures', exist_ok=True)
     
     print('Downloading sample info from MS barcoding gsheet...')
     df_samples = (load_sample_info(config['samples']['gate'])
@@ -70,17 +71,13 @@ def setup():
 
     symlink_input(df_samples)
 
-    df_designs = load_designs(**config['designs'])
+    df_designs = load_designs()
     num_designs = df_designs.shape[0]
     print(f'Loaded {num_designs:,} designs from {config["designs"]["table"]}')
-    df_designs = validate_designs(df_designs)
-    dropped = num_designs - df_designs.shape[0]
-    if dropped:
-        print(f'  Dropped {dropped:,} duplicate (barcode, design_name) pairs')
-    df_designs.to_csv(design_table, index=None)
-    print(f'  Wrote {len(df_designs):,} designs to {design_table}')
-
+    validate_designs(df_designs).to_csv(design_table, index=None)
     write_barcode_fa(df_designs)
+    print(f'  Wrote design info to {design_table}')
+    print(f'  Wrote fasta reference (concatenated barcodes) to {barcodes_by_design}')
 
 
     if 'convert_raw' in config:
@@ -93,7 +90,7 @@ def setup():
         setup_process_mzml()
         print('Run mzML calibration and comet search with bash command:')
         print(f'  /home/dfeldman/s/app.sh submit {command_list_process_mzml} '
-            '--cpus=10 --memory=20g')
+            '--cpus=10 --memory=8g')
 
     if 'dinosaur' in config:
         setup_dinosaur(df_samples, df_designs)
@@ -157,7 +154,7 @@ def setup_process_mzml():
     ]
     [force_symlink(src, dst) for src, dst in links]
 
-    cmd = 'cd process_mzml && snakemake --cores --forceall'
+    cmd = 'cd process_mzml && snakemake --cores'
     with open(command_list_process_mzml, 'w') as fh:
         fh.write(cmd)
 
@@ -432,21 +429,23 @@ def load_dino_features(file_template=feature_output):
                 file=sys.stderr)
 
 
-def load_designs(table, gate):
+def load_designs():
     """Merged to detected features based on `mz` and `iRT`.
     """
     import pandas as pd
+    config = load_config()['designs']
     cols = ['barcode', 'mz', 'iRT', 'design_name', 'pdb_file']
-    return pd.read_csv(table).query(gate)[cols]
+    df = pd.read_csv(config['table'])
+    if 'gate' in config:
+        df = df.query(config['gate'])
+    if 'drop_duplicates' in config:
+        df = df.drop_duplicates(config['drop_duplicates'])
+    return df[cols]
 
 
 def validate_designs(df_designs):
     from postdoc.utils import assert_unique
-
-    return (df_designs
-     .drop_duplicates(['barcode', 'design_name'])
-     .pipe(assert_unique, 'barcode')
-    )
+    return df_designs.pipe(assert_unique, ['barcode', 'design_name'])
 
 
 def add_sec_fractions(df_sample_info):
@@ -461,6 +460,8 @@ def add_sec_fractions(df_sample_info):
     df_chroma = (pd.read_hdf(f)
      .query('Description == @sec_runs').drop_duplicates('ChromatogramID'))
 
+    print(f'Found {len(df_chroma)} matching SEC runs')
+
     f = f'{akta_db}/fractions.hdf'
     df_fractions = pd.read_hdf(f).merge(df_chroma[['ChromatogramID', 'Description']])
     fractions = (df_fractions
@@ -473,8 +474,6 @@ def add_sec_fractions(df_sample_info):
      [['fraction_center', 'fraction_width', 'ChromatogramID']]
      )
 
-    # df_fractions['volume'].diff()
-    
     return (df_sample_info
     .join(fractions, on=['SEC', 'SEC_fraction'])
     )
@@ -584,6 +583,8 @@ def load_skyline_intensities():
     
     print(f'Wrote {df_sky.shape[0]:,} / {df_sky_raw.shape[0]:,} non-zero entries'
           f' to {intensities_table}')
+    for gate in config['gates']:
+        print(f'  gate {gate}: {df_sky[gate].mean():.1%}')
 
 
 def update_intensities(df_intensities):
@@ -765,7 +766,7 @@ def plot_skyline_QC(prefix='figures/skyline_QC'):
     ax.set_xlabel('Elution width (FWHM of MS1 peak)')
     save(fig, 'sample_elution_widths', 'barcode elution widths')
 
-    gate = config['skyline']['gate']
+    gate = config['skyline']['qc_gate']
     fig, ax = plt.subplots(figsize=(5, 5))
     df_sky.query(gate).plot.scatter(y='iRT', x='retention_time', 
         s=1, alpha=0.3, color='black', ax=ax)
@@ -867,22 +868,31 @@ def analyze_sec():
     )
 
     df_traces.to_csv(sec_barcodes_table)
-    print(f'Wrote barcode SEC traces to {sec_barcodes_table}')
+    print(f'Wrote barcode SEC traces to {sec_barcodes_table} ({len(df_traces)} lines)')
     # calculate per-trace metrics
     df_trace_metrics = get_trace_metrics(df_traces, df_intensities)
     df_trace_metrics.to_csv(sec_barcode_metrics_table, index=None)
-    print(f'Wrote per-barcode SEC metrics to {sec_barcode_metrics_table}')
+    print(f'Wrote per-barcode SEC metrics to {sec_barcode_metrics_table}' 
+          f' ({len(df_trace_metrics)} lines)')
+    
     consensus_barcodes = df_trace_metrics.query('consensus_gate')['barcode'].pipe(list)
+    barcode_counts = (df_trace_metrics
+     .drop_duplicates('design_name').set_index('design_name')
+     [['num_chip_barcodes', 'num_ms_barcodes', 'num_consensus_barcodes']]
+    )
 
     df_traces_filt = df_traces.query('barcode == @consensus_barcodes')
     df_consensus = df_traces_filt.pipe(get_consensus)
-    df_consensus_metrics = get_consensus_metrics(
+    df_consensus_metrics = (get_consensus_metrics(
         df_consensus, df_traces_filt, config['consensus']['method'])
-    
+        .join(barcode_counts, on='design_name')
+    )
     df_consensus.to_csv(sec_consensus_table)
-    print(f'Wrote per-design SEC consensus to {sec_consensus_table}')
+    print(f'Wrote per-design SEC consensus to {sec_consensus_table}'
+          f' ({len(df_consensus)} lines)')
     df_consensus_metrics.to_csv(sec_consensus_metrics_table, index=None)
-    print(f'Wrote consensus SEC metrics to {sec_consensus_metrics_table}')
+    print(f'Wrote consensus SEC metrics to {sec_consensus_metrics_table}'
+          f' ({len(df_consensus_metrics)} lines)')
 
 
 def get_trace_metrics(df_traces, df_intensities):
@@ -896,6 +906,9 @@ def get_trace_metrics(df_traces, df_intensities):
         """
         return max(sum(i for i in g if i) for k,g in groupby(xs))
 
+    num_chip_barcodes = (pd.read_csv(design_table)
+     .groupby('design_name').size().rename('num_chip_barcodes')
+    )
     config = load_config()['sec']
     intensity = config['barcode']['intensity_metric']
     crap = (df_traces
@@ -919,7 +932,8 @@ def get_trace_metrics(df_traces, df_intensities):
      .assign(Y_count=lambda x: x['barcode'].str.count('Y'))
      .assign(crap=crap)
      .assign(consensus_gate=lambda x: x.eval(config['consensus']['gate']))
-     .assign(num_barcodes=lambda x: 
+     .join(num_chip_barcodes, on='design_name')
+     .assign(num_ms_barcodes=lambda x: 
         x.groupby('design_name')['barcode'].transform('size'))
      .assign(num_consensus_barcodes=lambda x: 
         x.groupby('design_name')['consensus_gate'].transform('sum'))
@@ -971,9 +985,7 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
      .groupby('design_name')['deviation_count'].mean()
      .rename('mean_deviation_count'))
     
-    barcode_count = df_traces.groupby('design_name').size().rename('num_barcodes')
-
-    df_consensus_metrics = (pd.concat([barcode_count, l1, l2, 
+    df_consensus_metrics = (pd.concat([l1, l2, 
         mean_wass_distance, mean_abs_distance, mean_deviation_count, integrate_fractions(df_consensus)
         ], axis=1)
      .assign(peak_center=classify_sec.find_peaks(df_consensus))
@@ -1082,6 +1094,14 @@ def print(*args, file=sys.stderr, **kwargs):
     print(*args, file=file, **kwargs)
 
 
+def search_sec(df_chroma, *terms):
+    for term in terms:
+        filt = df_chroma['folder_path'].str.contains(term)
+        filt |= df_chroma['Description'].str.contains(term)
+        df_chroma = df_chroma[filt]
+    return df_chroma
+
+
 def load_validation_sec():
     from postdoc.lab import akta_db
     from io import StringIO
@@ -1091,13 +1111,6 @@ def load_validation_sec():
     drive = Drive()
     df_sec = drive('MS barcoding shared/validation SEC', skiprows=1, dtype=str)
 
-    def search(df_chroma, *terms):
-        for term in terms:
-            filt = df_chroma['folder_path'].str.contains(term)
-            filt |= df_chroma['Description'].str.contains(term)
-            df_chroma = df_chroma[filt]
-        return df_chroma
-
     arr = []
     for search_0, df_block in df_sec.groupby('search_0'):
         # do the first search in blocks for speed
@@ -1105,7 +1118,7 @@ def load_validation_sec():
         if df_result.shape[0] == 0:
             raise ValueError(f'No match at row\n{df_block.iloc[0]}')
         for ix, row in df_block.iterrows():
-            df = (df_result.pipe(search, row['search_1'])
+            df = (df_result.pipe(search_sec, row['search_1'])
              .assign(sec_index=ix))
             n = df['ChromatogramID'].drop_duplicates().shape[0]
             if n == 0:
@@ -1176,10 +1189,9 @@ def overlay_validation_sec(uv_regex='230|260|280'):
                 .set_index('design_name').rename(columns=float))
     df_designs = pd.concat(arr0)
     df_barcode_metrics = (pd.concat(arr1)
-     [['design_name', 'num_barcodes']].drop_duplicates()
-     .rename(columns={'num_barcodes': 'num_ms_barcodes'})
+     [['design_name', 'num_ms_barcodes']].drop_duplicates()
     )
-    df_consensus_metrics = pd.concat(arr2).rename(columns={'num_barcodes': 'num_consensus_barcodes'})
+    df_consensus_metrics = pd.concat(arr2)
     
     # statistics
     dataset_info = (df_designs
