@@ -5,6 +5,7 @@ import tempfile
 import os
 from glob import glob
 from collections import defaultdict
+import gzip
 
 import numpy as np
 import pandas as pd
@@ -26,8 +27,10 @@ all_chain_ids = alphabet.upper() + alphabet.lower() + digits
 
 
 def read_pdb(filename, add_info=True, reorder_cols=True):
-    with open(filename, 'r') as fh:
-        txt = fh.read()
+    if filename.endswith('gz'):
+        txt = gzip.open(filename, 'rt').read()
+    else:
+        txt = open(filename, 'r').read()
     return read_pdb_string(txt, reorder_cols=reorder_cols, add_info=add_info)
 
 
