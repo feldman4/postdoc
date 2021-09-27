@@ -1,10 +1,9 @@
 samples:
-  gate: date == "2021-08-06" & "MS_191" <= sample <= "MS_229"
+  gate: date == "2021-09-07" & ("MS_284" <= sample <= "MS_292" | "MS_315" <= sample <= "MS_318")
 
 designs:
-  table: /home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv
-  gate: vector == "pT12"
-  drop_duplicates: CDS
+  table: /home/dfeldman/flycodes/chip_orders/chip137_design.csv
+  gate: source == ["BH_IL6R_variants", "CD98_binders", "TS_variants"]
 
 convert_raw:
   flags: [
@@ -13,20 +12,20 @@ convert_raw:
 
 process_mzml:
   snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
-  request: '{sample}.calibratedRT.pepXML'
+  request: '{sample}.filtered.pepXML'
   mzML_filter: -rt 600:2700 -mz 400:860
   comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
   idXML_filter: -score:pep 30 -mz:error 10
-  mz_calibration: -offset -1.5 -ms_level 1
-  rt_reference: MS_193
+  mz_calibration: -offset 1 -ms_level 1
+  rt_reference: MS_287
   rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
 
 skyline:
-  input_tag: 'calibratedRT'
+  input_tag: 'filtered'
   gui_settings:
     peaks: 3
-    mass_accuracy: 2.5 ppm
-    rt_filtering: 0.5 minutes
+    mass_accuracy: 5 ppm
+    rt_filtering: 1 minute
   qc_gate: >-
     -2 < mass_error_ppm < 2
     & 0.9 < isotope_dot_product
