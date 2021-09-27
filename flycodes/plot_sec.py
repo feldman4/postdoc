@@ -163,7 +163,8 @@ def plot(df_int, stages, fraction_centers, intensity):
      [intensity_L1_norm].max()
     )
 
-    ax_sec.set_ylim([0, 1.1 * ymax])
+    if not np.isnan(ymax):
+        ax_sec.set_ylim([0, 1.1 * ymax])
     # ax_mean.ticklabel_format(useOffset=False, style='plain', axis='y')
     # ax_mean.set_yticks(ax_sec.get_yticks()) # avoid mpl warning
     # ax_mean.set_yticklabels([f'{y:.1e}' for y in ax_mean.get_yticks()])
