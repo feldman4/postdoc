@@ -22,6 +22,7 @@ alias ttime='/usr/bin/time -v'
 ######################### TERMINAL ############################
 
 PS1='\[\033[0;33m\]\u@\h \[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
+PS1='\[\033[0;33m\]\h \[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
 export TERM=xterm-color
 set bell-style none
 # can output a warning that messes with sftp
@@ -37,6 +38,11 @@ alias wstatus="watch 'clusterstatus | (head -n 31; grep $USER)'"
 alias sq='squeue --user `whoami`'
 alias sqh='sjob | less' 
 alias fname='readlink -f'
+
+######################## COMPLETION ##########################
+
+source ~/.fire_completion # python fire completion
+source /software/mmseqs2/util/bash-completion.sh
 
 ########################### EXTRA ############################
 
@@ -54,8 +60,6 @@ nbless() {
     ipython nbconvert --to markdown --stdout $1 | mdless
 }
 
-# python fire completion
-source ~/.fire_completion
 
 # log bash input and search with hh
 # nicked from wyang12's .bashrc
@@ -78,5 +82,16 @@ function real() {
 }
 
 function wip() {
-    cd `real ~/wip`
+    cd `real ~/.wip`
+}
+
+function makewip() {
+    if [ ! -z $1 ] 
+    then 
+        target=`real $1`
+    else
+        target=`real .`
+    fi
+    rm ~/.wip 2>/dev/null
+    ln -s $target ~/.wip
 }
