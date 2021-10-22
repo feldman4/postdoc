@@ -356,7 +356,7 @@ def parse_human_date(s):
     return t
 
 
-def search(*terms, output=None, after=None, before=None, hdf_path=default_location):
+def search(*terms, after=None, before=None, hdf_path=default_location):
     """Search AKTA database for run information.
 
     The search result table includes one row per channel acquired. Each AKTA run is labeled with a 
