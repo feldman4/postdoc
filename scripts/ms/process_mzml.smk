@@ -18,17 +18,22 @@ rule all:
         # expand('{sample}.calibrated.pepXML', sample=SAMPLES),
         # expand('{sample}.calibrated.mzML', sample=SAMPLES),
         # expand('{sample}.filtered.pepXML', sample=SAMPLES),
-        expand(config['request'], sample=SAMPLES),
+        expand(f'{{sample}}.{config["request"]}.mzML', sample=SAMPLES),
+        expand(f'{{sample}}.{config["request"]}.pepXML', sample=SAMPLES),
+        expand(f'ms1/{{sample}}.{config["request"]}.ms1.hdf', sample=SAMPLES),
 
 rule limit_range:
     input: 
         '{sample}.mzML'
     output: 
-        '{sample}.filtered.mzML'
+        '{sample}.filtered.mzML',
     params:
-        flags=config['mzML_filter']
+        flags=config['mzML_filter'],
+        app=ms_app.ms_app,
     shell:
-        'FileFilter -in {input} -out {output} {params.flags}'
+        """
+        FileFilter -in {input} -out {output[0]} {params.flags}
+        """
 
 rule comet:
     input:
@@ -82,3 +87,22 @@ rule apply_rt_calibration:
         """
         MapRTTransformer -in {input[0]} -trafo_in {input[1]} -out {output}
         """
+
+rule export_ms1_filtered:
+    input:
+        '{sample}.filtered.mzML'
+    output:
+        
+    run:
+        os.makedirs('ms1', exist_ok=True)
+        ms_app.export_ms1(input[0]).to_csv(output[0], index=None)
+
+
+rule export_ms1:
+    input:
+        '{sample}.{tag}.mzML'
+    output:
+        'ms1/{sample}.{tag}.ms1.hdf'
+    run:
+        os.makedirs('ms1', exist_ok=True)
+        ms_app.export_ms1(input[0]).to_hdf(output[0], 'x', mode='w')
