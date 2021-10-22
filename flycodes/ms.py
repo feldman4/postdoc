@@ -120,6 +120,8 @@ def load_mzxml_data(filename, progress=lambda x: x):
 
 
 def load_mzml_data(filename, progress=lambda x: x):
+    """Filtering out ms2 scans doesn't help to load faster.
+    """
     mz = []
     intensity = []
     info = []
@@ -130,8 +132,12 @@ def load_mzml_data(filename, progress=lambda x: x):
         # inject = scan['ion injection time']
         mz_arr = spectrum['m/z array']
         int_arr = spectrum['intensity array']
+        try:
+            filter_string = spectrum['filter string']
+        except KeyError:
+            filter_string = spectrum['scanList']['scan'][0]['filter string']
         info += [{'scan': start, 'id': spectrum['id'], 
-        'filter_string': scan['filter string'],
+        'filter_string': filter_string,
         }]
         mz += [mz_arr]
         intensity += [int_arr]
@@ -312,7 +318,21 @@ def generate_msfragger_cmd(mzML, protein_fa,
     return cmd
 
 
-
+def read_idxml(filename):
+    from pyteomics.openms.idxml import IDXML
+    arr = []
+    for hit in IDXML(filename):
+        phit = hit['PeptideHit'][0]
+        
+        info = {}
+        info['sequence'] = phit['sequence']
+        info['scan_mz'] = hit['MZ']
+        info['retention_time'] = hit['RT']
+        info['score'] = phit['score']
+        info['scan'] = int(hit['spectrum_reference'].split('scan=')[1])
+        arr += [info]
+        
+    return pd.DataFrame(arr)
 
 
 msfragger_jar = 'misc/msfragger/MSFragger-3.0.jar'
