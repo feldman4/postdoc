@@ -35,6 +35,7 @@ INSERT = 'insert' # translated amino acid sequence between adapters
 INSERT_DNA = 'insert_dna' # DNA sequence between adapters
 INSERT_DNA_MATCH = 'insert_dna_match' # matched DNA insert from design table
 INSERT_DNA_DISTANCE = 'insert_dna_distance' # Levenshtein distance to matched DNA insert
+INSERT_OUT_OF_FRAME = 'insert_out_of_frame' # is the insert out of frame?
 INSERT_HAS_STOP = 'insert_has_stop' # is there a stop codon in the insert?
 
 # if including barcodes
@@ -254,7 +255,7 @@ def annotate_inserts(df_inserts, df_designs, window=30, k=12):
             INSERT_DISTANCE, INSERT_EQUIDISTANT] 
     cols += list(design_info.columns)
     cols += [INSERT_MATCH, INSERT, INSERT_DNA, INSERT_DNA_MATCH, 
-            INSERT_DNA_DISTANCE, INSERT_HAS_STOP]
+            INSERT_DNA_DISTANCE, INSERT_OUT_OF_FRAME, INSERT_HAS_STOP]
 
 
     return (df_inserts
@@ -262,7 +263,9 @@ def annotate_inserts(df_inserts, df_designs, window=30, k=12):
     .rename(columns={'design_match': INSERT_DNA_MATCH, 
                     'design_distance': INSERT_DNA_DISTANCE})
     .drop('design_equidistant', axis=1)
+    # returns None when insert is out of frame
     .assign(**{INSERT: lambda x: x[INSERT_DNA].apply(try_translate_dna)})
+    .assign(**{INSERT_OUT_OF_FRAME: lambda x: x[INSERT].isnull()})
     .pipe(add_design_matches, INSERT, df_designs[INSERT], window, k)
     .rename(columns={'design_match': INSERT_MATCH, 
                     'design_distance': INSERT_DISTANCE, 
@@ -370,6 +373,7 @@ def stats(*matched_tables):
     from postdoc.utils import dataframe_to_csv_string
     from postdoc.sequence import read_fastq
     from natsort import natsorted
+    import numpy as np
 
     df_matches = load_matched_tables(*matched_tables)
 
@@ -381,18 +385,21 @@ def stats(*matched_tables):
         num_reads = num_assembled + len(read_fastq(f))
         num_with_adapters = df[TOTAL_WITH_ADAPTERS].iloc[0]
         num_over_min = df[COUNT].sum()
+        num_in_frame = df.query('~insert_out_of_frame')[COUNT].sum()
+        num_no_stop = df.query('~insert_has_stop & ~insert_out_of_frame')[COUNT].sum()
         num_exact = df.query('insert_distance == 0')[COUNT].sum()
         num_exact_dna = df.query('insert_dna_distance == 0')[COUNT].sum()
-        num_no_stop = df.query('~insert_has_stop')[COUNT].sum()
+        r = lambda x: np.round(x, 4)
         info = {
             SAMPLE: sample,
             'total_reads': num_reads,
-            'fraction_assembled': num_assembled/num_reads,
-            'fraction_with_adapters': num_with_adapters/num_assembled,
-            'fraction_over_min_count': num_over_min/num_with_adapters,
-            'fraction_in_frame': num_no_stop/num_over_min,
-            'fraction_exact_mapped': num_exact/num_no_stop,
-            'fraction_exact_dna_mapped': num_exact_dna/num_exact,
+            'fraction_assembled': r(num_assembled/num_reads),
+            'fraction_with_adapters': r(num_with_adapters/num_assembled),
+            'fraction_over_min_count': r(num_over_min/num_with_adapters),
+            'fraction_in_frame': r(num_in_frame/num_over_min),
+            'fraction_no_stop': r(num_no_stop/num_in_frame),
+            'fraction_exact_mapped': r(num_exact/num_no_stop),
+            'fraction_exact_dna_mapped': r(num_exact_dna/num_exact),
             TOTAL_ASSEMBLED_READS: num_assembled,
         }
         
