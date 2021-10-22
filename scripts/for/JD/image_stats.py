@@ -29,6 +29,8 @@ global_stats = {
     'max': np.max,
 }
 
+fiji = '/home/dfeldman/misc/fiji/Fiji.app/ImageJ-linux64'
+
 ij_find_maxima_template = """
 from ij import IJ
 
@@ -47,7 +49,6 @@ for file in files:
     IJ.run("Measure");
     IJ.run("Close All");
 """
-
 
 @decorator.decorator
 def print_dataframe(f, *args, **kw):
@@ -726,7 +727,6 @@ def parse_ij_console_results(text):
 
 def run_ij_script(ij_script):
     # bypass ImageJ's awful command line argument parsing
-    fiji = '/home/dfeldman/misc/fiji/Fiji.app/ImageJ-linux64'
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tmp:
         tmp.write(ij_script)
         tmp.close()
