@@ -4,6 +4,7 @@ import os
 from natsort import natsorted
 import gzip
 import numpy as np
+import re
 
 import pandas as pd
 from Bio import SeqIO
@@ -530,3 +531,21 @@ def try_translate_dna(s):
         return translate_dna(s)
     except:
         return None
+
+
+def digest_protein_fasta(filename, digest_pat='[R|K]'):
+    """Convert protein fasta into a table of peptides, digesting with provided regex.
+    """
+    records = read_fasta(filename)
+
+    arr = []
+    for name, seq in records:
+        parts = re.split(f'({digest_pat})', seq)
+        parts = [x for x in parts if x]
+        peptides = [a+b for a,b in zip(parts[::2], parts[1::2])]
+        for peptide in peptides:
+            arr += [{'name': name, 'sequence': peptide}]
+
+    return pd.DataFrame(arr)
+
+

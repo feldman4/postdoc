@@ -36,6 +36,15 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
               include_cols=None, exclude_cols=None, keep_index=False, ignore_missing=True, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
+
+    TODO:
+    from parse import parse
+    from string import Formatter
+    search = '/projects/ms/analysis/{dataset}/process/sec_barcode_metrics.csv'
+    fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
+    search_glob = search.format(**{x: '*' for x in fieldnames})
+    files = nglob(search_glob)
+    pd.concat([pd.read_csv(f).assign(**parse(search, f).named) for f in files])
     """
     
     def read_csv(f):
@@ -680,3 +689,18 @@ def add_gates(df, exist_ok=False, **gates):
     for name, gate in gates.items():
         df = df.assign(**{name: df.eval(gate)})
     return df
+
+def force_symlink(src, dst):
+    """Same as ln -sf {src} {dst}
+    """
+    if os.path.islink(dst):
+        os.remove(dst)
+    os.symlink(src, dst)
+
+
+def split_by_regex(pat, s):
+    """Retains the delimiter between substrings A and B as the suffix of A.
+    """
+    parts = re.split(f'({pat})', s) + ['']
+    fragments = [a+b for a,b in zip(parts[::2], parts[1::2])]
+    return [x for x in fragments if x]

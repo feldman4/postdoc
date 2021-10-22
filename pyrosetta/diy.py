@@ -408,7 +408,7 @@ def read_pdb_sequences(filename, first_chain_only=False):
     for line in fh:
         if line.startswith('ATOM'):
             chain = line[chain_0:chain_1]
-            aa = AA_3_1[line[res_0:res_1]]
+            aa = AA_3_1.get(line[res_0:res_1], 'x')
             res_seq = line[res_seq_0:res_seq_1]
             res_i = int(res_seq) - 1
             if res_i > chain_lengths[chain]:
