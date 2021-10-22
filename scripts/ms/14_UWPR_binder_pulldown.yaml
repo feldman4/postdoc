@@ -1,16 +1,14 @@
 samples:
-  gate: date == "2021-09-07" & sample == "MS_193"
+  gate: date == "2021-09-28" & ("MS_349" <= sample <= "MS_372")
 
 designs:
-  table: /home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv
-  gate: vector == "pT12"
-  drop_duplicates: CDS
+  table: /home/dfeldman/flycodes/chip_orders/chip137_design.csv
+  gate: source == ["BH_IL6R_variants", "CD98_binders", "TS_variants"]
 
 convert_raw:
   flags: [
     # '--noPeakPicking'
     ]
-
 
 process_mzml:
   snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
@@ -19,9 +17,8 @@ process_mzml:
   comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
   idXML_filter: -score:pep 30 -mz:error 10
   mz_calibration: -offset 1 -ms_level 1
-  rt_reference: MS_193
+  rt_reference: MS_287
   rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
-
 
 skyline:
   input_tag: 'filtered'
@@ -42,7 +39,7 @@ intensities:
     # barcode measurements outside this gate are shown as hollow circles in SEC plots
     plot_barcode: >-
       -2 < mass_error_ppm < 2
-      & 0.8 < isotope_dot_product
+      & 0.85 < isotope_dot_product
 
 plot:
   by_design:

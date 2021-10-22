@@ -12,7 +12,7 @@ convert_raw:
 
 process_mzml:
   snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
-  request: '{sample}.filtered.pepXML'
+  request: 'filtered'
   mzML_filter: -rt 600:2700 -mz 400:860
   comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
   idXML_filter: -score:pep 30 -mz:error 10
@@ -39,7 +39,7 @@ intensities:
     # barcode measurements outside this gate are shown as hollow circles in SEC plots
     plot_barcode: >-
       -2 < mass_error_ppm < 2
-      & 0.8 < isotope_dot_product
+      & 0.85 < isotope_dot_product
 
 plot:
   by_design:

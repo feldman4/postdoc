@@ -1,16 +1,19 @@
 samples:
-  gate: date == "2021-09-07" & sample == "MS_193"
+  # two raw files are incomplete
+  gate: >-
+    date == "2021-10-06" & "MS_478" <= sample <= "MS_517"
+    & sample != ["MS_495", "MS_498", "MS_499", "MS_500", "MS_505", "MS_513", "MS_514", "MS_516"]
 
 designs:
-  table: /home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv
-  gate: vector == "pT12"
-  drop_duplicates: CDS
+  table: /home/dfeldman/flycodes/chip_orders/chip162_designs.csv.gz
+  gate: library == "LA_NTF2s"
+  rename:
+    design_name_original: pdb_file
 
 convert_raw:
   flags: [
     # '--noPeakPicking'
     ]
-
 
 process_mzml:
   snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
@@ -18,17 +21,16 @@ process_mzml:
   mzML_filter: -rt 600:2700 -mz 400:860
   comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
   idXML_filter: -score:pep 30 -mz:error 10
-  mz_calibration: -offset 1 -ms_level 1
-  rt_reference: MS_193
+  mz_calibration: -offset 0 -ms_level 1
+  rt_reference: MS_418
   rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
-
 
 skyline:
   input_tag: 'filtered'
   gui_settings:
     peaks: 3
-    mass_accuracy: 5 ppm
-    rt_filtering: 1 minute
+    mass_accuracy: 3 ppm
+    rt_filtering: 0.75 minutes
   qc_gate: >-
     -2 < mass_error_ppm < 2
     & 0.9 < isotope_dot_product
@@ -49,7 +51,7 @@ plot:
     job_size: 100
   barcode_stats:
     detected_cutoff: 5
-  stage_order: ['insoluble', 'soluble', 'injection', 'SEC']
+  stage_order: ['R1 insoluble', 'R1 soluble', 'R1 injection', 'R2 injection']
 
 sec:
   barcode:
@@ -60,7 +62,7 @@ sec:
     crap_threshold: 0.4
   consensus:
     # barcodes to include in consensus calculation
-    gate: max_consecutive_missing < 2 & num_missing < 4 & Y_count < 4 & not crap
+    gate: max_consecutive_missing < 4 & num_missing < 4
     method: 'median'
     # parameters for consensus metrics
     deviation_threshold: 0.02

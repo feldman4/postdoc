@@ -13,7 +13,7 @@ convert_raw:
 
 process_mzml:
   snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
-  request: '{sample}.calibratedRT.pepXML'
+  request: 'calibratedRT'
   mzML_filter: -rt 600:2700 -mz 400:860
   comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
   idXML_filter: -score:pep 30 -mz:error 10
