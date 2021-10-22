@@ -18,11 +18,12 @@ alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
 alias ptree='ps --user $(id -u) f'
 alias ttime='/usr/bin/time -v'
+alias countfiles='du -a | cut -d/ -f2 | sort | uniq -c | sort -nr'
 
 ######################### TERMINAL ############################
 
 PS1='\[\033[0;33m\]\u@\h \[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
-PS1='\[\033[0;33m\]\h \[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
+PS1='\[\033[0;33m\]\h:\[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
 export TERM=xterm-color
 set bell-style none
 # can output a warning that messes with sftp
