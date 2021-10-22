@@ -24,6 +24,7 @@ barcode_results = 'skyline/barcode_results.csv'
 dino_feature_table = 'dino_features.csv'
 direct_table = 'direct_intensities.csv'
 target_table = 'dinosaur/targets.tsv'
+ngs_result_table = 'ngs_result.csv'
 
 intensities_table = 'intensities.csv'
 sec_barcodes_table = 'sec_barcodes.csv'
@@ -59,7 +60,8 @@ def setup():
     os.makedirs('figures', exist_ok=True)
     
     print('Downloading sample info from MS barcoding gsheet...')
-    df_samples = (load_sample_info(config['samples']['gate'])
+    gate = config['samples']['gate'].replace('\n', ' ')
+    df_samples = (load_sample_info(gate)
      .pipe(assert_unique, 'sample', 'file', 'short_name')
      .pipe(add_sec_fractions)
     )
@@ -73,7 +75,6 @@ def setup():
 
     df_designs = load_designs()
     num_designs = df_designs.shape[0]
-    print(f'Loaded {num_designs:,} designs from {config["designs"]["table"]}')
     validate_designs(df_designs).to_csv(design_table, index=None)
     write_barcode_fa(df_designs)
     print(f'  Wrote design info to {design_table}')
@@ -90,7 +91,7 @@ def setup():
         setup_process_mzml()
         print('Run mzML calibration and comet search with bash command:')
         print(f'  /home/dfeldman/s/app.sh submit {command_list_process_mzml} '
-            '--cpus=10 --memory=8g')
+            '--cpus=10 --memory=16g')
 
     if 'dinosaur' in config:
         setup_dinosaur(df_samples, df_designs)
@@ -137,6 +138,7 @@ def setup_convert_raw():
 
 def setup_process_mzml():
     import pandas as pd
+    from postdoc.utils import force_symlink
     df_samples = pd.read_csv(sample_table)
     config = load_config()['process_mzml']
     os.makedirs('process_mzml', exist_ok=True)
@@ -159,15 +161,10 @@ def setup_process_mzml():
         fh.write(cmd)
 
 
-def force_symlink(src, dst):
-    if os.path.islink(dst):
-        os.remove(dst)
-    os.symlink(src, dst)
-
-
 def setup_skyline():
     # TODO: copy skyline template
     import pandas as pd
+    from postdoc.utils import force_symlink
     df_samples = pd.read_csv(sample_table)
     os.makedirs('skyline/input', exist_ok=True)
     tag = load_config()['skyline']['input_tag']
@@ -177,6 +174,7 @@ def setup_skyline():
         for ext in ('.mzML', '.pepXML'):
             force_symlink(f'../../process_mzml/{sample}{tag}{ext}', 
                           f'skyline/input/{sample}{ext}')
+    force_symlink(f'../{barcodes_by_design}', f'skyline/{barcodes_by_design}')
 
 
 def setup_dinosaur(df_samples, df_designs):
@@ -342,7 +340,7 @@ def load_design_table():
     from postdoc.utils import codify
     import pandas as pd
 
-    return (pd.read_csv(design_table)
+    return (pd.read_csv(design_table, low_memory=False)
     [['design_name', 'pdb_file',  'barcode', 'mz', 'iRT']]
     .sort_values('mz')
     .rename(columns={'mz': 'mz_theoretical'})
@@ -436,10 +434,15 @@ def load_designs():
     config = load_config()['designs']
     cols = ['barcode', 'mz', 'iRT', 'design_name', 'pdb_file']
     df = pd.read_csv(config['table'])
+    print(f'Loaded {len(df):,} designs from {config["table"]}')
     if 'gate' in config:
         df = df.query(config['gate'])
+        print(f'  Kept {len(df):,} passing gate: {config["gate"]}')
     if 'drop_duplicates' in config:
         df = df.drop_duplicates(config['drop_duplicates'])
+        print(f'  {len(df):,} after dropping duplicates on {config["drop_duplicates"]}')
+    if 'rename' in config:
+        df = df.rename(columns=config['rename'])
     return df[cols]
 
 
@@ -454,28 +457,38 @@ def add_sec_fractions(df_sample_info):
     """
     import pandas as pd
 
+    df_sample_info = df_sample_info.copy()
+
     sec_runs = df_sample_info['SEC'].dropna().pipe(list)
 
     f = f'{akta_db}/chroma.hdf'
-    df_chroma = (pd.read_hdf(f)
-     .query('Description == @sec_runs').drop_duplicates('ChromatogramID'))
+    df_chroma_all = pd.read_hdf(f)
+    description_to_id = (df_chroma_all
+     .drop_duplicates('ChromatogramID')
+     .drop_duplicates('Description', keep=False)
+     .set_index('Description')['ChromatogramID'].to_dict()
+    )
+    for x in df_chroma_all['ChromatogramID']:
+        description_to_id[x] = x
 
-    print(f'Found {len(df_chroma)} matching SEC runs')
-
+    # map to chromatogram IDs if possible
+    df_sample_info['ChromatogramID'] = (df_sample_info['SEC']
+      .map(description_to_id)
+    )
+    
     f = f'{akta_db}/fractions.hdf'
-    df_fractions = pd.read_hdf(f).merge(df_chroma[['ChromatogramID', 'Description']])
-    fractions = (df_fractions
+    fractions = (pd.read_hdf(f)
      .reset_index(drop=True)
      .assign(fraction_width=lambda x: 
         x.groupby('ChromatogramID')['volume'].diff()
          .fillna(method='bfill').round(2))
-     .set_index(['Description', 'fraction'])
+     .set_index(['ChromatogramID', 'fraction'])
      .assign(fraction_center=lambda x: x.eval('volume + fraction_width/2'))
-     [['fraction_center', 'fraction_width', 'ChromatogramID']]
-     )
+     [['fraction_center', 'fraction_width']]
+    )
 
     return (df_sample_info
-    .join(fractions, on=['SEC', 'SEC_fraction'])
+    .join(fractions, on=['ChromatogramID', 'SEC_fraction'])
     )
 
 
@@ -747,15 +760,16 @@ def plot_skyline_QC(prefix='figures/skyline_QC'):
         print(f'Saved {description} to {f}')
 
     df_sky = pd.read_csv(intensities_table)
-    df_sky['mean_rt'] = df_sky.groupby('barcode')['retention_time'].transform('mean')
-    df_sky['rt_offset'] = df_sky['retention_time'] - df_sky['mean_rt']
+    df_sky['median_rt'] = df_sky.groupby('barcode')['retention_time'].transform('median')
+    df_sky['rt_offset'] = df_sky['retention_time'] - df_sky['median_rt']
+    print(f'Loaded skyline results from {intensities_table}')
 
     fig, ax = plt.subplots(figsize=(4, 5))
     (df_sky
     .pipe((sns.boxplot, 'data'), y='sample', x='rt_offset', 
         orient='h', ax=ax, showfliers=False)
     )
-    ax.set_xlabel('Retention time offset\nrelative to average across samples\n(minutes)')
+    ax.set_xlabel('Retention time offset\nrelative to median across samples\n(minutes)')
     save(fig, 'sample_rt_offset', 'retention time offsets')
 
     fig, ax = plt.subplots(figsize=(4, 5))
@@ -852,10 +866,12 @@ def analyze_sec():
     import numpy as np
 
     df_intensities = pd.read_csv(intensities_table)
+    df_samples = pd.read_csv(sample_table)
 
     config = load_config()['sec']
     stages = load_config()['plot']['stage_order']
-    fraction_centers = (pd.read_csv(sample_table)
+    
+    fraction_centers = (df_samples
     .query('stage == "SEC"')['fraction_center'].pipe(sorted)
     )
     intensity = config['barcode']['intensity_metric']
@@ -992,6 +1008,7 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
      .reset_index()
     )
     cols = ['design_name'] + [x for x in df_consensus_metrics if x != 'design_name']
+    print(df_consensus_metrics.set_index('design_name').loc['89e3bcfa67ec'])
     return df_consensus_metrics[cols]
 
 
@@ -1070,6 +1087,7 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
             designs = df_or_designs['design_name']
     else:
         designs = df_or_designs
+
 
     prefix = str(prefix)
     os.makedirs(f'figures/{prefix}', exist_ok=True)
@@ -1222,6 +1240,18 @@ def overlay_validation_sec(uv_regex='230|260|280'):
         plot_sec.plot_validation_overlays(df_summary, df_uv_data, traces)
 
 
+def export_ms1_to_string(mzml_file):
+    from postdoc.utils import dataframe_to_csv_string
+    return dataframe_to_csv_string(export_ms1(mzml_file))    
+
+
+def export_ms1(mzml_file, progress=lambda x: x):
+    from postdoc.flycodes.explore import load_mzml_to_ms1_dataframe
+    from tqdm.auto import tqdm
+    
+    return load_mzml_to_ms1_dataframe(mzml_file, progress=progress)
+
+
 def validation_block():
     export_validation_sec()
     overlay_validation_sec()
@@ -1243,12 +1273,14 @@ if __name__ == '__main__':
         'plot_barcode_coverage', # TOF and skyline
         'export_validation_sec',
         'overlay_validation_sec',
+        
     ]
     # if the command name is different from the function name
     named = {
         '0_setup': setup,
         '1.1_skyline': load_skyline_intensities,
         '5_validation': validation_block,
+        'export_ms1': export_ms1_to_string,
         }
 
     final = {}
