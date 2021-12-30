@@ -149,3 +149,36 @@ def get_structure_info(rcsb_ids):
         arr += [{'method': get_method(entry), 'resolution': get_resolution(entry)}]
 
     return pd.DataFrame(arr).assign(rcsb=rcsb_ids)[['rcsb', 'method', 'resolution']]
+
+
+def fetch_pdbe(uniprot_id):
+    return (parse_pdbe_uniprot(fetch_pdbe_json(uniprot_id))
+            .insert(0, 'UniProtKB', uniprot_id)
+            )
+
+
+def fetch_pdbe_json(uniprot_id):
+    url = f'https://www.ebi.ac.uk/pdbe/graph-api/uniprot/unipdb/{uniprot_id}'
+    res = requests.get(url)
+    data = res.json()
+    if len(data) == 0:
+        raise ValueError(f'no result for uniprot id {uniprot_id}')
+    return data[uniprot_id]
+
+
+def parse_pdbe_uniprot(result_json):
+    keys = 'name', 'entityId', 'bestChainId'
+    add_keys = 'resolution', 'experiment', 'title'
+    rename = {'name': 'RCSB'}
+    arr = []
+    for entry in result_json['data']:
+        assert entry['name'] == entry['accession']
+        entry['name'] = entry['name'].upper()
+        info = {k: entry[k] for k in keys}
+        info.update({k: entry['additionalData'][k] for k in add_keys})
+        info['residue_coverage'] = (';'.join('{startIndex}-{endIndex}'.format(**x) 
+                                             for x in entry['residues']))
+        arr += [info]
+
+    return pd.DataFrame(arr).rename(columns=rename)
+    
