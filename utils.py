@@ -441,6 +441,7 @@ def hash_set(xs, width, no_duplicates=True):
         for x in xs:
             if x in val_maps:
                 continue
+            md5 = hashlib.md5()
             md5.update(str(x).encode())
             key = md5.hexdigest()[:width]
             assert key_maps.get(key, x) == x, 'hash not wide enough'
@@ -704,3 +705,42 @@ def split_by_regex(pat, s):
     parts = re.split(f'({pat})', s) + ['']
     fragments = [a+b for a,b in zip(parts[::2], parts[1::2])]
     return [x for x in fragments if x]
+
+
+def load_yaml_table(config, verbose=True):
+    """Load a table from a YAML description.
+    TODO: include drive: option
+    """
+    df = pd.read_csv(config['table'], low_memory=False)
+    if verbose:
+        print(f'Loaded {len(df):,} entries from {config["table"]}')
+    return filter_yaml_table(df, verbose=verbose, **config)
+
+#     if entry['source'].startswith('drive:'):
+#         if drive is None:
+#             from postdoc.drive import Drive
+#             drive = Drive()
+#         remote = entry['source'].replace('drive:', '')
+#         kwargs = {k: entry[k] for k in load_keys if k in entry}
+#         df = drive(remote, **kwargs)
+#     else:
+#         df = pd.read_csv(entry['source'], **kwargs)
+#     if 'gate' in entry:
+#         df = df.query(entry['gate'])
+
+
+def filter_yaml_table(df, gate=None, drop_duplicates=None, rename=None, verbose=True, **ignore):
+    """Apply some common transformations (e.g., from a YAML description).
+    """
+    if gate is not None:
+        df = df.query(gate)
+        if verbose:
+            print(f'  Kept {len(df):,} passing gate: {gate}')
+    if drop_duplicates is not None:
+        df = df.drop_duplicates(drop_duplicates)
+        if verbose:
+            print(f'  {len(df):,} after dropping duplicates on {drop_duplicates}')
+    if rename is not None:
+        df = df.rename(columns=rename)
+    return df
+
