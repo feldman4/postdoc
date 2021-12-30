@@ -9,12 +9,19 @@ from glob import glob
 mono_dir = ':/home/dfeldman/.conda/envs/df-pyr-tf/bin'
 thermorawfileparser = '/home/dfeldman/.conda/envs/df-pyr-tf/bin/thermorawfileparser'
 comet = '/home/dfeldman/.conda/envs/tpp/bin/comet'
-comet_params = '/home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params'
+default_comet_params = '/home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params'
 
 IDFileConverter = '/home/dfeldman/.conda/envs/proteowizard/bin/IDFileConverter'
 IDFilter = '/home/dfeldman/.conda/envs/proteowizard/bin/IDFilter'
 
 barcode_iRT_table = '/home/dfeldman/for/ms_qc_app/barcode_iRT.csv'
+
+chips = {
+'chip137': '/home/dfeldman/flycodes/chip_orders/chip137_design.csv',
+'chip137-rolls': '/home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv',
+'chip162': '/home/dfeldman/flycodes/chip_orders/chip162_designs.csv.gz',
+'chip166': '/home/dfeldman/flycodes/chip_orders/chip166_CR_designs.csv',
+}
 
 
 def print(*args, flush=True, **kwargs):
@@ -25,6 +32,7 @@ def validate(raw_file, output='qc', databases='/home/dfeldman/for/ms_qc_app/fast
              comet_filter='-score:pep 1 -mz:error 5', 
              plot_filter='abs(mass_error_ppm) < 3 & score < 0.05',
              ms1_filter='1e5 < intensity',
+             comet_params=default_comet_params,
              ):
     """Convert .raw file to mzML, ensuring acquisition is complete. Use comet to map peptides from
     databases (default is all known barcode sets). Plot detected peptide retention times against 
@@ -77,7 +85,7 @@ def validate(raw_file, output='qc', databases='/home/dfeldman/for/ms_qc_app/fast
             print('OK!')
 
     # map peptides
-    named_databases = map_to_databases(mzml, databases, comet_filter)
+    named_databases = map_to_databases(mzml, databases, comet_filter, comet_params)
     best_database = consolidate_peptide_ids(basename, mzml, id_table, plot_filter)
 
     # plot results
@@ -113,6 +121,7 @@ def annotate_ms1_peptides(df_ms1, df_ids, database_path):
     from postdoc.flycodes.explore import match_events
     import pandas as pd
 
+    df_ids = df_ids.copy()
     df_ids['retention_time'] /= 60
 
     x, y = 'iRT', 'retention_time'
@@ -154,6 +163,7 @@ def plot_ion_current(df_ms1_plot, output_dir):
         )
 
         ax = fg.axes.flat[0]
+        ax.set_xlim([0, 60])
         ax.set_yscale('log')
         ax.set_ylim([1e4, 1e10])
         # ax.set_title(f'{basename} -- {database}')
@@ -213,7 +223,7 @@ def consolidate_peptide_ids(basename, mzml, id_table, plot_filter):
         return best_database
 
 
-def map_to_databases(mzml, databases, comet_filter):
+def map_to_databases(mzml, databases, comet_filter, comet_params):
     from natsort import natsorted
     
     comet_pepxml = mzml.replace('.mzML', '.pep.xml') # comet output, will get renamed
@@ -311,21 +321,35 @@ def check_raw_file(raw_file):
                 return None
 
 
-def export_databases(output_dir='/home/dfeldman/for/ms_qc_app/fasta'):
-    chips = {
-    'chip137': '/home/dfeldman/flycodes/chip_orders/chip137_design.csv',
-    'chip137-rolls': '/home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv',
-    'chip162': '/home/dfeldman/flycodes/chip_orders/chip162_designs.csv.gz',
-    }
+def check_raw_file_cli(raw_file):
+    """Check if a .raw file can be parsed to .mzML. Will fail if the .raw file is 
+    incomplete.
 
+    :param raw_file: path to .raw file
+    """
+    result = check_raw_file(raw_file)
+    if result is None:
+        print('Looks good!')
+    else:
+        print('Error:', f'  {result}', sep='\n')
+
+
+def export_databases(output_dir='/home/dfeldman/for/ms_qc_app/fasta'):
+    """Generates one database per chip and barcode set. Duplicate barcodes are removed,
+    so the protein IDs in the fasta files may not be comprehensive.
+    """
     from postdoc.sequence import write_fasta
     import pandas as pd
 
     arr = []
     for chip, f in chips.items():
-        df_chip = pd.read_csv(f)
+        df_chip = pd.read_csv(f, low_memory=False)
         arr += [df_chip[['barcode', 'iRT']]]
         for barcode_set, df_designs in df_chip.groupby('barcode_set'):
+            dupes = df_designs['barcode'].duplicated()
+            if dupes.any():
+                print(f'Dropping {dupes.sum()} duplicate barcodes from {chip}-{barcode_set}')
+            df_designs = df_designs.drop_duplicates('barcode')
             records = []
             for design_name, df in df_designs.groupby('design_name'):
                 fake_protein = ''.join(df['barcode'])
@@ -349,6 +373,7 @@ if __name__ == '__main__':
     ]
     # if the command name is different from the function name
     named = {
+        'check_raw_file': check_raw_file_cli
         }
 
     final = {}
