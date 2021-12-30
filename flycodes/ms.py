@@ -129,16 +129,24 @@ def load_mzml_data(filename, progress=lambda x: x):
     for spectrum in progress(reader):
         scan = spectrum['scanList']['scan'][0]
         start = scan['scan start time']
-        # inject = scan['ion injection time']
         mz_arr = spectrum['m/z array']
         int_arr = spectrum['intensity array']
         try:
             filter_string = spectrum['filter string']
         except KeyError:
             filter_string = spectrum['scanList']['scan'][0]['filter string']
-        info += [{'scan': start, 'id': spectrum['id'], 
-        'filter_string': filter_string,
+        info += [{
+            'scan': start, 
+            'id': spectrum['id'], 
+            'filter_string': filter_string,
         }]
+
+        # not sure why this is only present some of the time
+        try:
+            info[-1].update({'ion_injection_time': scan['ion injection time']})
+        except KeyError:
+            pass
+
         mz += [mz_arr]
         intensity += [int_arr]
 
@@ -204,6 +212,7 @@ def load_pepxml_data(f, progress=lambda x: x):
         assert x['start_scan'] - x['end_scan'] == 0
         info['scan_id'] = x['start_scan']
         info['scan_ix'] = x['start_scan'] - 1
+        info['id'] = x['spectrumNativeID']
         arr += [info]
 
     return pd.DataFrame(arr)
@@ -318,10 +327,10 @@ def generate_msfragger_cmd(mzML, protein_fa,
     return cmd
 
 
-def read_idxml(filename):
+def read_idxml(filename, progress=lambda x: x):
     from pyteomics.openms.idxml import IDXML
     arr = []
-    for hit in IDXML(filename):
+    for hit in progress(IDXML(filename)):
         phit = hit['PeptideHit'][0]
         
         info = {}
@@ -330,6 +339,10 @@ def read_idxml(filename):
         info['retention_time'] = hit['RT']
         info['score'] = phit['score']
         info['scan'] = int(hit['spectrum_reference'].split('scan=')[1])
+        if len(phit['protein']) == 1:
+            info['protein'] = phit['protein'][0]['accession']
+        else:
+            info['protein'] = 'multi'
         arr += [info]
         
     return pd.DataFrame(arr)
