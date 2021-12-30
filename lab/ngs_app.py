@@ -28,7 +28,7 @@ SAMPLE = 'sample' # slugified identifier
 COUNT = 'count' # read count
 TOTAL_ASSEMBLED_READS = 'total_assembled_reads' # reads successfully assembled by PEAR
 TOTAL_WITH_ADAPTERS = 'total_with_adapters' # reads matching adapters
-INSERT_MATCH = 'insert_match' # matched amino acid insert from design table
+INSERT_MATCH = 'insert_match' # nearest match amino acid insert from design table
 INSERT_DISTANCE = 'insert_distance' # Levenshtein distance to matched amino acid insert
 INSERT_EQUIDISTANT = 'insert_equidistant' # number of other designed inserts at this edit distance
 INSERT = 'insert' # translated amino acid sequence between adapters
@@ -40,13 +40,16 @@ INSERT_HAS_STOP = 'insert_has_stop' # is there a stop codon in the insert?
 
 # if including barcodes
 BARCODE = 'barcode' # amino acid barcode in design table
-INSERT_BARCODE = 'barcode' # barcode expected after peptide purification at given terminus
+INSERT_BARCODE = 'insert_barcode' # barcode resulting from peptide purification at given terminus
 MATCH_BARCODE = 'match_barcode' # barcode of matched insert
 MISMAPPED_BARCODE = 'mismapped_barcode' # true if the barcode matches exactly, but not the insert
+INSERT_FROM_BARCODE = 'insert_from_barcode' # the expected insert found by matching the barcode exactly
+SUBPOOL_FROM_BARCODE = 'subpool_from_barcode' # the first subpool containing the barcode
 
 # optional
 SUBPOOL = 'subpool' # column in designs.csv
 DESIGN_NAME = 'design_name' # column in designs.csv
+
 
 def setup(design_table=design_table, sample_table=sample_table, min_counts=2, 
           include_barcodes=None):
@@ -74,11 +77,10 @@ def setup(design_table=design_table, sample_table=sample_table, min_counts=2,
     df_designs = load_design_table()
     if BARCODE in df_designs and include_barcodes is None:
         print(f'WARNING: including barcodes since "barcode" column is in {design_table}, '
-              f'explicitly set --include_barcodes=False to exclude', file=sys.stderr)
+              f'explicitly set --include_barcodes=False to exclude')
         include_barcodes = True
     if INSERT_DNA not in pd.read_csv(design_table):
-        print('Insert DNA not provided, so DNA metrics will not be calculated.',
-              file=sys.stderr)
+        print('Insert DNA not provided, so DNA metrics will not be calculated.')
 
     df_samples = (pd.read_csv(sample_table)
      .pipe(validate_sample_table, include_barcodes=include_barcodes)
@@ -163,6 +165,11 @@ def validate_design_table(df_designs, include_barcodes):
             assert barcode in insert
 
     return df_designs
+
+
+def print(*args, file=sys.stderr, **kwargs):
+    from builtins import print
+    print(*args, file=file, **kwargs)
 
 
 def only_one_file(search):
@@ -282,17 +289,21 @@ def annotate_match_barcodes(df_matches, df_designs, barcode_terminus):
         'C': '.*K([^RK]*R).?',
     }
 
-    design_barcode_to_insert = df_designs.set_index('barcode')[INSERT].to_dict()
-    barcodes = list(df_designs['barcode'])
-    mismapped_gate = ('insert_barcode == @barcodes & ~insert_has_stop '
-                      '& insert_from_barcode != insert_match')
+    design_barcode_to_insert = df_designs.set_index(BARCODE)[INSERT].to_dict()
+    
 
-    df_matches = (df_matches
-    .assign(insert_barcode=lambda x: x[INSERT].str.extract(barcode_pat[barcode_terminus])[0])
-    .assign(insert_from_barcode=lambda x: x['insert_barcode'].map(design_barcode_to_insert))
-    # .assign(mismapped_barcode=lambda x: x.eval(mismapped_gate))
-    )
+    barcodes = list(df_designs['barcode'])
+    mismapped_gate = (f'{INSERT_BARCODE} == @barcodes & ~{INSERT_HAS_STOP} '
+                      f'& {INSERT_FROM_BARCODE} != {INSERT_MATCH}')
+
+    df_matches[INSERT_BARCODE] = df_matches[INSERT].str.extract(barcode_pat[barcode_terminus])[0]
+    df_matches[INSERT_FROM_BARCODE] = df_matches[INSERT_BARCODE].map(design_barcode_to_insert)
     df_matches[MISMAPPED_BARCODE] = df_matches.eval(mismapped_gate)
+
+    if SUBPOOL in df_designs:
+        design_barcode_to_subpool = df_designs.set_index(BARCODE)[SUBPOOL].to_dict()
+        df_matches[SUBPOOL_FROM_BARCODE] = df_matches[INSERT_BARCODE].map(design_barcode_to_subpool)
+
     return df_matches.fillna('')
 
 
@@ -351,7 +362,7 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     msg = (f'Loaded sample {row["sample"]}, '
            f'mapping {num_unique:,} unique reads '
            f'({num_reads:,} / {total_reads:,} have >= {min_counts} counts)')
-    print(msg, file=sys.stderr)
+    print(msg)
     
     df_matches = annotate_inserts(df_matches, df_designs)
 
@@ -454,77 +465,126 @@ def plot(*matched_tables, output='figures/', filetype='png'):
     from postdoc.sequence import read_fastq
     import seaborn as sns
 
+    print('Loading data...')
     df_matches = load_matched_tables(*matched_tables)
     df_designs = pd.read_csv(design_table)
     os.makedirs(os.path.dirname(output), exist_ok=True)
 
+    fuzzy_distance = 15
 
     with sns.plotting_context('notebook'):
-        fg, df_plot = plot_abundance(df_matches, df_designs)
-        f = f'{output}rank_abundance.{filetype}'
-        fg.savefig(f)
-        df_plot.to_csv(f'{output}rank_abundance.csv', index=None)
-        print(f'Saved rank abundance plot to {f}', file=sys.stderr)
+        try:
+            fg, df_plot = plot_abundance(df_matches, df_designs, mode='insert')
+            f = f'{output}rank_abundance.{filetype}'
+            fg.savefig(f)
+            df_plot.to_csv(f'{output}rank_abundance.csv', index=None)
+            print(f'Saved rank abundance plot to {f}')
+        except:
+            pass
+
+        if INSERT_BARCODE in df_matches:
+            fg, df_plot = plot_abundance(df_matches, df_designs, mode='barcode')
+            f = f'{output}rank_abundance_barcodes.{filetype}'
+            fg.savefig(f)
+            df_plot.to_csv(f'{output}rank_abundance_barcodes.csv', index=None)
+            print(f'Saved rank abundance plot of barcodes to {f}')
 
         fig, df_plot = plot_distance_distribution(df_matches)
         f = f'{output}distance_distribution.{filetype}'
         fig.savefig(f, bbox_inches='tight')
         df_plot.to_csv(f'{output}distance_distribution.csv', index=None)
-        print(f'Saved edit distance distribution heatmap to {f}', file=sys.stderr)
+        print(f'Saved edit distance distribution heatmap to {f}')
 
         fg, df_plot = plot_length_distribution(df_matches, df_designs)
         f = f'{output}insert_length.{filetype}'
         fg.savefig(f)
         df_plot.to_csv(f'{output}insert_length.csv', index=None)
-        print(f'Saved insert length histogram to {f}', file=sys.stderr)
+        print(f'Saved insert length histogram to {f}')
 
 
-        if 'subpool' in df_matches:
+        if SUBPOOL in df_matches:
             f = f'{output}cross_mapping.{filetype}'
-            fig, df_plot = plot_crossmapping(df_matches)
+            fig, df_plot = plot_crossmapping(df_matches, df_designs, mode='insert')
             fig.savefig(f, bbox_inches='tight')
             df_plot.to_csv(f'{output}cross_mapping.csv', index=None)
-            print(f'Saved cross mapping heatmap to {f}', file=sys.stderr)
+            print(f'Saved cross mapping heatmap to {f}')
 
-        if 'design_name' in df_matches and 'match_barcode' in df_matches:
-            gate = 'insert_distance == 0 & insert_has_stop == False'
+            f = f'{output}cross_mapping_fuzzy_{fuzzy_distance}.{filetype}'
+            fig, df_plot = plot_crossmapping(df_matches, df_designs, mode='insert', 
+                                             max_insert_distance=fuzzy_distance)
+            fig.savefig(f, bbox_inches='tight')
+            df_plot.to_csv(f'{output}cross_mapping_fuzzy_{fuzzy_distance}.csv', index=None)
+            print(f'Saved fuzzy cross mapping heatmap (insert distance within {fuzzy_distance}) '
+                  f'to {f}')
+
+            if MATCH_BARCODE in df_matches:
+                f = f'{output}cross_mapping_barcodes.{filetype}'
+                fig, df_plot = plot_crossmapping(df_matches, df_designs, mode='barcode')
+                fig.savefig(f, bbox_inches='tight')
+                df_plot.to_csv(f'{output}cross_mapping_barcodes.csv', index=None)
+                print(f'Saved barcode cross mapping heatmap to {f}')
+
+
+        if DESIGN_NAME in df_matches and MATCH_BARCODE in df_matches:
+            gate = f'{INSERT_DISTANCE} == 0 & {INSERT_HAS_STOP} == False'
             for (sample, subpool), df in df_matches.query(gate).groupby([SAMPLE, SUBPOOL]):
                 fig, df_plot = plot_detection_cutoffs_barcode(df)
                 f = f'{output}design_barcode_counts_{sample}-{subpool}.{filetype}'
                 fig.savefig(f, bbox_inches='tight')
                 df_plot.to_csv(f'{output}design_barcode_counts_{sample}-{subpool}.csv')
-                print(f'Saved design-barcode count heatmap ({sample}-{subpool}) to {f}', file=sys.stderr)
+                print(f'Saved design-barcode count heatmap ({sample}-{subpool}) to {f}')
 
             fg, df_plot = plot_barcode_purity(df_matches)
             f = f'{output}barcode_purity.{filetype}'
             fg.savefig(f)
             df_plot.to_csv(f'{output}barcode_purity.csv', index=None)
-            print(f'Saved barcode purity histogram to {f}', file=sys.stderr)
+            print(f'Saved barcode purity histogram to {f}')
 
 
-def plot_abundance(df_matches, df_designs):
+def plot_abundance(df_matches, df_designs, mode='insert'):
     """Plot of log abundance (y-axis) vs oligo rank (x-axis) for exact amino acid sequences.
     If the design table includes subpool labels, make one plot per sample colored by subpool. 
     Otherwise, combine all samples onto one plot.
+    Mode is either "insert" or "barcode"
     """
     import seaborn as sns
     import matplotlib.pyplot as plt
+
+    if mode == 'insert':
+        key = INSERT
+        subpool = SUBPOOL
+    elif mode == 'barcode':
+        key = INSERT_BARCODE
+        subpool = SUBPOOL_FROM_BARCODE
+    else:
+        raise ValueError(f'mode must be "insert" or "barcode", not {mode}')
     
-    has_subpool = SUBPOOL in df_matches
+    has_subpool = subpool in df_matches
     if not has_subpool:
         df_matches = df_matches.copy()
-        df_matches[SUBPOOL] = 'dummy'
+        df_matches[subpool] = 'dummy'
         design_counts = dict(dummy=len(df_designs))
     else:
         design_counts = df_designs.groupby(SUBPOOL).size().to_dict()
 
+    if mode == 'insert':
+        # only exactly matched inserts
+        df_matches = df_matches.query('insert_distance == 0')
+    elif mode == 'barcode':
+        # only barcodes in the design table
+        df_matches = df_matches.query(f'{INSERT_FROM_BARCODE} == {INSERT_FROM_BARCODE}')
+
+    df_matches.to_csv('test.csv', index=None)
+
     df_plot = (df_matches
-    .query('insert_distance == 0')
-    .groupby([SAMPLE, SUBPOOL, INSERT])[COUNT].sum().reset_index()
-    .assign(rank=lambda x: x.groupby([SAMPLE, SUBPOOL])[COUNT].rank(method='first', ascending=False))
-    .sort_values([SAMPLE, SUBPOOL, 'rank']).reset_index(drop=True)
-    [[SAMPLE, SUBPOOL, COUNT, 'rank', INSERT]]
+    .groupby([SAMPLE, subpool, key])[COUNT].sum().reset_index()
+    .assign(rank=lambda x: x.groupby([SAMPLE, subpool])[COUNT].rank(method='first', ascending=False))
+    .sort_values([SAMPLE, subpool, 'rank']).reset_index(drop=True)
+    [[SAMPLE, subpool, COUNT, 'rank', key]]
     )
+
+    if len(df_plot) == 0:
+        raise SystemExit('Nothing to plot!!')
 
     def plot(data, label, color):
         ax = plt.gca()
@@ -538,7 +598,7 @@ def plot_abundance(df_matches, df_designs):
         
 
     if has_subpool:
-        hue_kw = SUBPOOL
+        hue_kw = subpool
         row_kw = SAMPLE
     else:
         hue_kw = SAMPLE
@@ -559,7 +619,7 @@ def plot_abundance(df_matches, df_designs):
     y0, y1 = ax.get_ylim()
     ax.set_ylim([1, y1])
 
-    ax.set_xlabel('Matched insert rank')
+    ax.set_xlabel(f'Matched {mode} rank')
 
     return fg, df_plot
 
@@ -617,12 +677,17 @@ def plot_detection_cutoffs_barcode(df_matches):
 
 
 def plot_barcode_purity(df_matches):
+    """Purity is defined relative to the barcode detected in the insert 
+    (i.e., the barcode that will be pulled down for MS).
+    """
     import seaborn as sns
     import matplotlib.pyplot as plt
     import numpy as np
 
     df_plot = (df_matches
-    .pivot_table(index=[SAMPLE, MATCH_BARCODE], 
+    # only barcodes in the design table
+    .query(f'{INSERT_FROM_BARCODE} == {INSERT_FROM_BARCODE}')
+    .pivot_table(index=[SAMPLE, INSERT_BARCODE], 
                 columns=MISMAPPED_BARCODE, values='count', aggfunc='sum')
     .reindex(columns=[False, True]).fillna(0).astype(int)
     .rename(columns={False: 'right_insert', True: 'wrong_insert'})
@@ -644,15 +709,34 @@ def plot_barcode_purity(df_matches):
     return fg, df_plot
 
 
-def plot_crossmapping(df_matches):
+def plot_crossmapping(df_matches, df_designs, mode='insert', max_insert_distance=0):
     import matplotlib.pyplot as plt
     import seaborn as sns
+
+    if mode == 'insert':
+        key = SUBPOOL
+        # only matched inserts within edit distance (but not -1)
+        df_matches = df_matches.query(f'0 <= {INSERT_DISTANCE} <= @max_insert_distance')
+    elif mode == 'barcode':
+        key = SUBPOOL_FROM_BARCODE
+        allowed_barcodes = (df_designs
+         .drop_duplicates([SUBPOOL, BARCODE])
+         .drop_duplicates(BARCODE, keep=False)
+         [BARCODE].pipe(list)
+        )
+        df_matches = (df_matches
+         # only barcodes in the design table
+         .query(f'{INSERT_FROM_BARCODE} == {INSERT_FROM_BARCODE}')
+         # only barcodes that are unique across subpools
+         .query(f'{INSERT_BARCODE} == @allowed_barcodes')
+        )
+    else:
+        raise ValueError(f'mode must be "insert" or "barcode", not {mode}')
 
     fig, ax = plt.subplots()
 
     df_plot = (df_matches
-    .query(f'{INSERT_DISTANCE} == 0')
-    .pivot_table(index=SAMPLE, columns=SUBPOOL, values=COUNT, aggfunc='sum')
+    .pivot_table(index=SAMPLE, columns=key, values=COUNT, aggfunc='sum')
     .fillna(0).astype(int)
     )
 
