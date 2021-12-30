@@ -36,12 +36,11 @@ dnaworks_output = 'process/DNAworks/DNA_sequence.list'
 reverse_translation_table = 'process/reverse_translations.csv'
 
 # designs assigned to pool 
-# ()
 chip_designs_table = 'process/1_chip_designs.csv'
 CHIP_DESIGNS_COLS = [
     'library', 'pool', 'source', 'design_name', 'design', 'source_file', 'design_name_original',
     'layout', 'barcode_set', 'barcodes_per_design', 'organism', 'length_cap']
-
+DESIGN_NAME_WIDTH = 12
 
 # DNA assemblies
 assembly_single_table = 'process/2_assemblies_single.csv'
@@ -67,14 +66,13 @@ FINAL_DESIGNS_COLS = [
 # matches are added
 FINAL_DESIGNS_COLS_REGEX = '^overlap$|^part_*'
 
-design_name_width = 12
-
-
 # global
 app_script = '/home/dfeldman/s/app.sh'
 
 
 def print(*args, file=sys.stderr, **kwargs):
+    """Local print command goes to stderr by default.
+    """
     from builtins import print
     print(*args, file=file, **kwargs)
 
@@ -393,7 +391,7 @@ def generate_chip_designs():
     df_chip_designs = (pd.concat(arr)
     .pipe(remove_duplicate_designs)
     .assign(design_name=lambda x: 
-        hash_set(x['design'], width=design_name_width, no_duplicates=False))
+        hash_set(x['design'], width=DESIGN_NAME_WIDTH, no_duplicates=False))
     [CHIP_DESIGNS_COLS].sort_values(['library', 'pool', 'source'])
     )
 
@@ -567,7 +565,7 @@ def setup_reverse_translations():
     config = load_config()['reverse_translation']
     organism = df_chip_designs['organism'].iloc[0]
     if len(set(df_chip_designs['organism'])) > 1:
-        print('WARNING!!!!!! taking 1st orgnaims oNLY!!!')
+        print('WARNING!!!!!! taking 1st organisms only !!!')
 
     method = config.pop('method')
     if method == 'DNAworks':
@@ -594,7 +592,7 @@ def setup_DNAworks(designs, organism):
     [os.remove(f) for f in glob(d + '/*')]
     
     df = pd.DataFrame({'design': designs}).drop_duplicates()
-    df['design_name'] = hash_set(df['design'], width=design_name_width)
+    df['design_name'] = hash_set(df['design'], width=DESIGN_NAME_WIDTH)
     (df[['design_name', 'design']]
      .to_csv(dnaworks_input, header=None, index=None, sep='\t')
     )
@@ -648,7 +646,6 @@ def load_barcode_sets():
     """
     from tqdm.auto import tqdm
 
-    
     barcode_sets = load_config()['barcodes']
     arr = []
     for entry in barcode_sets:
@@ -666,23 +663,22 @@ def load_barcode_sets():
 
         mz_precision = 1 / (10 * entry['mz_resolution'])
         iRT_precision = entry['iRT_separation'] / 10
+        mz_group_separation = max(0.25, df_0['mz'].min()/entry['mz_resolution'])
         df_1 = (df_0
          .assign(iRT_bin=lambda x: (x['iRT'] / iRT_precision).round())
          .assign(mz_bin=lambda x: (x['mz'] / mz_precision).round())
          .sample(frac=1, replace=False, random_state=hash(entry['name']) % 10**8)
          .drop_duplicates(['iRT_bin', 'mz_bin'])
          .drop(['iRT_bin', 'mz_bin'], axis=1)
-         .assign(mz_group=lambda x: get_separated_components(x['mz'], 0.25))
+         .assign(mz_group=lambda x: get_separated_components(x['mz'], mz_group_separation))
          .sort_values(['mz_group', 'length']) # prioritize shortest barcodes
         )
-        print(f'  Retained {len(df_1):,} after mz,iRT deduplication')
+        print(f'  Retained {len(df_1):,} after mz,iRT deduplication (mz group separation={mz_group_separation})')
 
         func = lambda x: barcode_cover(x['mz'], x['iRT'], entry['mz_resolution'], entry['iRT_separation'])
         
         # parallel selection on all available CPUs
         results = df_1.pipe(gb_apply_parallel, 'mz_group', func, progress=tqdm)
-        # tqdm.pandas()
-        # results = df_1.groupby('mz_group').progress_apply(func)
         df_1['keep'] = np.concatenate(results)
         df_2 = (df_1.query('keep == 1').drop(['keep'], axis=1)
                     .assign(barcode_set=entry['name']))
@@ -695,6 +691,8 @@ def load_barcode_sets():
 
         arr += [df_2.sort_values(['mz', 'iRT'])]
         print(f'  Retained {len(df_2):,} after filtering by mz,iRT separation')
+
+    os.makedirs(os.path.dirname(barcode_table), exist_ok=True)
     pd.concat(arr).to_csv(barcode_table, index=None)
     print(f'Available barcodes written to {barcode_table}')
     plot_barcode_sets()
@@ -973,7 +971,7 @@ def reconcile_assemblies():
     cols = check_cols + list(part_cols)
     df_check[cols].to_csv(assembly_overlap_table, index=None)
 
-    print(f'Wrote {len(df_check):,} reconciled assemblies (from  {len(df_chip_designs)} '
+    print(f'Wrote {len(df_check):,} reconciled assemblies (from {len(df_chip_designs):,} '
     f'chip designs) to {assembly_overlap_table}')
 
 
@@ -1126,6 +1124,7 @@ if __name__ == '__main__':
         'reconcile_assemblies',
         'export_oligos',
         'collect_subdirectory_tables',
+        'plot_barcode_sets',
     ]
     # if the command name is different from the function name
     named = {
