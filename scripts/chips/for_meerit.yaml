@@ -1,0 +1,33 @@
+barcodes:
+  # - name: nterm_TOF_0
+  #   terminus: 'N'
+  #   source:
+  #     - /net/scratch/dfeldman/flycodes/runs/run_011/all_barcodes.csv
+  #     - /net/scratch/dfeldman/flycodes/runs/run_012/all_barcodes.csv
+
+  #   gate: "hydro_count_norm < 0.4 \
+  #          & hydro_levy2012 < 2.5 \
+  #          & 450 < mz < 850 \
+  #          & 3 <= usable_ion_count \
+  #          & -10 < iRT < 115 \
+  #          & -4 < charge_pH7 \
+  #          & ~polyQ \
+  #          "
+  #   mz_resolution: 2000 # above half-dalton spacing
+  #   iRT_separation: 30
+
+  - name: nterm_TOF_1
+    terminus: 'N'
+    source:
+      - /home/dfeldman/for/MS/0_barcodes/downsampled_run011_run012.csv
+
+    gate: "hydro_count_norm < 0.4 \
+           & hydro_levy2012 < 2.5 \
+           & 500 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -10 < iRT < 115 \
+           & -4 < charge_pH7 \
+           & ~polyQ \
+           "
+    mz_resolution: 300 # three isotopes away at mz 500
+    iRT_separation: 20
