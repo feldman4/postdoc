@@ -108,7 +108,6 @@ def load_chromatograms():
         'ChromatogramID', 'folder_path', 'Description', 'SystemName', 'MethodStartTime',
         ]
 
-
     # use MethodStartTime as the timestamp
     # some ChromatogramPos timestamps are randomly off, so take the median of several
     timestamps = (fetch('SELECT ChromatogramID,MethodStartTime FROM Curve WHERE ChromatogramPos<6')
