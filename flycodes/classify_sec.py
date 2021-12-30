@@ -145,6 +145,19 @@ def get_center_of_mass(df_traces, threshold=0.5):
         centers += [(largest * largest.columns).sum()]
     return centers
 
+def get_peak_highres(df_traces):
+    centers = []
+    for _, row in df_traces.iterrows():
+        peak = np.argmax(row)
+        neighbors = row.iloc[peak-1:peak+1].dropna()
+        default = row.index[peak]
+        # if either neighboring point doesn't exist, fall back to peak itself
+        if len(neighbors) != 3:
+            centers += [row.index[peak]]
+        else:
+            row /= row.sum()
+            centers = [(row.index * row).mean()]
+    return centers        
 
 def add_scores(df_metadata, num_bins=4):
     df_metadata = df_metadata.copy()
@@ -175,6 +188,25 @@ def find_peaks(df_traces, smooth=2):
     # df_traces_smooth = pd.DataFrame(X, index=df_traces.index, columns=df_traces.columns)
     peaks = pd.Series(df_traces.columns.values[np.argmax(X, axis=1)], index=df_traces.index)
     return peaks
+
+
+def find_smoothed_peaks(df_traces, width=1, num_pts=1000):
+    """Finds peaks of smoothed linear interpolation of traces (missing values dropped before 
+    interpolation).
+    """
+    arr = []
+    for _, row in df_traces.iterrows():
+        row = row.dropna()
+        xs = row.index.astype(float)
+        ys = row.values
+        xs_resamp = np.linspace(xs.min(), xs.max(), num_pts)
+
+        ys_resamp = np.interp(xs_resamp, xs, ys)
+        window = int(num_pts * (width / (xs.max() - xs.min())))
+        ys_resamp_smooth = np.convolve(ys_resamp, np.ones(window) / window, mode='same')
+        center = xs_resamp[np.argmax(ys_resamp_smooth)]
+        arr += [center]
+    return arr
 
 
 def calculate_wasserstein_distance(df_consensus, df_traces):
