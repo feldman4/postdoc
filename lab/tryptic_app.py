@@ -12,6 +12,7 @@ import os
 
 design_table = 'designs.csv'
 tryptic_table = 'tryptic_peptides.csv'
+prosit_input_table = 'prosit_input.csv'
 iRT_table = 'iRT.csv'
 predict_sh = 'predict.sh'
 
@@ -60,15 +61,25 @@ def digest_peptides(pattern='trypsin', pH=2, min_length=4, max_length=25):
 
 
 def predict_iRT():
+    """Prosit model is restricted to peptides of 7-30 amino acids.
+    """
+    peptides = pd.read_csv(tryptic_table)['peptide']
+    lengths = peptides.str.len()
+    keep = (7 <= lengths) & (lengths <= 30)
+    if not keep.all():
+        print(f'Predicting {keep.sum()} / {keep.shape[0]} peptides within 7-30 aa length range.')
+
+    peptides = peptides[keep]
+    peptides.to_csv(prosit_input_table)
+
     if os.path.exists(iRT_table):
         iRT_peptides = pd.read_csv(iRT_table)['sequence']
-        peptides = pd.read_csv(tryptic_table)['peptide']
         if peptides.isin(iRT_peptides).all():
             print(f'iRT values already available in {iRT_table}, skipping prediction')
             return
 
     app = '/home/dfeldman/packages/postdoc/scripts/app.sh'
-    cmd = f'{app} --env=prosit predict_iRT tryptic_peptides.csv --col=peptide > {iRT_table}'
+    cmd = f'{app} --env=prosit predict_iRT {prosit_input_table} --col=peptide > {iRT_table}'
     with open(predict_sh, 'w') as fh:
         fh.write(cmd)
 
