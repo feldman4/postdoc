@@ -567,13 +567,13 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
                              dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
-    :param filename: file with one line per command
+    :param filename: file with one line per command, or "stdin" to pipe in a command list
     :param array: submit as a task array with this many concurrent jobs (e.g., --array=5)
     :param name: sbatch job name (-J), defaults to `filename`
     :param queue: sbatch queue (-p)
     :param memory: sbatch memory (--mem)
     :param cpus: sbatch number of cpus (-c)
-    :param with_gpu: sbatch --gres=gpu:1 to request a GPU, defaults to true if using gpu queue
+    :param with_gpu: GPU type and count, such as "rtx2080:1" (default value if using gpu queue)
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
     :param dry_run: output command instead of submitting
@@ -591,7 +591,14 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
             name = 'stdin:' + first_word.split('/')[-1][:8]
     else:
         commands = pd.read_csv(filename, header=None)[0]
-    
+
+    commands = [x.strip() for x in commands]
+    commands = [x for x in commands if not x.startswith('#')]
+
+    if len(commands) == 0:
+        print('No commands to submit, exiting.', file=sys.stderr)
+        return
+        
     if name is None:
         name = os.path.basename(filename)
     clean_name = name.replace(':', '_')
@@ -607,12 +614,10 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
         if queue == 'gpu':
             print('Requested gpu queue but no GPUs, including 1 GPU by default', 
                   file=sys.stderr)
-            with_gpu = True
-        else:
-            with_gpu = False
-
-    if with_gpu:
-        gpu_flag = '--gres=gpu:1'
+            with_gpu = 'rtx2080:1'
+        
+    if with_gpu is not None:
+        gpu_flag = f'--gres=gpu:{with_gpu}'
     else:
         gpu_flag = ''
 
