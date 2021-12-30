@@ -2,6 +2,7 @@ import biotite.database.rcsb as rcsb
 from postdoc.pyrosetta import diy
 import gemmi
 import pandas as pd
+import os
 
 
 def loop_to_dataframe(loop):
@@ -121,3 +122,28 @@ def get_biounit_sequences(rcsb_id, biounit=1):
     rcsb_id = rcsb_id.lower()
     f = f'/databases/rcsb/biounits/{rcsb_id[1:3]}/{rcsb_id}.pdb{biounit}.gz'
     return diy.read_pdb_sequences(f)
+
+def export_complexes(df_chain_info):
+    """Split targets by complex, 
+    """
+
+    it = (df_chain_info
+    .query('seq != "?"')
+    .drop_duplicates(['rcsb', 'assembly_id', 'chain_assembly'])
+    .groupby(['rcsb', 'assembly_id', 'assembly_cif'])
+    )
+
+    for (rcsb, assembly_id, assembly_cif), df in it:
+        complex_counts = (df.sort_values('gene_symbol')
+            .groupby('gene_symbol').size().to_dict())
+        
+        complex_name = (
+            '_'.join(complex_counts.keys()) + '_' + 
+            '-'.join([str(x) for x in complex_counts.values()])
+        )
+        dst = f'by_complex/{complex_name}/{rcsb}_{assembly_id}.cif'
+        src = f'../../{assembly_cif}'
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if os.path.islink(dst):
+            os.remove(dst)
+        os.symlink(src, dst)
