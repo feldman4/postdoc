@@ -51,7 +51,7 @@ def parse_files(files, pat):
     return pd.DataFrame(arr)
 
 
-def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
+def main(*files, start='TACATATG|ATCATATG|TATACCATG', end='TAACTCGAGC|TGAGATCCG',
          output=None, summarize=True, 
          min_aa=None, max_aa=None,
          align=True, use_file_as_sample=False,
@@ -114,7 +114,9 @@ def main(*files, start='TACATATG|ATCATATG', end='TGAGATCCG',
         df_sequences.to_csv(result_table, index=False)
 
     if fake_fastq is not None:
-        os.makedirs(os.path.dirname(fake_fastq), exist_ok=True)
+        if not fake_fastq.endswith('.fastq') or fake_fastq.endswith('.fq'):
+            fake_fastq += '.fastq'
+        os.makedirs(os.path.dirname(os.path.abspath(fake_fastq)), exist_ok=True)
         records = df_sequences.dropna(subset=['dna_match'])[[sample_col, 'dna_match']].values
         write_fake_fastq(fake_fastq, records)
 
