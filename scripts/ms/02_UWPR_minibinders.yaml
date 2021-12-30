@@ -48,14 +48,45 @@ plot:
     job_size: 100
   barcode_stats:
     detected_cutoff: 5
+  stage_order: ['insoluble', 'soluble',' injection', 'SEC']
+
+# sec:
+#   volume_windows:
+#     aggregate: [10.3, 13.6]
+#     oligomer: [13.6, 16.6]
+#     monomer: [16.6, 19]
+#     # degraded: 
+#   export_gate: '3 <= num_barcodes <= 5 & mean_deviation_count < 0.25 & median_l1 < 3'
+#   deviation_threshold: 0.2
+
+
+
 
 sec:
-  volume_windows:
-    aggregate: [10.3, 13.6]
-    oligomer: [13.6, 16.6]
-    monomer: [16.6, 19]
-    # degraded: 
-  export_gate: '3 <= num_barcodes <= 5 & mean_deviation_count < 0.25 & median_l1 < 3'
-  deviation_threshold: 0.2
-
-
+  barcode:
+    # barcode measurements outside this gate are missing values in SEC traces
+    gate: stage == "SEC" & plot_barcode & 1e6 < area_ms1
+    intensity_metric: 'area_ms1'
+    # data points with higher 2nd derivative (diff, then convolve [-1, 1]) are removed
+    crap_threshold: 0.4
+  consensus:
+    # barcodes to include in consensus calculation
+    gate: max_consecutive_missing < 2 & num_missing < 4 & Y_count < 4 & not crap
+    method: 'median'
+    # parameters for consensus metrics
+    deviation_threshold: 0.02
+    volume_windows:
+      aggregate: [10.3, 13.6]
+      oligomer: [12.5, 15.5]
+      monomer: [16, 19]
+  rank_plots:
+    all:
+      gate: >- 
+         1 <= num_consensus_barcodes
+      sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
+      sort_descending: [monomer, oligomer, aggregate, median_l2]
+    multi:
+      gate: >- 
+         2 <= num_consensus_barcodes
+      sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
+      sort_descending: [monomer, oligomer, aggregate, median_l2]
