@@ -8,7 +8,8 @@ import pandas as pd
 from tqdm.auto import tqdm
 from .assembly import get_allowed_swaps, polish_snowflakes
 from .design import make_nterm_linker, make_cterm_linker
-from ..sequence import aa_to_dna_re, translate_dna, load_codons, reverse_complement
+from ..sequence import (aa_to_dna_re, translate_dna, load_codons, 
+                        reverse_complement, findone)
 from ..pyrosetta import diy
 from ..utils import DivPath, csv_frame, read_list, assert_unique
 
@@ -444,14 +445,6 @@ def get_component_dna(df, component, dna):
     for design, dna in tqdm(df[['design', 'CDS_dna']].values):
         arr += [findone(design, dna)]
     return arr
-
-
-def findone(aa, dna):
-    """Simple case of amino acid substring in in-frame DNA.
-    """
-    aa_ = translate_dna(dna)
-    i = aa_.index(aa)
-    return dna[i * 3:(i + len(aa)) * 3]
 
 
 def assert_one_to_one(values):
