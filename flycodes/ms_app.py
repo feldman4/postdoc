@@ -14,6 +14,7 @@ comet = '/home/dfeldman/.conda/envs/tpp/bin/comet'
 ms_app = '/home/dfeldman/packages/postdoc/scripts/ms_app.sh'
 tpp_dir = '/home/dfeldman/.conda/envs/tpp/bin/'
 openms_dir = '/home/dfeldman/.conda/envs/proteowizard/bin/'
+validation_sec_drive = 'MS barcoding shared/validation SEC'
 
 # local
 config_file = 'config.yaml'
@@ -91,7 +92,7 @@ def setup():
         setup_process_mzml()
         print('Run mzML calibration and comet search with bash command:')
         print(f'  /home/dfeldman/s/app.sh submit {command_list_process_mzml} '
-            '--cpus=10 --memory=16g')
+            '--cpus=10 --memory=32g')
 
     if 'dinosaur' in config:
         setup_dinosaur(df_samples, df_designs)
@@ -430,20 +431,10 @@ def load_dino_features(file_template=feature_output):
 def load_designs():
     """Merged to detected features based on `mz` and `iRT`.
     """
-    import pandas as pd
+    from postdoc.utils import load_yaml_table
     config = load_config()['designs']
-    cols = ['barcode', 'mz', 'iRT', 'design_name', 'pdb_file']
-    df = pd.read_csv(config['table'])
-    print(f'Loaded {len(df):,} designs from {config["table"]}')
-    if 'gate' in config:
-        df = df.query(config['gate'])
-        print(f'  Kept {len(df):,} passing gate: {config["gate"]}')
-    if 'drop_duplicates' in config:
-        df = df.drop_duplicates(config['drop_duplicates'])
-        print(f'  {len(df):,} after dropping duplicates on {config["drop_duplicates"]}')
-    if 'rename' in config:
-        df = df.rename(columns=config['rename'])
-    return df[cols]
+    cols = ['barcode', 'mz', 'iRT', 'design_name', 'pdb_file']    
+    return load_yaml_table(config, verbose=True)[cols]
 
 
 def validate_designs(df_designs):
@@ -1004,11 +995,10 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
     df_consensus_metrics = (pd.concat([l1, l2, 
         mean_wass_distance, mean_abs_distance, mean_deviation_count, integrate_fractions(df_consensus)
         ], axis=1)
-     .assign(peak_center=classify_sec.find_peaks(df_consensus))
+     .assign(peak_center=classify_sec.find_smoothed_peaks(df_consensus))
      .reset_index()
     )
     cols = ['design_name'] + [x for x in df_consensus_metrics if x != 'design_name']
-    print(df_consensus_metrics.set_index('design_name').loc['89e3bcfa67ec'])
     return df_consensus_metrics[cols]
 
 
@@ -1093,7 +1083,7 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
     os.makedirs(f'figures/{prefix}', exist_ok=True)
     if clear:
         files = glob(f'figures/{prefix}/*')
-        [os.remove(f) for f in files]
+        [os.remove(f) for f in files if os.path.islink(f)]
     designs = pd.Series(list(designs)).drop_duplicates()
     width = int(np.ceil(np.log10(len(designs))))
     rank_format = '{:0' + str(width) + 'd}'
@@ -1120,14 +1110,19 @@ def search_sec(df_chroma, *terms):
     return df_chroma
 
 
-def load_validation_sec():
+def load_validation_sec(limit=None):
     from postdoc.lab import akta_db
     from io import StringIO
     import pandas as pd
     from postdoc.drive import Drive
     
     drive = Drive()
-    df_sec = drive('MS barcoding shared/validation SEC', skiprows=1, dtype=str)
+    df_sec = drive(validation_sec_drive, skiprows=1, dtype=str)
+
+    n = df_sec.shape[0]
+    if limit is not None:
+        df_sec = df_sec.loc[lambda x: x['description'].str.contains(limit)]
+    print(f'Processing {n}/{df_sec.shape[0]} entries from {validation_sec_drive}')
 
     arr = []
     for search_0, df_block in df_sec.groupby('search_0'):
@@ -1136,7 +1131,8 @@ def load_validation_sec():
         if df_result.shape[0] == 0:
             raise ValueError(f'No match at row\n{df_block.iloc[0]}')
         for ix, row in df_block.iterrows():
-            df = (df_result.pipe(search_sec, row['search_1'])
+            terms = [] if pd.isnull(row['search_1']) else [row['search_1']]
+            df = (df_result.pipe(search_sec, *terms)
              .assign(sec_index=ix))
             n = df['ChromatogramID'].drop_duplicates().shape[0]
             if n == 0:
@@ -1187,12 +1183,15 @@ def overlay_validation_sec(uv_regex='230|260|280'):
     
     drive = Drive()
     df_sec = drive('MS barcoding shared/validation SEC', skiprows=1, dtype=str)
+    # grab UV data saved by export_validation_sec
     df_uv_data = csv_frame('*/uv_data.csv')
     df_uv_data = df_uv_data[df_uv_data['channel'].str.match(f'.*{uv_regex}.*')]
 
+    # load barcode SEC from these runs
     analysis_directories = {
         '01_UWPR_beta_barrels': '/projects/ms/analysis/01_UWPR_beta_barrels/process',
         '05_UWPR_rolls': '/projects/ms/analysis/05_UWPR_rolls/process',
+        '19_UWPR_CN162': '/projects/ms/analysis/19_UWPR_CN162/process',
     }
     traces = {}
     arr0, arr1, arr2 = [], [], []
@@ -1252,9 +1251,11 @@ def export_ms1(mzml_file, progress=lambda x: x):
     return load_mzml_to_ms1_dataframe(mzml_file, progress=progress)
 
 
-def validation_block():
+def validation_block(limit=None, uv_regex='230|260|280'):
+    """Export validation SEC data and plots for entries in MS barcoding shared/
+    """
     export_validation_sec()
-    overlay_validation_sec()
+    overlay_validation_sec(uv_regex=uv_regex)
 
 
 if __name__ == '__main__':
