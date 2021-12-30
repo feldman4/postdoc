@@ -104,6 +104,7 @@ def normalize_col_name(s):
         s = s.replace(' / ', '_per_')
         s = s.replace('/', '_per_')
         s = s.replace(' ', '_')
+        s = s.replace('-', '_')
         
     except AttributeError: # not a string
         pass
