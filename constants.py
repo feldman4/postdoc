@@ -34,6 +34,7 @@ biomart_columns = {'Gene stable ID': ENSG,
                    'NCBI gene ID': GENE_ID,
                    'NCBI gene (formerly Entrezgene) ID': GENE_ID,
                    'HGNC symbol': GENE_SYMBOL,
+                   'UniProtKB Gene Name ID': UNIPROTKB,
                   }
 
 PTHR = 'PTHR'
