@@ -223,15 +223,7 @@ def add_aa_counts(df, col='barcode'):
     return df
 
 
-def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 21)):
-
-    it = (df_summary
-     .dropna(subset=['num_ms_barcodes'])
-     [['design_name', 'dataset', 'export_name', 'description']].values
-    )
-
-    # for baseline normalization
-    v0, v1 = baseline_range
+def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 21), xlim=(8, 20)):
 
     def minmax(x):
         return (x - x.min()) / (x.max() - x.min())
@@ -248,6 +240,14 @@ def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 
         v0_, v1_ = X0.index.min(), X0.index.max()
         integrated = df['amplitude_0'].sum()
         return (df['amplitude_0'] / integrated) * (df_.shape[0] / X0.shape[0])
+
+    # for baseline normalization
+    v0, v1 = baseline_range
+
+    it = (df_summary
+     .dropna(subset=['num_ms_barcodes'])
+     [['design_name', 'dataset', 'export_name', 'description']].values
+    )
 
     for design_name, dataset, export_name, description in tqdm(list(it)):
         X0 = traces[(dataset, 'barcodes')].loc[design_name].T
@@ -285,6 +285,8 @@ def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 
         ax1.set_ylabel('raw amplitude')
         ax0.set_ylabel('normalized within pool range')
         ax0.set_title(f'{export_name}: {dataset}')
+        ax0.set_xlim(xlim)
+        ax1.set_xlim(xlim)
 
         ax0.legend().remove()
         ax0.legend(bbox_to_anchor=(1, 0, 1, 1), loc='upper left')
