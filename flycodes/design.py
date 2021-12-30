@@ -1067,5 +1067,5 @@ def add_barcode_metrics(df_barcodes, col='sequence'):
 
     from pyteomics import electrochem
     df['charge_pH7'] = df[col].apply(electrochem.charge, pH=7)
-
+    df['polyQ'] = df[col].str.contains('QQQQ')
     return df
