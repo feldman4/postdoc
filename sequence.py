@@ -64,6 +64,8 @@ def parse_fasta(txt):
 
 
 def write_fasta(filename, list_or_records):
+    if isinstance(list_or_records, pd.DataFrame) and list_or_records.shape[1] == 2:
+        list_or_records = list_or_records.values
     list_or_records = list(list_or_records)
     with open(filename, 'w') as fh:
         fh.write(format_fasta(list_or_records))
@@ -549,3 +551,9 @@ def digest_protein_fasta(filename, digest_pat='[R|K]'):
     return pd.DataFrame(arr)
 
 
+def findone(aa, dna):
+    """Simple case of amino acid substring in in-frame DNA.
+    """
+    aa_ = translate_dna(dna)
+    i = aa_.index(aa)
+    return dna[i * 3:(i + len(aa)) * 3]
