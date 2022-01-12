@@ -1,5 +1,6 @@
 import biotite.database.rcsb as rcsb
 from postdoc.pyrosetta import diy
+from postdoc.sequence import parse_fasta
 import gemmi
 import pandas as pd
 import os
@@ -93,7 +94,7 @@ def get_uniprot(uniprot):
     uniprot_fasta = f'https://www.uniprot.org/uniprot/{uniprot}.fasta'
     data = requests.get(uniprot_fasta)
     txt = ''.join([x.decode() for x in data])
-    name, uni_seq = postdoc.sequence.parse_fasta(txt)[0]
+    name, uni_seq = parse_fasta(txt)[0]
     return uni_seq
 
 def scrape_assembly_cif(cif_file):
