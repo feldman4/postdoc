@@ -4,6 +4,7 @@ import subprocess
 import pandas as pd
 from postdoc.utils import nglob, split_by_regex, cast_cols
 from postdoc.pyrosetta.diy import read_pdb_sequences
+from postdoc.sequence import read_fasta
 from pyteomics import electrochem
 from pyteomics.mass import fast_mass
 from tqdm.auto import tqdm
@@ -18,22 +19,40 @@ predict_sh = 'predict.sh'
 
 
 def setup_from_pdbs(search):
-    print('Loading designs from pdbs...')
     arr = []
     for f in tqdm(nglob(search)):
         seqs = read_pdb_sequences(f)
         assert len(set(seqs.values())) == 1
-        arr += [{'design_name': f.split('/')[-1], 'design': seqs['A'], 'pdb_file': f}]
+        arr += [{'design_name': f.split('/')[-1], 'design': seqs['A'], 'source_file': f}]
         
-    df_seqs = pd.DataFrame(arr)
-
+    df_seqs = pd.DataFrame(arr).pipe(drop_duplicate_designs)
     df_seqs.to_csv(design_table, index=None)
-
     print(f'Wrote {len(df_seqs)} designs to {design_table}')
 
 
+def setup_from_fasta(search):
+    arr = []
+    for f in nglob(search):
+        df = read_fasta(f, as_df=True)
+        df.columns = 'design_name', 'design'
+        df['source_file'] = f
+        arr += [df]
+    
+    df_seqs = pd.concat(arr).pipe(drop_duplicate_designs)
+    df_seqs.to_csv(design_table, index=None)
+    print(f'Wrote {len(df_seqs)} designs to {design_table}')
 
-def digest_peptides(pattern='trypsin', pH=2, min_length=4, max_length=25):
+
+def drop_duplicate_designs(df_seqs):
+    num_dupes = df_seqs['design'].duplicated().sum()
+    if num_dupes:
+        print(f'Dropping {len(num_dupes)} duplicate designs')
+    return df_seqs.drop_duplicates('design')
+
+
+def digest(pattern='trypsin', pH=2, min_length=4, max_length=25, missed_cleavages=0):
+    """Digest designs with indicated enzyme. 
+    """
     enzymes = {
         'trypsin': '[RK](?=[^P])'
     }
@@ -42,20 +61,25 @@ def digest_peptides(pattern='trypsin', pH=2, min_length=4, max_length=25):
     df_designs = pd.read_csv(design_table)
 
     arr = []
-    for pdb, design in df_designs[['pdb_file', 'design']].values:
+    for design in df_designs['design']:
         peptides = split_by_regex(pattern, design)
         for x in peptides:
-            arr.append({'peptide': x, 'pdb': pdb})
+            arr.append({'peptide': x, 'missed_cleavages': 0, 'design': design})
+        for i in range(1, missed_cleavages + 1):
+            for j in range(len(peptides) - i):
+                x = ''.join(peptides[j:j + i + 1])
+                arr.append({'peptide': x, 'missed_cleavages': i, 'design': design})
 
 
     df_peptides = pd.DataFrame(arr)
-    df_peptides['count'] = df_peptides.groupby('peptide')['pdb'].transform('size')
+    df_peptides['count'] = df_peptides.groupby('peptide')['design'].transform('size')
     df_peptides['electro_charge'] = df_peptides['peptide'].apply(electrochem.charge, pH=pH)
     df_peptides['mz_2'] = df_peptides['peptide'].apply(fast_mass, charge=2)
     df_peptides['peptide_length'] = df_peptides['peptide'].str.len()
     df_peptides = df_peptides.query('@min_length <= peptide_length <= @max_length')
 
-    df_peptides.to_csv(tryptic_table, index=None)
+    cols = [x for x in df_peptides.columns if x != 'design'] + ['design']
+    df_peptides[cols].to_csv(tryptic_table, index=None)
 
     print(f'Wrote {len(df_peptides)} peptides digested with {original_pattern} to {tryptic_table}')
 
@@ -64,10 +88,13 @@ def predict_iRT():
     """Prosit model is restricted to peptides of 7-30 amino acids.
     """
     peptides = pd.read_csv(tryptic_table)['peptide']
+    if peptides.duplicated().any():
+        print(f'Dropping {peptides.duplicated().sum()} duplicate peptides')
+        peptides = peptides.drop_duplicates()
     lengths = peptides.str.len()
     keep = (7 <= lengths) & (lengths <= 30)
     if not keep.all():
-        print(f'Predicting {keep.sum()} / {keep.shape[0]} peptides within 7-30 aa length range.')
+        print(f'Predicting {keep.sum()} / {keep.shape[0]} peptides within 7-30 aa length range')
 
     peptides = peptides[keep]
     peptides.to_csv(prosit_input_table)
@@ -131,13 +158,19 @@ if __name__ == '__main__':
 
     # order is preserved
     commands = [
-        'setup_from_pdbs',
-        'digest_peptides',
-        'predict_iRT',
-        'analyze_results',
+        '0.1_setup_from_pdbs',
+        '0.2_setup_from_fasta',
+        '1_digest',
+        '2_predict_iRT',
+        '3_analyze_results',
     ]
     # if the command name is different from the function name
     named = {
+        '0.1_setup_from_pdbs': setup_from_pdbs,
+        '0.2_setup_from_fasta': setup_from_fasta,
+        '1_digest': digest,
+        '2_predict_iRT': predict_iRT,
+        '3_analyze_results': analyze_results,
         }
 
     final = {}
