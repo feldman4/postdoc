@@ -41,7 +41,7 @@ iupac = {'A': ['A'],
 
 codon_maps = {}
 
-def read_fasta(f):
+def read_fasta(f, as_df=False):
     if f.endswith('gz'):
         fh = gzip.open(f)
         txt = fh.read().decode()
@@ -49,8 +49,11 @@ def read_fasta(f):
         fh = open(f, 'r')
         txt = fh.read()
     fh.close()
-    return parse_fasta(txt)
-
+    records = parse_fasta(txt)
+    if as_df:
+        return pd.DataFrame(records, columns=('name', 'seq'))
+    else:
+        return records
 
 def parse_fasta(txt):
     entries = []
