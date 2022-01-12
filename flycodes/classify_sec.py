@@ -199,8 +199,13 @@ def find_smoothed_peaks(df_traces, width=1, num_pts=1000):
         row = row.dropna()
         xs = row.index.astype(float)
         ys = row.values
-        xs_resamp = np.linspace(xs.min(), xs.max(), num_pts)
 
+        # if there's just one valid data point, call it the center
+        if xs.max() == xs.min():
+            arr += [xs.max()]
+            continue
+
+        xs_resamp = np.linspace(xs.min(), xs.max(), num_pts)
         ys_resamp = np.interp(xs_resamp, xs, ys)
         window = int(num_pts * (width / (xs.max() - xs.min())))
         ys_resamp_smooth = np.convolve(ys_resamp, np.ones(window) / window, mode='same')
