@@ -691,9 +691,11 @@ def add_gates(df, exist_ok=False, **gates):
         df = df.assign(**{name: df.eval(gate)})
     return df
 
-def force_symlink(src, dst):
+def force_symlink(src, dst=None):
     """Same as ln -sf {src} {dst}
     """
+    if dst is None:
+        dst = os.path.basename(src)
     if os.path.islink(dst):
         os.remove(dst)
     os.symlink(src, dst)
