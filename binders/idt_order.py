@@ -11,11 +11,15 @@ from slugify import slugify
 
 parts_table = 'parts.csv'
 binder_table = 'binders.csv'
+target_table = 'targets.csv'
 feature_table = 'features.csv'
+template_table = 'templates.csv'
 sites_to_avoid = 'reverse_translations/sites_to_avoid.csv'
 rt_input_fasta = 'reverse_translations/input.fa'
 rt_output_fasta = 'reverse_translations/output.fa'
-idt_scores = 'reverse_translations/idt_scores.csv'
+idt_rt_scores = 'reverse_translations/idt_scores.csv'
+idt_order_fasta = 'idt_order.fa'
+idt_order_scores = 'idt_order_scores.csv'
 
 always_avoid = '6xA', '5xG'
 # queries against endpoint https://www.idtdna.com/api/complexities/screengBlockSequences
@@ -31,42 +35,50 @@ def download_tables():
     drive = Drive()
     drive('IS receptor trapping/parts').to_csv(parts_table, index=None)
     drive('IS receptor trapping/binders').to_csv(binder_table, index=None)
+    drive('IS receptor trapping/targets').to_csv(target_table, index=None)
     drive('IS receptor trapping/features').to_csv(feature_table, index=None)
+    drive('IS receptor trapping/templates').to_csv(template_table, index=None)
 
 
 def prepare_reverse_translation():
     """Write input fasta and list of restriction sites to avoid.
     """
-    df_parts = pd.read_csv(parts_table)
-    df_binders = pd.read_csv(binder_table)
-    df = pd.concat([df_binders, df_parts]).dropna(subset=['aa', 'dna'], how='all')
-
+    df_features = pd.read_csv(feature_table)
+    
     # reverse_translations
-    needs_rt = df.query('dna != dna')
+    needs_rt = load_part_tables().query('dna != dna')
     write_fasta(rt_input_fasta, needs_rt[['name', 'aa']])
 
     # enzyme white list
-    white_list_names = df_parts['white_list'].dropna()
-    white_list = [getattr(Bio.Restriction, x).site for x in white_list_names]
-
-    (df_parts['white_list'].dropna().rename('enzyme').pipe(pd.DataFrame)
+    (df_features['white_list'].dropna().rename('enzyme').pipe(pd.DataFrame)
     .assign(site=lambda x: x['enzyme'].apply(
         lambda y: getattr(Bio.Restriction, y).site))
     .to_csv(sites_to_avoid, index=None)
     )
 
 
-def do_reverse_translations():
+def do_reverse_translations(skip_existing=False):
     """Use DNA Chisel to codon optimize with constraints. Save to fasta and individual genbanks 
     with DNA Chisel annotations.
     """
     df_seqs = pd.DataFrame(read_fasta(rt_input_fasta), columns=('name', 'aa_seq'))
     df_sites = pd.read_csv(sites_to_avoid)
     
+    if skip_existing:
+        if not os.path.exists(rt_output_fasta):
+            skip_existing = False
+        else:
+            existing = dict(read_fasta(rt_output_fasta))
+            existing_aa = {k: translate_dna(v) for k,v in existing.items()}
+        
     avoid = list(always_avoid) + list(df_sites['site'])
     clean_name = lambda x: slugify(x, lowercase=False, separator='_')
     arr = []
     for name, aa_seq in tqdm(df_seqs.values):
+        if skip_existing and existing_aa.get(name) == aa_seq:
+            arr += [existing[name]]
+            continue
+
         clean = clean_name(name)
         problem = dnachisel_rt(aa_seq, avoid)
         problem.to_record(filepath=f'reverse_translations/dna_chisel/{clean}.gb', 
@@ -83,6 +95,19 @@ def do_reverse_translations():
     write_fasta(rt_output_fasta, df_seqs[['name', 'dna_seq']])
 
 
+def check_idt_order():
+    """Use domesticator3 to query IDT API for gblock complexity scores.
+    """
+    cmd = [domesticator_idt, idt_order_fasta]
+    output = subprocess.check_output(cmd)
+    df_scores = pd.Series(output.decode().strip().split('\n')).str.split(' ', expand=True)
+    df_scores.columns = 'short_name', 'dna_seq', 'score'
+    df_seqs = (pd.DataFrame(read_fasta(rt_output_fasta), columns=('name', 'dna_seq'))
+     .merge(df_scores, how='left')
+    )
+    df_seqs[['name', 'score']].to_csv(idt_rt_scores, index=None)
+
+
 def check_reverse_translations():
     """Use domesticator3 to query IDT API for gblock complexity scores.
     """
@@ -93,21 +118,28 @@ def check_reverse_translations():
     df_seqs = (pd.DataFrame(read_fasta(rt_output_fasta), columns=('name', 'dna_seq'))
      .merge(df_scores, how='left')
     )
-    df_seqs[['name', 'score']].to_csv(idt_scores, index=None)
+    df_seqs[['name', 'score']].to_csv(idt_order_scores, index=None)
 
 
-def generate_vectors():
+def generate_vectors(gate=None):
     """Fill in templates from parts table with original or reverse-translated DNA. Save to genbank,
     annotating template fields and entries from the feature table.
     """
     from Bio import SeqIO
     df_parts = pd.read_csv(parts_table)
-    df_features = pd.read_csv(feature_table)
+    df_templates = pd.read_csv(template_table)
+    df_features = pd.read_csv(feature_table)[['name', 'dna_seq']]
 
+    gate = 'ilevel_0 in ilevel_0' if gate is None else gate
     parts = load_dna_parts()
-    df_vectors = df_parts[['construct', 'template']].dropna()
+    df_vectors = df_templates.query(gate)[['construct', 'template']].dropna()
+    parts_no_up_down = {k: v if 'up' not in k and 'down' not in k else '' 
+                            for k, v in parts.items()}
+    arr = []
     for name, template in df_vectors.values:
         record, features = create_genbank(name, template, parts)
+        idt_dna = str(create_genbank(name, template, parts_no_up_down)[0].seq)
+        arr += [(name, idt_dna)]
         record = add_features(record, df_features.values)
         f = f'vectors/{name}.gb'
         with open(f, 'w') as fh:
@@ -115,10 +147,33 @@ def generate_vectors():
             dna = record.seq
             print(f'Wrote {len(dna):,} nt ({len(record.features)} features) to {f}')
 
+    write_fasta(idt_order_fasta, arr)
+    lengths = [len(x[1]) for x in arr]
+    total = sum(lengths) / 1000
+    longest = max(lengths) / 1000
+    print(f'Wrote {total:.1f} kb (longest gene is {longest:.1f} kb) to {idt_order_fasta}')
+
+
+def split_order(cutoff=3000):
+    less, more = [], []
+    for name, seq in read_fasta(idt_order_fasta):
+        if len(seq) >= cutoff:
+            more += [(name, seq)]
+        else:
+            less += [(name, seq)]
+    base = os.path.splitext(idt_order_fasta)[0]
+
+    write_fasta(f'{base}_gte_{cutoff}.fa', more)
+    write_fasta(f'{base}_lt_{cutoff}.fa', less)
+
+
+
 
 def dnachisel_rt(aa_seq, avoid, k=6, species='h_sapiens', logger=None, seed=0):
     """Use DNA Chisel to reverse translate a protein coding sequence. Optimize for best codons while
     avoiding restriction sites and controlling GC content and kmer diversity for synthesis.
+
+    Set `logger='bar'` to see progress.
     """
     np.random.seed(seed)
     # default seed is the input itself
@@ -159,6 +214,7 @@ def create_genbank(name, template, parts, topology='circular'):
     from Bio.Alphabet import IUPAC
     from Bio.SeqFeature import SeqFeature, FeatureLocation
     
+    parts = dict(parts)
     dna = template.format(**parts)
     keys = template.replace('{', '').split('}')[:-1]
     features = {x: parts[x] for x in keys}
@@ -169,7 +225,9 @@ def create_genbank(name, template, parts, topology='circular'):
     arr = []
     for key in keys:
         n = len(parts[key])
-        arr += [SeqFeature(FeatureLocation(start=i, end=i+n), type=key)]
+        location = FeatureLocation(start=i, end=i+n, strand=1)
+        arr += [SeqFeature(location, type='from_template',
+                           qualifiers=dict(label=key))]
         i += n
 
     record = SeqRecord(Seq(dna, IUPAC.unambiguous_dna), name=name)
@@ -179,15 +237,21 @@ def create_genbank(name, template, parts, topology='circular'):
     return record, features
 
 
-def load_dna_parts():
+def load_part_tables():
     df_parts = pd.read_csv(parts_table)
     df_binders = pd.read_csv(binder_table)
+    df_targets = pd.read_csv(target_table)
+    sources = [df_binders, df_parts, df_targets]
 
+    return pd.concat(sources).dropna(subset=['aa', 'dna'], how='all')
+
+
+def load_dna_parts():
+    df_parts = load_part_tables()
     translations = {translate_dna(x): x for _,x in read_fasta(rt_output_fasta)}
 
-    df = pd.concat([df_binders, df_parts]).dropna(subset=['aa', 'dna'], how='all')
     parts = {}
-    for name, aa, dna in df[['name', 'aa', 'dna']].values:
+    for name, aa, dna in df_parts[['name', 'aa', 'dna']].values:
         if pd.isnull(dna):
             parts[name] = translations[aa]
         else:
@@ -204,8 +268,9 @@ def add_features(record, features):
 
     n = len(vector)
 
+    features = dict(features)
     arr = []
-    for name, feature in features:
+    for name, feature in features.items():
         feature = feature.upper()
         m = len(feature)
 
