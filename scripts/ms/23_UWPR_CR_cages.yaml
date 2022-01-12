@@ -61,7 +61,7 @@ sec:
     gate: num_missing < 7
     method: 'median'
     # parameters for consensus metrics
-    deviation_threshold: 0.02
+    deviation_threshold: 0.05
     volume_windows:
       aggregate: [8, 11]
       cage: [11, 14]
