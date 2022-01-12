@@ -77,9 +77,14 @@ def setup():
     df_designs = load_designs()
     num_designs = df_designs.shape[0]
     validate_designs(df_designs).to_csv(design_table, index=None)
-    write_barcode_fa(df_designs)
     print(f'  Wrote design info to {design_table}')
-    print(f'  Wrote fasta reference (concatenated barcodes) to {barcodes_by_design}')
+    try:
+        f = config['designs']['design_barcode_fasta']
+        shutil.copy(f, barcodes_by_design)
+        print(f'  Copied fasta reference to {barcodes_by_design}')
+    except KeyError:
+        write_barcode_fa(df_designs)
+        print(f'  Wrote fasta reference (concatenated barcodes) to {barcodes_by_design}')
 
 
     if 'convert_raw' in config:
@@ -281,6 +286,11 @@ def format_dinosaur_command(executable, options, filters, advParams, targets):
         cmd = (f'{cmd} --targets=targets.tsv '
                 '--targetPreference=intensity --reportTargets')
     return cmd
+
+
+def format_openms_commands():
+    # TODO: implement?
+    pass
 
 
 def write_openms_dinosaur_commands(samples, dino_base):
@@ -581,7 +591,10 @@ def load_skyline_intensities():
     .pipe(update_intensities)
     )
 
-    assert df_sky.shape[0] == df_sky_raw.shape[0]
+    dropped = df_sky_raw.shape[0] - df_sky.shape[0]
+    if dropped:
+        print(f'WARNING!!! Dropped {dropped} entries after merging with barcode and sample info')
+
     df_sky = df_sky.query('area_ms1 > 0')
     df_sky.to_csv(intensities_table, index=None)
     
@@ -1097,6 +1110,34 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
         os.symlink(src, dst)
 
 
+def link_plots():
+    import pandas as pd
+    # load results of analyze_sec
+    df_consensus_metrics = pd.read_csv(sec_consensus_metrics_table).set_index('design_name')
+
+    config = load_config()['sec']['rank_plots']
+
+
+    for prefix, info in config.items():
+        df = df_consensus_metrics.query(info['gate'])
+        if len(df) == 0:
+            print(f'No designs passed gate for {prefix}!!')
+            continue
+        for metric in info['sort_ascending']:
+            (df.sort_values(metric)
+            .pipe(create_plot_links,
+                prefix=f'{prefix}/{metric}',
+                source='figures/by_design', clear=True)
+            )
+
+        for metric in info['sort_descending']:
+            (df.sort_values(metric, ascending=False)
+            .pipe(create_plot_links,
+                prefix=f'{prefix}/{metric}',
+                source='figures/by_design', clear=True)
+            )
+
+
 def print(*args, file=sys.stderr, **kwargs):
     from builtins import print
     print(*args, file=file, **kwargs)
@@ -1274,7 +1315,7 @@ if __name__ == '__main__':
         'plot_barcode_coverage', # TOF and skyline
         'export_validation_sec',
         'overlay_validation_sec',
-        
+        'link_plots',
     ]
     # if the command name is different from the function name
     named = {
