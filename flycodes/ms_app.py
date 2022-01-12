@@ -1076,7 +1076,7 @@ def plot_one_design2(df_intensities):
     return fig
 
 
-def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=False):
+def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=False, no_broken=True):
     """Create symlinks to images in figures/by_design at location
      `figures/{prefix}/{design_rank}_{design_name}.png`. Duplicate designs are dropped.
     """
@@ -1094,6 +1094,7 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
 
     prefix = str(prefix)
     os.makedirs(f'figures/{prefix}', exist_ok=True)
+    broken = set()
     if clear:
         files = glob(f'figures/{prefix}/*')
         [os.remove(f) for f in files if os.path.islink(f)]
@@ -1101,6 +1102,11 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
     width = int(np.ceil(np.log10(len(designs))))
     rank_format = '{:0' + str(width) + 'd}'
     for i, design in enumerate(designs):
+        original = f'{source}/{design}.png'
+        if not os.path.exists(original):
+            broken.add(original)
+            if no_broken:
+                continue
         rank = rank_format.format(i)
         dst = f'figures/{prefix}/{rank}_{design}.png'
         depth = os.path.normpath(dst).count('/')
@@ -1108,34 +1114,39 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
         if os.path.islink(dst):
             os.remove(dst)
         os.symlink(src, dst)
+    return broken
 
 
-def link_plots():
+def link_plots(clear=True, no_broken=True):
     import pandas as pd
     # load results of analyze_sec
     df_consensus_metrics = pd.read_csv(sec_consensus_metrics_table).set_index('design_name')
 
     config = load_config()['sec']['rank_plots']
 
-
+    broken = set()
     for prefix, info in config.items():
         df = df_consensus_metrics.query(info['gate'])
         if len(df) == 0:
             print(f'No designs passed gate for {prefix}!!')
             continue
         for metric in info['sort_ascending']:
-            (df.sort_values(metric)
+            broken |= (df.sort_values(metric)
             .pipe(create_plot_links,
                 prefix=f'{prefix}/{metric}',
-                source='figures/by_design', clear=True)
+                  source='figures/by_design', clear=clear, no_broken=no_broken)
             )
 
         for metric in info['sort_descending']:
-            (df.sort_values(metric, ascending=False)
+            broken |= (df.sort_values(metric, ascending=False)
             .pipe(create_plot_links,
                 prefix=f'{prefix}/{metric}',
-                source='figures/by_design', clear=True)
+                  source='figures/by_design', clear=clear, no_broken=no_broken)
             )
+    if no_broken:
+        print(f'Skipped {len(broken)} broken links')
+    else:
+        print(f'Included {len(broken)} broken links (use --no-broken to skip).')
 
 
 def print(*args, file=sys.stderr, **kwargs):
