@@ -109,7 +109,7 @@ def format_fasta(list_or_records):
     
     lines = []
     for name, seq in records:
-        lines.extend([f'>{name}', seq])
+        lines.extend([f'>{name}', str(seq)])
     return '\n'.join(lines)
 
 
