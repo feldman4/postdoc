@@ -8,9 +8,6 @@ fetch:
 
 layout:
   cterm_DK: [design, spacer, linker, K, barcode]
-  nterm_padded: [spacer, R, barcode, linker, design]
-  nterm_CN: [R, barcode, spacer, linker, design]
-  nterm_CN_stop_control: [R, barcode, spacer, linker, triple_stop, design]
   parts:
     spacer: 
       aa: GSSGSGSSGSGSSGSGSSG
