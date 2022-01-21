@@ -13,11 +13,12 @@ from tqdm.auto import tqdm
 import yaml
 
 from postdoc.pyrosetta import diy
-from postdoc.sequence import read_fasta, parse_fasta, translate_dna
+from postdoc.sequence import read_fasta, write_fasta, translate_dna, try_translate_dna
 from postdoc.sequence import reverse_complement as rc
 from postdoc.sequence import reverse_translate_random, reverse_translate_max
 from postdoc.utils import (
-    hash_set, approx_max_clique, csv_frame, gb_apply_parallel, assert_unique, expand_repeats)
+    hash_set, approx_max_clique, csv_frame, gb_apply_parallel, assert_unique, 
+    expand_repeats, split_by_regex)
 from postdoc.flycodes.pool2 import remove_restriction_sites, findone
 from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.pool2 import remove_restriction_sites
@@ -34,6 +35,7 @@ input_rt_dir = 'input/reverse_translations'
 dnaworks_input = 'process/DNAworks/DNA_input.list'
 dnaworks_output = 'process/DNAworks/DNA_sequence.list'
 reverse_translation_table = 'process/reverse_translations.csv'
+missing_rt_fasta = 'process/missing_rt.fa'
 
 # designs assigned to pool 
 chip_designs_table = 'process/1_chip_designs.csv'
@@ -61,7 +63,7 @@ FINAL_DESIGNS_COLS = [
     'library', 'pool',
     'barcode', 'design_name', 'design',
     'source', 'source_file', 'design_name_original', 
-    'assembly_dna', 'assembly_parts',
+    'assembly', 'assembly_dna', 'assembly_parts',
 ]
 # matches are added
 FINAL_DESIGNS_COLS_REGEX = '^overlap$|^part_*'
@@ -99,6 +101,17 @@ def generate_assemblies():
     .assign(design=lambda x: x['design_dna'].apply(translate_dna))
     .set_index('design')['design_dna'].to_dict()
     )
+
+    missing_rt = list(set(df_chip_designs['design']) - set(design_dna_map))
+    if missing_rt:
+        df = (df_chip_designs
+         .query('design == @missing_rt')
+         .drop_duplicates('design')
+         .pipe(lambda x: write_fasta(missing_rt_fasta, x[['design_name', 'design']]))
+        )
+        msg = (f'Missing reverse translations for {len(missing_rt)} designs; '
+                f'wrote them to {missing_rt_fasta}')
+        raise ValueError(msg)
 
     # expand chip design table to one row per barcoded design
     # assign barcodes so the maximum design + barcode length within a pool is as small as possible 
@@ -301,7 +314,7 @@ def assign_barcodes(df_chip_designs, df_barcodes, plot=True):
 
 
 def create_assembly_dna(df_assemblies, design_dna_map):
-    def do_rt(seq, info, design, organism):
+    def do_rt(seq, info, organism):
         if info['reverse_translation'] == 'random':
             return reverse_translate_random(seq, organism=organism)
         elif info['reverse_translation'] == 'max':
@@ -314,7 +327,7 @@ def create_assembly_dna(df_assemblies, design_dna_map):
     arr_ = []
     it = df_assemblies[['layout', 'design', 'barcode', 
                         'spacer_length', 'organism']].values
-    for layout, design, barcode, spacer_length, organism in it:
+    for layout, design, barcode, spacer_length, organism in tqdm(it):
         parts = config[layout]
         seq = ''
         added = []
@@ -334,9 +347,9 @@ def create_assembly_dna(df_assemblies, design_dna_map):
                     s = info['aa'][:spacer_length]
                 elif info['expand_from'] == 'right':
                     s = info['aa'][-spacer_length:]
-                dna = do_rt(s, info, design, organism)
+                dna = do_rt(s, info, organism)
             elif 'aa' in info:
-                dna = do_rt(info['aa'], info, design, organism)
+                dna = do_rt(info['aa'], info, organism)
             else:
                 dna = info['dna']
             seq += dna
@@ -407,39 +420,13 @@ def create_directories():
 
 def fake_reverse_translate():
     from postdoc.sequence import reverse_translate_random, write_fasta
-    (pd.read_csv(chip_designs_table)
+    df = (pd.read_csv(chip_designs_table)
      .assign(design_dna=lambda x: 
-       x['design'].apply(reverse_translate_random, seed='input'))
-     .pipe(lambda x: write_fasta(f'{input_rt_dir}/fake.fa', 
-                                 x[['design', 'design_dna']].values))
+       x['design'].apply(reverse_translate_random))
     )
-
-
-def prepare_DNAworks():
-    df_chip_designs = pd.read_csv(chip_designs_table)
-
-    seq_list = os.path.abspath(dnaworks_input)
-
-    d = 'process/DNAworks'
-    os.makedirs(d, exist_ok=True)
-    [os.remove(f) for f in glob(d + '/*')]
-    
-    (csv_frame('process/*DNAworks*csv')
-    [['cds_name', 'cds']]
-     .to_csv(seq_list, header=None, index=None, sep='\t')
-    )
-
-    script = 'python2 /home/longxing/bin/DNAWorks/1_reverse_translate.py'
-    cmd = f'{script} -seq_list {seq_list} -organism ecoli'
-    print(cmd)
-    subprocess.run(cmd, cwd=d, shell=True)
-
-    print(f"""DNAworks steps
-    1. submit: sh {os.path.abspath('process/DNAworks/submition_commands.list')}
-    2. monitor: watch sq
-    3. collect: python2 /home/longxing/bin/DNAWorks/2_collect_dnaseq.py
-    4. verify: python /home/longxing/bin/DNAWorks/3_check_seq.py DNA_sequence.list
-    """)
+    f = f'{input_rt_dir}/fake.fa'
+    write_fasta(f, df[['design', 'design_dna']].values)
+    print(f'Wrote {df.shape[0]} random reverse translations to {f}')
 
 
 def fetch_tables():
@@ -468,6 +455,9 @@ def fetch_tables():
 
 
 def parse_source_file(f):
+    """Load sequence from a pdb or multiple sequences from a protein fasta file. The pdb 
+    must contain only one unique chain.
+    """
     info = {'source_file': f, 'source': f.split('/')[1]}
     if f.endswith('.pdb'):
         values = list(read_pdb_sequences(f).values())
@@ -625,19 +615,6 @@ def collect_reverse_translations():
     (df_rt[['design_dna', 'rt_source_file']]
     .to_csv(reverse_translation_table, index=None)
     )
-
-
-def load_input_designs():
-    # load pdbs in each {source} dir mentioned in subpools
-    # concatenate protein fasta files from {source}
-    pdb_files = glob('input/*/*pdb')
-    arr = []
-    for f in pdb_files:
-        _, source, pdb_file = f.split('/')
-        seq = read_pdb_sequences(f)['A']
-        arr += [{'source': source, 'pdb_file': pdb_file, 'design': seq}]
-
-    pd.DataFrame(arr).to_csv(input_table, index=None)
 
 
 def load_barcode_sets():
@@ -1025,6 +1002,7 @@ def export_oligos():
     print(f'Exported {len(df_oligos):,} oligos to table {oligo_table}')
 
     cols = FINAL_DESIGNS_COLS + list(df_final.filter(regex=FINAL_DESIGNS_COLS_REGEX))
+    df_final['assembly'] = df_final['assembly_dna'].apply(try_translate_dna)
     df_final[cols].to_csv(final_design_table, index=None)
     print(f'Exported {len(df_final):,} barcoded designs to {final_design_table}')
     
@@ -1053,6 +1031,36 @@ def export_oligos():
         fh.write(txt)
     txt = '\n'.join('  ' + line for line in txt.split('\n'))
     print(txt)
+
+
+def find_orfs(seq):
+    """Find open reading frames in circular DNA sequence.
+    """
+    plasmid = str(seq)
+    pat = '(ATG(?:...)*?)(?:TAA|TAG|TGA)'
+    orfs = [translate_dna(x) for x in re.findall(pat, plasmid + plasmid)]
+    orfs += [translate_dna(x) for x in re.findall(pat, rc(plasmid + plasmid))]
+    return orfs
+
+
+def purified_peptides(protein, his_tag='HHH'):
+    """Return peptides purified after Lys-C digest => His pulldown => trypsin digest.
+    """
+    # lys-c
+    on_beads = [x for x in split_by_regex('K', protein) if his_tag in x]
+    # trypsin
+    off_beads = sum([split_by_regex('R|K', x) for x in on_beads], [])
+    off_beads = [x for x in off_beads if his_tag not in x]
+
+    return off_beads
+
+
+def express_and_purify(plasmid):
+    arr = []
+    for orf in find_orfs(plasmid):
+        for peptide in purified_peptides(orf):
+            arr += [(peptide, orf)]
+    return pd.DataFrame(arr, columns=('peptide', 'protein'))
 
 
 def collect_subdirectory_tables():
@@ -1119,6 +1127,7 @@ if __name__ == '__main__':
         'load_barcode_sets',
         'setup_reverse_translations',
         'collect_reverse_translations',
+        'fake_reverse_translate',
         'summarize_lengths',
         'create_overlap_commands',
         'reconcile_assemblies',
