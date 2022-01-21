@@ -19,6 +19,9 @@ import pandas as pd
 from natsort import natsorted
 from tqdm.auto import tqdm
 
+import parse
+from string import Formatter
+
 
 def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
     stamp = time.strftime(fmt)
@@ -32,19 +35,14 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
         return stamp
 
 
-def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None, sort=True, 
-              include_cols=None, exclude_cols=None, keep_index=False, ignore_missing=True, **kwargs):
+def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None,  
+              include_cols=None, exclude_cols=None, 
+              join='outer', ignore_missing=True, ignore_index=True, 
+              sort=False, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
 
     TODO:
-    from parse import parse
-    from string import Formatter
-    search = '/projects/ms/analysis/{dataset}/process/sec_barcode_metrics.csv'
-    fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
-    search_glob = search.format(**{x: '*' for x in fieldnames})
-    files = nglob(search_glob)
-    pd.concat([pd.read_csv(f).assign(**parse(search, f).named) for f in files])
     """
     
     def read_csv(f):
@@ -74,19 +72,25 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
                 df[add_file] = first
         return df
     
+    # set up `files` and `extra_fields` depending on if `files_or_search` is a list, format string,
+    # or regular glob string
+    extra_fields = {}
     if isinstance(files_or_search, str):
-        files = natsorted(glob(files_or_search))
+        if '{' in files_or_search:
+            search = files_or_search
+            fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
+            search_glob = search.format(**{x: '*' for x in fieldnames})
+            files = nglob(search_glob)
+            extra_fields.update({f: parse.parse(search, f).named for f in files})
+        else:
+            files = natsorted(glob(files_or_search))
     else:
         files = files_or_search
-
-    if ignore_missing:
-        files = [f for f in files if os.path.exists(f)]
+        if ignore_missing:
+            files = [f for f in files if os.path.exists(f)]
         
-    df = pd.concat([read_csv(f) for f in progress(files)], sort=sort)
-    if keep_index:
-        return df
-    else:
-        return df.reset_index(drop=True)
+    arr = [read_csv(f).assign(**extra_fields.get(f, {})) for f in progress(files)]
+    return pd.concat(arr, ignore_index=ignore_index, sort=sort)
 
 
 def read_list(filename):
@@ -171,8 +175,6 @@ def codify(df, as_codes=True, sort=False, nsort=False, ordered=True, **kwargs):
 
 
 def ls_df(search):
-    from string import Formatter
-    import parse
     wc = ''
     for subs, _, _, _ in Formatter().parse(search):
         wc += subs + '*'
