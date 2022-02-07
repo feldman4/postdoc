@@ -371,7 +371,7 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     num_unique = len(df_matches)
     msg = (f'Loaded sample {row["sample"]}, '
            f'mapping {num_unique:,} unique reads ({num_reads:,} with >= {min_counts} reads; '
-           f'{total_with_adapters:,} reads with adapters; {total_assembled} reads assembled)')
+           f'{total_with_adapters:,} reads with adapters; {total_assembled:,} reads assembled)')
     print(msg)
     
     df_matches = annotate_inserts(df_matches, df_designs)
@@ -410,17 +410,17 @@ def stats(*matched_tables):
         num_no_stop = df.query('~insert_has_stop & ~insert_out_of_frame')[COUNT].sum()
         num_exact = df.query('insert_distance == 0')[COUNT].sum()
         num_exact_dna = df.query('insert_dna_distance == 0')[COUNT].sum()
-        r = lambda x: np.round(x, 4)
+        d = lambda a, b: np.round(a / b, 4) if b > 0 else 0
         info = {
             SAMPLE: sample,
             'total_reads': num_reads,
-            'fraction_assembled': r(num_assembled/num_reads),
-            'fraction_with_adapters': r(num_with_adapters/num_assembled),
-            'fraction_over_min_count': r(num_over_min/num_with_adapters),
-            'fraction_in_frame': r(num_in_frame/num_over_min),
-            'fraction_no_stop': r(num_no_stop/num_in_frame),
-            'fraction_exact_mapped': r(num_exact/num_no_stop),
-            'fraction_exact_dna_mapped': r(num_exact_dna/num_exact),
+            'fraction_assembled': d(num_assembled, num_reads),
+            'fraction_with_adapters': d(num_with_adapters, num_assembled),
+            'fraction_over_min_count': d(num_over_min, num_with_adapters),
+            'fraction_in_frame': d(num_in_frame, num_over_min),
+            'fraction_no_stop': d(num_no_stop, num_in_frame),
+            'fraction_exact_mapped': d(num_exact, num_no_stop),
+            'fraction_exact_dna_mapped': d(num_exact_dna, num_exact),
         }
         
         
