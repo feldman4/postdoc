@@ -2,7 +2,7 @@ from .imports import *
 
 from .scripts import app
 from .sequence import print_alignment, translate_dna, try_translate_dna
-from .sequence import read_fasta, read_fastq, write_fasta
+from .sequence import read_fasta, read_fastq, write_fasta, fasta_frame
 from .utils import ls_df
 
 from .sequence import reverse_complement as rc
