@@ -2,13 +2,16 @@
 """
 from ..imports import *
 from ..drive import Drive
+from ..utils import load_yaml_table, assert_unique
 from ..sequence import read_fasta, write_fasta, translate_dna, reverse_translate_random
 from ..sequence import reverse_complement as rc
 
 import dnachisel as dc
 import Bio.Restriction
 from slugify import slugify
+import yaml
 
+config_file = 'config.yaml'
 parts_table = 'parts.csv'
 binder_table = 'binders.csv'
 target_table = 'targets.csv'
@@ -31,7 +34,7 @@ def setup():
     os.makedirs('vectors', exist_ok=True)
 
 
-def download_tables():
+def download_trapping_tables():
     drive = Drive()
     drive('IS receptor trapping/parts').to_csv(parts_table, index=None)
     drive('IS receptor trapping/binders').to_csv(binder_table, index=None)
@@ -40,21 +43,47 @@ def download_tables():
     drive('IS receptor trapping/templates').to_csv(template_table, index=None)
 
 
-def prepare_reverse_translation():
+def load_config():
+    with open(config_file, 'r') as fh:
+        return yaml.safe_load(fh)
+
+
+def download_tables():
+    c = load_config()['tables']
+    load_yaml_table(c['parts']).to_csv(parts_table, index=None)
+    (load_yaml_table(c['features'])
+     .pipe(convert_benchling_features)
+     .to_csv(feature_table, index=None)
+    )
+    load_yaml_table(c['templates']).to_csv(template_table, index=None)
+    (load_yaml_table(c['restriction_enzymes'])
+     .assign(site=lambda x: x['name'].apply(
+        lambda y: getattr(Bio.Restriction, y).site))
+     .to_csv(sites_to_avoid, index=None)
+    )
+
+
+def prepare_reverse_translations():
     """Write input fasta and list of restriction sites to avoid.
     """
     df_features = pd.read_csv(feature_table)
     
+    used_parts = get_parts_in_templates()
     # reverse_translations
-    needs_rt = load_part_tables().query('dna != dna')
-    write_fasta(rt_input_fasta, needs_rt[['name', 'aa']])
-
-    # enzyme white list
-    (df_features['white_list'].dropna().rename('enzyme').pipe(pd.DataFrame)
-    .assign(site=lambda x: x['enzyme'].apply(
-        lambda y: getattr(Bio.Restriction, y).site))
-    .to_csv(sites_to_avoid, index=None)
+    needs_rt = (load_part_tables()
+     .query('dna != dna')
+     .query('name == @used_parts')
     )
+
+    write_fasta(rt_input_fasta, needs_rt[['name', 'aa']])
+    
+    if 'white_list' in df_features:
+        # backwards compatibility
+        (df_features['white_list'].dropna().rename('enzyme').pipe(pd.DataFrame)
+        .assign(site=lambda x: x['enzyme'].apply(
+            lambda y: getattr(Bio.Restriction, y).site))
+        .to_csv(sites_to_avoid, index=None)
+        )
 
 
 def do_reverse_translations(skip_existing=False):
@@ -73,6 +102,7 @@ def do_reverse_translations(skip_existing=False):
         
     avoid = list(always_avoid) + list(df_sites['site'])
     clean_name = lambda x: slugify(x, lowercase=False, separator='_')
+
     arr = []
     for name, aa_seq in tqdm(df_seqs.values):
         if skip_existing and existing_aa.get(name) == aa_seq:
@@ -121,6 +151,14 @@ def check_reverse_translations():
     df_seqs[['name', 'score']].to_csv(idt_order_scores, index=None)
 
 
+def convert_benchling_features(df_features):
+    """Compatibility with benchling feature list format.
+    """
+    if 'match_type' in df_features:
+        df_features = df_features.query('match_type == "nucleotide"')
+    return df_features.rename(columns={'feature': 'dna_seq'})[['name', 'dna_seq']]
+
+
 def generate_vectors(gate=None):
     """Fill in templates from parts table with original or reverse-translated DNA. Save to genbank,
     annotating template fields and entries from the feature table.
@@ -167,8 +205,6 @@ def split_order(cutoff=3000):
     write_fasta(f'{base}_lt_{cutoff}.fa', less)
 
 
-
-
 def dnachisel_rt(aa_seq, avoid, k=6, species='h_sapiens', logger=None, seed=0):
     """Use DNA Chisel to reverse translate a protein coding sequence. Optimize for best codons while
     avoiding restriction sites and controlling GC content and kmer diversity for synthesis.
@@ -181,7 +217,7 @@ def dnachisel_rt(aa_seq, avoid, k=6, species='h_sapiens', logger=None, seed=0):
     
     n = len(dna_start)
     constraints=[
-        dc.EnforceGCContent(mini=0.4, maxi=0.65, window=50),
+        dc.EnforceGCContent(mini=0.4, maxi=0.75, window=50),
         dc.EnforceTranslation(location=(0, n)),
     ]
     constraints += [dc.AvoidPattern(x) for x in avoid]
@@ -193,13 +229,16 @@ def dnachisel_rt(aa_seq, avoid, k=6, species='h_sapiens', logger=None, seed=0):
             dc.CodonOptimize(species=species, 
                              method='use_best_codon', 
                              location=(0, n)),
+            dc.EnforceGCContent(mini=0.4, maxi=0.65, window=50),
             dc.UniquifyAllKmers(k, boost=1),
         ],
         logger=logger,
     )
+    problem.max_iters = 5000
 
+    # make sure the constraints are possible
     problem.resolve_constraints()
-    # optimizes the objective functions sequentially, maintaining constraints
+    # optimizes the objective functions sequentially, without violating constraints
     problem.optimize()
 
     return problem
@@ -237,16 +276,37 @@ def create_genbank(name, template, parts, topology='circular'):
     return record, features
 
 
-def load_part_tables():
-    df_parts = pd.read_csv(parts_table)
-    df_binders = pd.read_csv(binder_table)
-    df_targets = pd.read_csv(target_table)
-    sources = [df_binders, df_parts, df_targets]
+def load_part_tables(in_templates_only=True):
+    source_tables = [binder_table, target_table, parts_table]
+    sources = []
+    for f in source_tables:
+        if os.path.exists(f):
+            sources += [pd.read_csv(f)]
+    if len(sources) == 0:
+        raise ValueError(f'None of these part tables exist: {source_tables}')
 
-    return pd.concat(sources).dropna(subset=['aa', 'dna'], how='all')
+    df_parts = pd.concat(sources).dropna(subset=['aa', 'dna'], how='all')
+
+    if in_templates_only:
+        used_parts = get_parts_in_templates()
+        df_parts = df_parts.query('name == @used_parts')
+
+    return df_parts.pipe(assert_unique, 'name')
+
+
+def get_parts_in_templates():
+    """Just the parts used in the templates table.
+    """
+    parts = []
+    for template in pd.read_csv(template_table)['template']:
+        parts += [x for x in template.replace('{', '').split('}') if x]
+    return sorted(set(parts))
 
 
 def load_dna_parts():
+    """Dictionary mapping part name to DNA sequence. Uses DNA column in parts table
+    if available, otherwise first reverse translation found for amino acid sequence.
+    """
     df_parts = load_part_tables()
     translations = {translate_dna(x): x for _,x in read_fasta(rt_output_fasta)}
 
