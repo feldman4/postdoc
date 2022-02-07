@@ -148,6 +148,8 @@ def load_design_table():
                    f'"{INSERT_DNA}" (DNA) in designs.csv')
             raise SystemExit(msg)
         df_designs[INSERT_DNA] = df_designs[INSERT].apply(reverse_translate_max)
+    if SUBPOOL not in df_designs:
+        df_designs[SUBPOOL] = 'all'
     return df_designs
 
 
@@ -156,8 +158,9 @@ def validate_design_table(df_designs, include_barcodes):
     from postdoc.utils import assert_unique
 
     df_designs = df_designs.copy()
-    assert_unique(df_designs[INSERT_DNA])
-    df_designs[INSERT] = df_designs[INSERT_DNA].apply(translate_dna)
+    if INSERT_DNA in df_designs:
+        assert_unique(df_designs[INSERT_DNA])
+        df_designs[INSERT] = df_designs[INSERT_DNA].apply(translate_dna)
     if include_barcodes is True:
         it = df_designs[[INSERT, 'barcode']].values
         for insert, barcode in it:
@@ -283,7 +286,13 @@ def annotate_inserts(df_inserts, df_designs, window=30, k=12):
     )
 
 
+def has_subpools():
+    import pandas as pd
+    return SUBPOOL in pd.read_csv(design_table)
+
+
 def annotate_match_barcodes(df_matches, df_designs, barcode_terminus):
+
     barcode_pat = {
         'N': '.?R([^RK]*K).*',
         'C': '.*K([^RK]*R).?',
@@ -300,18 +309,15 @@ def annotate_match_barcodes(df_matches, df_designs, barcode_terminus):
     df_matches[INSERT_FROM_BARCODE] = df_matches[INSERT_BARCODE].map(design_barcode_to_insert)
     df_matches[MISMAPPED_BARCODE] = df_matches.eval(mismapped_gate)
 
-    if SUBPOOL in df_designs:
-        design_barcode_to_subpool = df_designs.set_index(BARCODE)[SUBPOOL].to_dict()
-        df_matches[SUBPOOL_FROM_BARCODE] = df_matches[INSERT_BARCODE].map(design_barcode_to_subpool)
+    # doesn't mean anything if there's just one subpool
+    design_barcode_to_subpool = df_designs.set_index(BARCODE)[SUBPOOL].to_dict()
+    df_matches[SUBPOOL_FROM_BARCODE] = df_matches[INSERT_BARCODE].map(design_barcode_to_subpool)
 
     return df_matches.fillna('')
 
 
-def parse_inserts(assembled_fastq, pat):
+def parse_inserts(reads, pat):
     import pandas as pd
-    from postdoc.sequence import read_fastq
-
-    reads = read_fastq(assembled_fastq)
 
     inserts = []
     for x in reads:
@@ -332,6 +338,7 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     """
     import pandas as pd
     from postdoc.utils import dataframe_to_csv_string
+    from postdoc.sequence import read_fastq
 
     df_designs = (load_design_table()
      .pipe(validate_design_table, include_barcodes=include_barcodes)
@@ -347,11 +354,14 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     row = row.iloc[0]
 
     assembled_fastq = f'assembled/{row["sample"]}.assembled.fastq'
-    pat = f'{row["adapter_5"]}([ACGT]*){row["adapter_3"]}'
+    reads = read_fastq(assembled_fastq)
+    total_assembled = len(reads)
 
-    df_matches = parse_inserts(assembled_fastq, pat)
-    total_reads = df_matches['count'].sum()
-    df_matches[TOTAL_WITH_ADAPTERS] = total_reads
+    pat = f'{row["adapter_5"]}([ACGT]*?){row["adapter_3"]}'
+
+    df_matches = parse_inserts(reads, pat)
+    total_with_adapters = df_matches['count'].sum()
+    df_matches[TOTAL_WITH_ADAPTERS] = total_with_adapters
     df_matches = (df_matches
     .query('count >= @min_counts')
     .assign(sample=row[SAMPLE])
@@ -360,8 +370,8 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     num_reads = df_matches['count'].sum()
     num_unique = len(df_matches)
     msg = (f'Loaded sample {row["sample"]}, '
-           f'mapping {num_unique:,} unique reads '
-           f'({num_reads:,} / {total_reads:,} have >= {min_counts} counts)')
+           f'mapping {num_unique:,} unique reads ({num_reads:,} with >= {min_counts} reads; '
+           f'{total_with_adapters:,} reads with adapters; {total_assembled} reads assembled)')
     print(msg)
     
     df_matches = annotate_inserts(df_matches, df_designs)
@@ -411,7 +421,6 @@ def stats(*matched_tables):
             'fraction_no_stop': r(num_no_stop/num_in_frame),
             'fraction_exact_mapped': r(num_exact/num_no_stop),
             'fraction_exact_dna_mapped': r(num_exact_dna/num_exact),
-            TOTAL_ASSEMBLED_READS: num_assembled,
         }
         
         
@@ -467,7 +476,9 @@ def plot(*matched_tables, output='figures/', filetype='png'):
 
     print('Loading data...')
     df_matches = load_matched_tables(*matched_tables)
-    df_designs = pd.read_csv(design_table)
+    df_designs = load_design_table()
+    multiple_subpools = len(set(df_designs[SUBPOOL])) > 1
+
     os.makedirs(os.path.dirname(output), exist_ok=True)
 
     fuzzy_distance = 15
@@ -501,8 +512,7 @@ def plot(*matched_tables, output='figures/', filetype='png'):
         df_plot.to_csv(f'{output}insert_length.csv', index=None)
         print(f'Saved insert length histogram to {f}')
 
-
-        if SUBPOOL in df_matches:
+        if multiple_subpools:
             f = f'{output}cross_mapping.{filetype}'
             fig, df_plot = plot_crossmapping(df_matches, df_designs, mode='insert')
             fig.savefig(f, bbox_inches='tight')
@@ -559,13 +569,7 @@ def plot_abundance(df_matches, df_designs, mode='insert'):
     else:
         raise ValueError(f'mode must be "insert" or "barcode", not {mode}')
     
-    has_subpool = subpool in df_matches
-    if not has_subpool:
-        df_matches = df_matches.copy()
-        df_matches[subpool] = 'dummy'
-        design_counts = dict(dummy=len(df_designs))
-    else:
-        design_counts = df_designs.groupby(SUBPOOL).size().to_dict()
+    design_counts = df_designs.groupby(SUBPOOL).size().to_dict()
 
     if mode == 'insert':
         # only exactly matched inserts
@@ -589,20 +593,11 @@ def plot_abundance(df_matches, df_designs, mode='insert'):
     def plot(data, label, color):
         ax = plt.gca()
         ax.plot(data['rank'], data[COUNT], color=color, label=label)
-        if has_subpool:
-            x = design_counts[label]
-            ax.plot([x, x], [1, 100], color=color)
-        else:
-            x = design_counts['dummy']
-            ax.plot([x, x], [1, 100], color='red', ls=':', label='# designs')
+        x = design_counts[label]
+        ax.plot([x, x], [1, 100], color='red', ls=':', label='# designs')
         
-
-    if has_subpool:
-        hue_kw = subpool
-        row_kw = SAMPLE
-    else:
-        hue_kw = SAMPLE
-        row_kw = None
+    hue_kw = subpool
+    row_kw = SAMPLE
 
     fg = (df_plot
     .pipe(sns.FacetGrid, row=row_kw, hue=hue_kw, height=4, aspect=1.5)
@@ -755,8 +750,6 @@ def plot_distance_distribution(df_matches):
     import pandas as pd
     import numpy as np
 
-    if SUBPOOL not in df_matches:
-        df_matches[SUBPOOL] = 'all'
 
     threshold = 5
     df_plot = (df_matches
@@ -775,10 +768,11 @@ def plot_distance_distribution(df_matches):
     .T
     )
 
-    figsize = np.array([1.2, 0.4]) * df_counts.shape[::-1]
+    figsize = np.array([1.2, 0.4]) * df_counts.shape[::-1] + [0, 1]
     fig, ax = plt.subplots(figsize=figsize)
     df_counts.pipe(sns.heatmap, annot=True, fmt=',', ax=ax, cbar=False)
     fig.tight_layout()
+    plt.yticks(rotation=0)
 
     return fig, df_plot
 
@@ -790,13 +784,8 @@ def plot_length_distribution(df_matches, df_designs, focus_window=50):
 
     xlabel = 'Insert DNA length'
 
-    if SUBPOOL not in df_matches:
-        df_matches[SUBPOOL] = 'all'
-
-    cols = [SAMPLE, xlabel]
-    if SUBPOOL in df_matches:
-        df_matches = df_matches.assign(subpool=lambda x: x[SUBPOOL].fillna('unmapped'))
-        cols += [SUBPOOL]
+    cols = [SAMPLE, xlabel, SUBPOOL]
+    df_matches = df_matches.assign(subpool=lambda x: x[SUBPOOL].fillna('unmapped'))
 
     df_plot = (df_matches
     .assign(**{xlabel: lambda x: x[INSERT_DNA].str.len()})
@@ -808,7 +797,7 @@ def plot_length_distribution(df_matches, df_designs, focus_window=50):
     )
 
     df_designs = df_designs.copy()
-    df_designs[xlabel] = df_designs['insert_dna'].str.len()
+    df_designs[xlabel] = df_designs[INSERT_DNA].str.len()
     design_counts = df_designs.groupby([SUBPOOL, xlabel]).size().rename('count').reset_index()
     design_counts['sample_index'] = 1 + df_plot['sample_index'].max()
     design_counts['sample_mode'] = design_counts.sort_values('count').iloc[-1]
