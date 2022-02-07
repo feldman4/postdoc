@@ -130,7 +130,6 @@ def get_phenotype(data, nuclei, cells, wildcards):
 def process_one_site(df_):
     from ops.io import read_stack as read
     from ops.firesnake import Snake
-    from scipy.ndimage import minimum_filter
     import skimage.morphology
     import numpy as np
 
