@@ -437,12 +437,12 @@ def fetch_tables():
     config = load_config()['fetch']
     load_keys = 'skiprows',
     for name, entry in config.items():
+        kwargs = {k: entry[k] for k in load_keys if k in entry}
         if entry['source'].startswith('drive:'):
             if drive is None:
                 from postdoc.drive import Drive
                 drive = Drive()
             remote = entry['source'].replace('drive:', '')
-            kwargs = {k: entry[k] for k in load_keys if k in entry}
             df = drive(remote, **kwargs)
         else:
             df = pd.read_csv(entry['source'], **kwargs)
