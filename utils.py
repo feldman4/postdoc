@@ -309,7 +309,7 @@ def _memoize(f, *args, **kwargs):
     return f.cache[key]
 
 
-def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None):
+def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None, add_parameters=False):
     """
     Example:
         (df_frag_ions
@@ -323,7 +323,15 @@ def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None):
     if query is not None:
         df_ = df_.query(query)
     model = RANSACRegressor().fit(df_[[x]], df_[y])
-    return df.assign(**{y_pred: model.predict(df[[x]])})
+    df = df.assign(**{y_pred: model.predict(df[[x]])})
+    if add_parameters:
+        df[f'{y_pred}_intercept'] = model.estimator_.intercept_
+        if model.estimator_.coef_.size == 1:
+            df[f'{y_pred}_coef'] = model.estimator_.coef_[0]
+        else:
+            df[f'{y_pred}_coef'] = [model.estimator_.coef_] * df.shape[0]
+
+    return df
 
 
 def to_list_dict(series):
@@ -715,22 +723,23 @@ def load_yaml_table(config, verbose=True):
     """Load a table from a YAML description.
     TODO: include drive: option
     """
-    df = pd.read_csv(config['table'], low_memory=False)
+    if isinstance(config, str):
+        config = {'table': config}
+    
+    load_keys = 'skiprows',
+    kwargs = {k: config[k] for k in load_keys if k in config}
+    if config['table'].startswith('drive:'):
+        from postdoc.drive import Drive
+        drive = Drive()
+        remote = config['table'][len('drive:'):]
+        df = drive(remote, **kwargs)
+    else:
+        df = pd.read_csv(config['table'], **kwargs)
+
     if verbose:
         print(f'Loaded {len(df):,} entries from {config["table"]}')
     return filter_yaml_table(df, verbose=verbose, **config)
 
-#     if entry['source'].startswith('drive:'):
-#         if drive is None:
-#             from postdoc.drive import Drive
-#             drive = Drive()
-#         remote = entry['source'].replace('drive:', '')
-#         kwargs = {k: entry[k] for k in load_keys if k in entry}
-#         df = drive(remote, **kwargs)
-#     else:
-#         df = pd.read_csv(entry['source'], **kwargs)
-#     if 'gate' in entry:
-#         df = df.query(entry['gate'])
 
 
 def filter_yaml_table(df, gate=None, drop_duplicates=None, rename=None, verbose=True, **ignore):
