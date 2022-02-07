@@ -111,3 +111,18 @@ def load_annotated_intensities(dataset, sample, tag, gate='intensity > 1e5'):
     df_plot.loc[df_plot['peptide_id'], 'precursor'] = 'ms2 hit'
     
     return df_plot
+
+
+def plot_around(x, width, ax):
+    """Draw central line and surrounding box.
+    """
+    from matplotlib.patches import Rectangle
+    y0, y1 = ax.get_ylim()
+    ax.plot([x, x], [y0, y1], c='red')
+    rect = Rectangle((x-width, y0), width*2, y1-y0, color='gray', alpha=0.3, zorder=-10, lw=0)
+    ax.add_patch(rect)
+    ax.set_ylim([y0, y1])
+
+def get_previous_scan(time, scan_times):
+    return scan_times.query('time < @time')['scan_id'].iloc[-1]    
+    
