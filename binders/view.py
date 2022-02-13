@@ -1,4 +1,3 @@
-import napari
 import numpy as np
 
 from cellpose.models import Cellpose
@@ -32,6 +31,7 @@ def find_nuclei(dapi, diameter, background_radius=50, log_first=True, return_all
 
 
 def view(xs, **kwargs):
+    import napari
     viewer = napari.view_image(np.array(xs), **kwargs)
     
     @viewer.bind_key('1')
