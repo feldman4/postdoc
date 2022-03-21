@@ -578,8 +578,6 @@ def plot_abundance(df_matches, df_designs, mode='insert'):
         # only barcodes in the design table
         df_matches = df_matches.query(f'{INSERT_FROM_BARCODE} == {INSERT_FROM_BARCODE}')
 
-    df_matches.to_csv('test.csv', index=None)
-
     df_plot = (df_matches
     .groupby([SAMPLE, subpool, key])[COUNT].sum().reset_index()
     .assign(rank=lambda x: x.groupby([SAMPLE, subpool])[COUNT].rank(method='first', ascending=False))
