@@ -757,3 +757,21 @@ def filter_yaml_table(df, gate=None, drop_duplicates=None, rename=None, verbose=
         df = df.rename(columns=rename)
     return df
 
+
+def parse_frame(search, ignore_missing=False):
+    """Convenience function to build file table from format string.
+    Example: parse_frame('analysis/export/10X_{well}_Site-{site}.tif')
+    """
+    import parse
+    extra_fields = {}
+    fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
+    search_glob = search.format(**{x: '*' for x in fieldnames})
+    files = nglob(search_glob)
+    arr = []
+    for f in files:
+        if ignore_missing and not os.path.exists(f):
+            continue
+        arr += [{'file': f}]
+        arr[-1].update(parse.parse(search, f).named)
+        
+    return pd.DataFrame(arr)
