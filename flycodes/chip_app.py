@@ -18,7 +18,7 @@ from postdoc.sequence import reverse_complement as rc
 from postdoc.sequence import reverse_translate_random, reverse_translate_max
 from postdoc.utils import (
     hash_set, approx_max_clique, csv_frame, gb_apply_parallel, assert_unique, 
-    expand_repeats, split_by_regex)
+    expand_repeats, split_by_regex, nglob)
 from postdoc.flycodes.pool2 import remove_restriction_sites, findone
 from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.pool2 import remove_restriction_sites
@@ -1066,16 +1066,22 @@ def express_and_purify(plasmid):
 def collect_subdirectory_tables():
     """Run from directory containing several chip_app runs.
     """
-    df_oligos = csv_frame('*/process/5_oligos.csv')
-
-    df_barcodes = (csv_frame('*/input/barcodes.csv', sort=False)
+    search = '*/process/5_oligos.csv'
+    df_oligos = csv_frame(search)
+    print(f'Collected oligos from:', *nglob(search), sep='\n')
+    
+    search = '*/input/barcodes.csv'
+    df_barcodes = (csv_frame(search, sort=False)
     .drop_duplicates('sequence').drop(['mz_group', 'barcode_set'], axis=1))
+    print(f'Collected barcodes from:', *nglob(search), sep='\n')
 
     barcode_info = df_barcodes.set_index('sequence')[['iRT', 'mz']]
 
-    df_designs = (csv_frame('*/designs.csv', sort=False)
+    search = '*/designs.csv'
+    df_designs = (csv_frame(search, sort=False)
     .join(barcode_info, on='barcode')
     )
+    print(f'Collected designs from:', *nglob(search), sep='\n')
 
     df_oligos.to_csv('oligos.csv', index=None)
     print(f'Wrote {df_oligos.shape[0]} oligos to oligos.csv')
