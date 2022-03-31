@@ -7,11 +7,7 @@ from skimage.filters import gaussian
 
 
 def find_nuclei(dapi, diameter, background_radius=50, log_first=True, return_all=False):
-    sigma = background_radius / 10
-    dapi_blur = gaussian(dapi, sigma=sigma, preserve_range=True)
-    bsub = dapi - rolling_ball(dapi_blur, radius=background_radius)
-    bsub = bsub.clip(min=0).astype(dapi.dtype)
-    
+    bsub = subtract_background(dapi, background_radius)
     model_nuclei = Cellpose(model_type='nuclei', net_avg=False)
     
     to_return = [bsub]
@@ -21,13 +17,20 @@ def find_nuclei(dapi, diameter, background_radius=50, log_first=True, return_all
     else:
         model_input = bsub
     
-    masks, _, _, _ = model_nuclei.eval(model_input, diameter=diameter)
-    masks = clear_border(masks)
+    nuclei, _, _, _ = model_nuclei.eval(model_input, diameter=diameter)
+    nuclei = clear_border(nuclei)
     
     if return_all:
-        return [masks] + to_return
+        return [nuclei] + to_return
     else:
-        return masks
+        return nuclei
+
+
+def subtract_background(img, background_radius):
+    sigma = background_radius / 10
+    dapi_blur = gaussian(img, sigma=sigma, preserve_range=True)
+    bsub = img - rolling_ball(dapi_blur, radius=background_radius)
+    return bsub.clip(min=0).astype(img.dtype)
 
 
 def view(xs, **kwargs):
