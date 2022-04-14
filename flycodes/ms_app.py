@@ -1,8 +1,8 @@
+from sre_constants import SRE_FLAG_TEMPLATE
 import fire
 
 from glob import glob
 import os
-import re
 import sys
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
@@ -60,22 +60,28 @@ def setup():
         shutil.rmtree('commands')
     os.makedirs('figures', exist_ok=True)
     
-    print('Downloading sample info from MS barcoding gsheet...')
-    gate = config['samples']['gate'].replace('\n', ' ')
-    df_samples = (load_sample_info(gate)
-     .pipe(assert_unique, 'sample', 'file', 'short_name')
-     .pipe(add_sec_fractions)
-    )
-    df_samples.to_csv(sample_table, index=None)
+    if 'table' in config['samples']:
+        print('Skipping sample info setup, loading provided table instead.')
+        df_samples = pd.read_csv(config['samples']['table'])
+        df_samples.to_csv(sample_table, index=None)
+    else:
+        print('Downloading sample info from MS barcoding gsheet...')
+        gate = config['samples']['gate'].replace('\n', ' ')
+        df_samples = (load_sample_info(gate)
+        .pipe(assert_unique, 'sample', 'file', 'short_name')
+        .pipe(add_sec_fractions)
+        )
+        df_samples.to_csv(sample_table, index=None)
+
     print(f'Wrote {len(df_samples)} samples to {sample_table}')
-    for stage, df in df_samples.groupby('stage'):
-        n = (~df['fraction_center'].isnull()).sum()
-        print(f'  {stage}: {len(df)} ({n} with SEC elution volumes)')
+    if 'stage' in df_samples:
+        for stage, df in df_samples.groupby('stage'):
+            n = (~df['fraction_center'].isnull()).sum()
+            print(f'  {stage}: {len(df)} ({n} with SEC elution volumes)')
 
     symlink_input(df_samples)
 
     df_designs = load_designs()
-    num_designs = df_designs.shape[0]
     validate_designs(df_designs).to_csv(design_table, index=None)
     print(f'  Wrote design info to {design_table}')
     try:
@@ -195,7 +201,9 @@ def setup_dinosaur(df_samples, df_designs):
         pass
     tolerance = config['python']['mz_tolerance_search']
     min_intensityApex = config['python']['min_intensityApex']
-    format_dinosaur_targets(targets, tolerance, min_intensityApex).to_csv(target_table, sep='\t')
+    df_targets = format_dinosaur_targets(targets, tolerance, min_intensityApex)
+    df_targets.to_csv(target_table, sep='\t')
+    print(f'Wrote {len(df_targets)} targets to {target_table}')
 
     dino_base = format_dinosaur_command(**config['dinosaur'])
     scripts = write_openms_dinosaur_commands(df_samples['sample'], dino_base)
@@ -283,14 +291,19 @@ def format_dinosaur_command(executable, options, filters, advParams, targets):
     write_dinosaur_advParams(dinosaur_params, **advParams)
     cmd = f'{executable} {options} {filters} --advParams=advParams.txt'
     if targets:
-        cmd = (f'{cmd} --targets=targets.tsv '
-                '--targetPreference=intensity --reportTargets')
+        cmd += ' --targets=targets.tsv --targetPreference=intensity --reportTargets'
     return cmd
 
 
-def format_openms_commands():
-    # TODO: implement?
-    pass
+def format_openms_commands(sample, filters):
+    input = 'input/' + sample
+    convert = 'convert/' + sample
+    return [
+    f'{openms_dir}/FileConverter -in {input}.mzData -out {convert}.mzML -lossy_compression',
+    f'{openms_dir}/FileInfo -in {convert}.mzML -out {convert}.mzML.info',
+    f'{openms_dir}/FileFilter -in {convert}.mzML -out {convert}.filt.mzML {filters}',
+    f'{openms_dir}/FileInfo -in {convert}.filt.mzML -out {convert}.filt.mzML.info',
+    ]
 
 
 def write_openms_dinosaur_commands(samples, dino_base):
@@ -298,15 +311,16 @@ def write_openms_dinosaur_commands(samples, dino_base):
     config = load_config()['openms']
 
     os.makedirs('commands/0', exist_ok=True)
+    os.makedirs('convert', exist_ok=True)
     arr = []
     for sample in samples:
         cmds = format_openms_commands(sample, **config)
         cmds += [
             f'mkdir -p dinosaur/{sample}',
             f'cd dinosaur/{sample}',
-            f'ln -s ../../input/{sample}.filt.mzML .',
-            f'ln -s ../../{dinosaur_params} .',
-            f'ln -s ../../{target_table} .',
+            f'ln -sf ../../convert/{sample}.filt.mzML .',
+            f'ln -sf ../../{dinosaur_params} .',
+            f'ln -sf ../../{target_table} .',
             f'{dino_base} {sample}.filt.mzML',
             ]
         f = f'commands/0/{sample}.sh'
@@ -382,7 +396,9 @@ def load_dino_features(file_template=feature_output):
         mz_corrector = lambda x: x
 
     keep = ['sample', 'short_name', 'stage', 'fraction_center', 'fraction_size']
-    df_samples = pd.read_csv(sample_table)[keep]
+
+    df_samples = pd.read_csv(sample_table)
+    df_samples = df_samples[[x for x in keep if x in df_samples]]
     df_designs = load_design_table()
 
     files = [file_template.format(sample=sample) 
@@ -958,8 +974,7 @@ def get_trace_metrics(df_traces, df_intensities):
      .assign(num_consensus_barcodes=lambda x: 
         x.groupby('design_name')['consensus_gate'].transform('sum'))
      .join(stage_means, on='barcode')
-     .join(barcode_metrics, on='barcode')
-    )
+     .join(barcode_metrics, on='barcode'))
 
 
 def get_consensus(df_traces):
@@ -1118,6 +1133,8 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
 
 
 def link_plots(clear=True, no_broken=True):
+    """Generate symlinks to per-design SEC plots based on specifications in config:sec:rank_plots
+    """
     import pandas as pd
     # load results of analyze_sec
     df_consensus_metrics = pd.read_csv(sec_consensus_metrics_table).set_index('design_name')
@@ -1199,8 +1216,7 @@ def load_validation_sec(limit=None):
     txt = akta_db.export(StringIO(df_chroma.to_csv()))
     return (pd.read_csv(StringIO(txt))
      .merge(sec_index)
-     .join(df_sec, on='sec_index')
-    )
+     .join(df_sec, on='sec_index'))
 
 
 def export_validation_sec():
