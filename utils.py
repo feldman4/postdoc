@@ -708,6 +708,10 @@ def force_symlink(src, dst=None):
         dst = os.path.basename(src)
     if os.path.islink(dst):
         os.remove(dst)
+    if os.path.isdir(dst):
+        # if the destination is a directory, make a link
+        # to source basename in that directory
+        dst = os.path.join(dst, os.path.basename(src))
     os.symlink(src, dst)
 
 
@@ -734,7 +738,7 @@ def load_yaml_table(config, verbose=True):
         remote = config['table'][len('drive:'):]
         df = drive(remote, **kwargs)
     else:
-        df = pd.read_csv(config['table'], **kwargs)
+        df = pd.read_csv(config['table'], low_memory=False, **kwargs)
 
     if verbose:
         print(f'Loaded {len(df):,} entries from {config["table"]}')

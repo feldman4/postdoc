@@ -2,7 +2,6 @@ import postdoc
 import postdoc as pos
 from postdoc.constants import *
 from postdoc.utils import *
-from postdoc import tagging
 from postdoc import flycodes as fly
 from postdoc.flycodes.designs import *
 import postdoc.flycodes.cloning
