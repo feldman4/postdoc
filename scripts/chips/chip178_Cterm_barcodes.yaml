@@ -1,0 +1,13 @@
+barcodes:
+  - name: cterm
+    terminus: 'C'
+    source: /net/scratch/dfeldman/flycodes/runs/run_014/all_barcodes.csv
+    gate: "hydro_count_norm < 0.4 \
+           & hydro_levy2012 < 2.5 \
+           & 490 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -30 < iRT < 130 \
+           "
+    mz_resolution: 100000
+    iRT_separation: 2
+

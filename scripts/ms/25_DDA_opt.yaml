@@ -1,0 +1,81 @@
+samples:
+  gate: >-
+    date == "2021-12-17" & what_it_is == "DDA optimization"
+
+designs:
+  table: /home/dfeldman/flycodes/chip_orders/chip162_designs.csv.gz
+  gate: library == "DK_barrels"
+  rename:
+    design_name_original: pdb_file
+
+convert_raw:
+  flags: [
+    # '--noPeakPicking'
+    ]
+
+process_mzml:
+  snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
+  request: 'calibratedRT'
+  mzML_filter: -rt 600:2700 -mz 495:850
+  comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
+  idXML_filter: -score:pep 30 -mz:error 10
+  mz_calibration: -offset 1 -ms_level 1 # offset of 1 decreases mz by 1 ppm
+  rt_reference: MS_740
+  rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
+
+skyline:
+  input_tag: 'calibratedRT'
+  gui_settings:
+    peaks: 3
+    mass_accuracy: 3 ppm
+    rt_filtering: 0.75 minutes
+  qc_gate: >-
+    -2 < mass_error_ppm < 2
+    & 0.9 < isotope_dot_product
+  barcode_count_gate: stage == "SEC" & 1e6 < area_ms1
+
+intensities:
+  # TODO: not implemented yet for skyline
+  rt-fit:
+    fit_gate: '-5 < mass_error_ppm < 0 & 0.9 < isotope_dot_product & 1e7 < area_ms1'
+  gates: 
+    # barcode measurements outside this gate are shown as hollow circles in SEC plots
+    plot_barcode: >-
+      -2 < mass_error_ppm < 2
+      & 0.8 < isotope_dot_product
+
+plot:
+  by_design:
+    job_size: 100
+  barcode_stats:
+    detected_cutoff: 5
+  stage_order: ['insoluble', 'soluble', 'injection', 'SEC']
+
+sec:
+  barcode:
+    # barcode measurements outside this gate are missing values in SEC traces
+    gate: stage == "SEC" & plot_barcode & 1e6 < area_ms1
+    intensity_metric: 'area_ms1'
+    # data points with higher 2nd derivative (diff, then convolve [-1, 1]) are removed
+    crap_threshold: 0.4
+  consensus:
+    # barcodes to include in consensus calculation
+    gate: num_missing < 15
+    method: 'median'
+    # parameters for consensus metrics
+    deviation_threshold: 0.02
+    volume_windows:
+      aggregate: [9, 11.5]
+      oligomer: [11.5, 13.5]
+      monomer: [13.5, 19]
+  rank_plots:
+    all:
+      gate: >- 
+        1 <= num_consensus_barcodes
+      sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
+      sort_descending: [monomer, oligomer, aggregate, median_l2]
+    multi:
+      gate: >- 
+        2 <= num_consensus_barcodes
+      sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
+      sort_descending: [monomer, oligomer, aggregate, median_l2]
