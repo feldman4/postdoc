@@ -6,7 +6,6 @@ import sys
 import pandas as pd
 
 import pyrosetta
-from pyrosetta.rosetta.core.pose import Pose
 from pyrosetta.rosetta.utility.tag import XMLSchemaDefinition
 from pyrosetta.rosetta.core.select.movemap import MoveMapFactory
 
