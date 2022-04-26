@@ -561,14 +561,15 @@ def find_nearest_sequence(
     return dataframe_to_csv_string(df_matched)
 
 
-def submit_from_command_list(filename, array=None, name=None, queue='short', 
-                             memory='4g', cpus=1, with_gpu=None,
-                             stdout='default', stderr='default', 
-                             dry_run=False):
+def submit_from_command_list(
+    filename, group_size=1, limit_array=None, name=None, queue='short', memory='4g', 
+    cpus=1, with_gpu=None, stdout='default', stderr='default', dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
     :param filename: file with one line per command, or "stdin" to pipe in a command list
-    :param array: submit as a task array with this many concurrent jobs (e.g., --array=5)
+    :param group_size: runs a group of commands within each task, useful if commands run in 
+      less than a few minutes (but group must finish in queue time limit!)
+    :param limit_array: limit task array to this many concurrent jobs (e.g., --array=5)
     :param name: sbatch job name (-J), defaults to `filename`
     :param queue: sbatch queue (-p)
     :param memory: sbatch memory (--mem)
@@ -576,12 +577,12 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     :param with_gpu: GPU type and count, such as "rtx2080:1" (default value if using gpu queue)
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
-    :param dry_run: output command instead of submitting
     """
     import os
     import sys
     import subprocess
     import pandas as pd
+    from math import ceil
 
     if filename == 'stdin':
         commands = sys.stdin.read().strip().split('\n')
@@ -598,54 +599,54 @@ def submit_from_command_list(filename, array=None, name=None, queue='short',
     if len(commands) == 0:
         print('No commands to submit, exiting.', file=sys.stderr)
         return
+    
+    num_groups = ceil(len(commands) / group_size)
         
     if name is None:
         name = os.path.basename(filename)
     clean_name = name.replace(':', '_')
 
-    little_a = '_%a' if array else ''
-    if stdout is 'default':
-        stdout = f'logs/{clean_name}_%A{little_a}.out'
-
-    if stderr is 'default':
-        stderr = f'logs/{clean_name}_%A{little_a}.err'
+    little_a = '_%a' if 1 < num_groups else ''
+    stdout = f'logs/{clean_name}_%A{little_a}.out' if stdout == 'default' else stdout
+    stderr = f'logs/{clean_name}_%A{little_a}.err' if stderr == 'default' else stderr
 
     if with_gpu is None:
         if queue == 'gpu':
-            print('Requested gpu queue but no GPUs, including 1 GPU by default', 
-                  file=sys.stderr)
+            print('Requested gpu queue but no GPUs, including 1 GPU by default', file=sys.stderr)
             with_gpu = 'rtx2080:1'
         
-    if with_gpu is not None:
-        gpu_flag = f'--gres=gpu:{with_gpu}'
-    else:
-        gpu_flag = ''
-
     for x in (stdout, stderr):
         os.makedirs(os.path.dirname(x), exist_ok=True)
     
-    base_command = (f'sbatch -p {queue} -J {name} --mem={memory} '
-                    f'-c {cpus} {gpu_flag} -o {stdout} -e {stderr}')
-    final_commands = []
-    plural = 's' if len(commands) > 1 else ''
-    if array:
-        submit_message = f'Submitting array of {len(commands)} task{plural} to {queue} queue...'
-        flag = f'--array=1-{len(commands)}'
-        if isinstance(array, int):
-            flag += f'%{int(array)}'
-        cmd = f'--wrap="sed -n ${{SLURM_ARRAY_TASK_ID}}p {filename} | bash"'
-        final_commands += [' '.join([base_command, flag, cmd])]
-    else:
-        submit_message = f'Submitting {len(commands)} job{plural} to {queue} queue...'
-        for cmd in commands:
-            final_commands += [base_command + f' --wrap="{cmd}"']
+    array = f'1-{num_groups}'
+    if limit_array is not None:
+        array += f'%{limit_array}'
 
+    plural = 's' if len(commands) > 1 else ''
+    gs = f' ({num_groups} groups of {group_size})' if group_size > 1 else ''
+    submit_message = f'Submitting {len(commands)} command{plural}{gs} to {queue} queue...'
+    
+    commands = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
+                '-o', stdout, '-e', stderr, '--array', array]
+    commands = [str(x) for x in commands]
+
+    if with_gpu is not None:
+        commands += [f'--gres', f'gpu:{with_gpu}']
+
+    wrap = (
+        f'for I in $(seq 1 {group_size}); do '
+        f'J=$(( ($SLURM_ARRAY_TASK_ID - 1) * {group_size} + $I )); '
+        f'sed -n ${{J}}p {filename} | bash; '
+        'done'
+    )
+    commands += ['--wrap', wrap]
+
+    print(submit_message, file=sys.stderr)
     if dry_run:
-        return final_commands
+        commands[-1] = '"' + commands[-1] + '"'
+        print(' '.join(commands))
     else:
-        print(submit_message, file=sys.stderr)
-        for command in final_commands:
-            subprocess.Popen(command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        subprocess.Popen(commands, stdout=sys.stdout, stderr=sys.stderr)
 
 
 def fasta_to_table(filename, name='name', sequence='sequence'):
