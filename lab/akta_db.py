@@ -747,7 +747,7 @@ def export(search_result, num_samples=512):
      # retrieve zipped data
      .pipe(add_uv_curves)
      # unzip and resample
-     .pipe(expand_bcp_data)
+     .pipe(expand_bcp_data, num_samples=num_samples)
      [cols]
      .pipe(dataframe_to_csv_string)
     )
@@ -876,6 +876,7 @@ def get_uv_data(fdata, pattern='UV.*\d\d\d'):
 
     return pd.concat(arr, axis=1).interpolate(method='index')
 
+
 def resample_linear(df, num_points):
     """Linearly interpolate dataframe over the range of its index.
     """
@@ -887,7 +888,7 @@ def resample_linear(df, num_points):
         index=ix,
     )
 
-def export_unicorn_zipfile(f, output=None, num_points=1000):
+def export_unicorn_zipfile(f, output=None, num_points=512):
     """Export UV data from unicorn zip file in csv format. 
     
     :param output: filepath for output csv, otherwise based on input filename
@@ -895,10 +896,16 @@ def export_unicorn_zipfile(f, output=None, num_points=1000):
 
     """
     fdata = load_unicorn_data(f)
-    df_uv = get_uv_data(fdata).pipe(resample_linear, num_points)
+    df_uv_wide = get_uv_data(fdata).pipe(resample_linear, num_points)
+    df_uv_long = (df_uv_wide.stack().reset_index()
+     .set_axis(['volume', 'channel', 'amplitude'], 1)
+     .sort_values(['channel', 'volume'])
+     [['channel', 'volume', 'amplitude']]
+    )
+    
     if output is None:
         output = f[:-4] + '.csv'
-    df_uv.to_csv(output)
+    df_uv_long.to_csv(output)
 
 
 if __name__ == '__main__':
