@@ -1,14 +1,12 @@
 from collections import defaultdict, Counter
 import contextlib
 from glob import glob
-import logging
 import io
 import hashlib
 import os
 import re
 import subprocess
 import shutil
-import sys
 import time
 
 import decorator
@@ -706,12 +704,12 @@ def force_symlink(src, dst=None):
     """
     if dst is None:
         dst = os.path.basename(src)
-    if os.path.islink(dst):
-        os.remove(dst)
     if os.path.isdir(dst):
         # if the destination is a directory, make a link
         # to source basename in that directory
         dst = os.path.join(dst, os.path.basename(src))
+    if os.path.islink(dst):
+        os.remove(dst)
     os.symlink(src, dst)
 
 
