@@ -16,8 +16,6 @@ from itertools import product
 import matplotlib.pyplot as plt
 import pyteomics.mass
 import seaborn as sns
-import wget
-
 
 # barcode flags
 UNUSED = 0
@@ -341,7 +339,7 @@ def prepare_filter(group_ids):
         present = codes[barcode_index]
         used = present[barcodes]
         if len(used) != len(set(used)):
-            raise WtfError
+            raise ValueError
         # other
         available = ~np.in1d(present, used)
         return barcodes | available
@@ -516,7 +514,6 @@ def rolling_window_sizes(values, window_size):
     return sizes
 
 
-
 def bin_by_value(values, bin_centers, bin_width):
     """Returns np.nan for values outside of bins.
     """
@@ -617,7 +614,7 @@ def generate_bin_set(df_bins, mask_indices):
     )
 
 
-def generate_bin_sets(bin_sets):
+def generate_bin_sets(df_bins, bin_sets):
     arr = []
     for bin_set, indices in bin_sets.items():
         (generate_bin_set(df_bins, indices).assign(bin_set=bin_set)
