@@ -607,6 +607,10 @@ def submit_from_command_list(
         name = os.path.basename(filename)
     clean_name = name.replace(':', '_')
 
+    # write a clean list of commands so wrapper can use sed to pull out correct lines
+    filename = f'logs/.clean/{uuid.uuid1()}.sh'
+    pd.Series(commands).to_csv(filename, header=None, index=None)
+
     little_a = '_%a' if 1 < num_groups else ''
     stdout = f'logs/{clean_name}_%A{little_a}.out' if stdout == 'default' else stdout
     stderr = f'logs/{clean_name}_%A{little_a}.err' if stderr == 'default' else stderr
@@ -625,18 +629,15 @@ def submit_from_command_list(
     gs = f' ({num_groups} groups of {group_size})' if group_size > 1 else ''
     removed = ''
     if num_removed:
-        # write a clean version so wrapper can use sed to pull out correct lines
-        filename = f'logs/.clean/{uuid.uuid1()}.sh'
-        pd.Series(commands).to_csv(filename, header=None, index=None)
         removed = f' (removed {num_removed} blank/comment lines)'
     submit_message = f'Submitting {len(commands)} command{plural}{gs} to {queue} queue{removed}...'
     
-    commands = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
+    args = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
                 '-o', stdout, '-e', stderr, '--array', array]
-    commands = [str(x) for x in commands]
+    args = [str(x) for x in args]
 
     if with_gpu is not None:
-        commands += [f'--gres', f'gpu:{with_gpu}']
+        args += [f'--gres', f'gpu:{with_gpu}']
 
     wrap = (
         f'for I in $(seq 1 {group_size}); do '
@@ -644,14 +645,15 @@ def submit_from_command_list(
         f'sed -n ${{J}}p {filename} | bash; '
         'done'
     )
-    commands += ['--wrap', wrap]
+    args += ['--wrap', wrap]
 
     print(submit_message, file=sys.stderr)
     if dry_run:
-        commands[-1] = '"' + commands[-1] + '"'
-        print(' '.join(commands))
+        args[-1] = '"' + args[-1] + '"'
+        print(' '.join(args))
     else:
-        subprocess.Popen(commands, stdout=sys.stdout, stderr=sys.stderr)
+        
+        subprocess.Popen(args, stdout=sys.stdout, stderr=sys.stderr)
 
 
 def fasta_to_table(filename, name='name', sequence='sequence'):
