@@ -578,23 +578,24 @@ def submit_from_command_list(
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
     """
-    import os
-    import sys
-    import subprocess
-    import pandas as pd
     from math import ceil
-
+    import os
+    import pandas as pd
+    import subprocess
+    import sys
+    import uuid
     num_removed = 0
     if filename == 'stdin':
         lines = sys.stdin.read().strip().split('\n')
         commands = [x.strip() for x in lines if x and not x.lstrip().startswith('#')]
-        num_removed = len(lines) - len(commands)
         # might be the command name
         first_word = commands[0].split()[0]
         if name is None:
             name = 'stdin:' + first_word.split('/')[-1][:8]
     else:
-        commands = pd.read_csv(filename, header=None)[0]
+        lines = pd.read_csv(filename, header=None)[0]
+        commands = [x.strip() for x in lines if x and not x.lstrip().startswith('#')]
+    num_removed = len(lines) - len(commands)
 
     if len(commands) == 0:
         print('No commands to submit, exiting.', file=sys.stderr)
@@ -609,15 +610,13 @@ def submit_from_command_list(
     little_a = '_%a' if 1 < num_groups else ''
     stdout = f'logs/{clean_name}_%A{little_a}.out' if stdout == 'default' else stdout
     stderr = f'logs/{clean_name}_%A{little_a}.err' if stderr == 'default' else stderr
+    os.makedirs('logs/.clean', exist_ok=True)
 
     if with_gpu is None:
         if queue == 'gpu':
             print('Requested gpu queue but no GPUs, including 1 GPU by default', file=sys.stderr)
             with_gpu = 'rtx2080:1'
         
-    for x in (stdout, stderr):
-        os.makedirs(os.path.dirname(x), exist_ok=True)
-    
     array = f'1-{num_groups}'
     if limit_array is not None:
         array += f'%{limit_array}'
@@ -626,7 +625,10 @@ def submit_from_command_list(
     gs = f' ({num_groups} groups of {group_size})' if group_size > 1 else ''
     removed = ''
     if num_removed:
-        removed = ' (removed {num_removed} blank/comment lines)'
+        # write a clean version so wrapper can use sed to pull out correct lines
+        filename = f'logs/.clean/{uuid.uuid1()}.sh'
+        pd.Series(commands).to_csv(filename, header=None, index=None)
+        removed = f' (removed {num_removed} blank/comment lines)'
     submit_message = f'Submitting {len(commands)} command{plural}{gs} to {queue} queue{removed}...'
     
     commands = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
