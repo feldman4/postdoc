@@ -58,6 +58,7 @@ def read_pdb_string(pdb_string, reorder_cols=True, add_info=True):
         
     return df
 
+
 def get_global_residue_index(df_pdb):
     seen = set()
     i = -1
