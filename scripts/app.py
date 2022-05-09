@@ -176,7 +176,7 @@ def calculate_distances(filename, header=None, col=0, sep=None):
 
     sequences = read_table(filename, col=col, header=header, sep=sep)
     distances = _calculate_distances(sequences)
-    df_distances = pd.Series(arr).value_counts().reset_index()
+    df_distances = pd.Series(distances).value_counts().reset_index()
     df_distances.columns = 'edit_distance', 'num_pairs'
     return df_distances.sort_values('edit_distance').pipe(dataframe_to_csv_string)
     
@@ -584,17 +584,17 @@ def submit_from_command_list(
     import pandas as pd
     from math import ceil
 
+    num_removed = 0
     if filename == 'stdin':
-        commands = sys.stdin.read().strip().split('\n')
+        lines = sys.stdin.read().strip().split('\n')
+        commands = [x.strip() for x in lines if x and not x.lstrip().startswith('#')]
+        num_removed = len(lines) - len(commands)
         # might be the command name
         first_word = commands[0].split()[0]
         if name is None:
             name = 'stdin:' + first_word.split('/')[-1][:8]
     else:
         commands = pd.read_csv(filename, header=None)[0]
-
-    commands = [x.strip() for x in commands]
-    commands = [x for x in commands if not x.startswith('#')]
 
     if len(commands) == 0:
         print('No commands to submit, exiting.', file=sys.stderr)
@@ -624,7 +624,10 @@ def submit_from_command_list(
 
     plural = 's' if len(commands) > 1 else ''
     gs = f' ({num_groups} groups of {group_size})' if group_size > 1 else ''
-    submit_message = f'Submitting {len(commands)} command{plural}{gs} to {queue} queue...'
+    removed = ''
+    if num_removed:
+        removed = ' (removed {num_removed} blank/comment lines)'
+    submit_message = f'Submitting {len(commands)} command{plural}{gs} to {queue} queue{removed}...'
     
     commands = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
                 '-o', stdout, '-e', stderr, '--array', array]
