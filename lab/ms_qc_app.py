@@ -293,6 +293,8 @@ def load_peptide_ids(search):
     if len(files) == 0:
         return None
     df_ids = pd.concat([read_idxml(f).assign(file=f) for f in files])
+    if df_ids.shape[0] == 0:
+        return None
     
     df_ids['mz'] = df_ids['sequence'].apply(fast_mass, charge=2)
     df_ids['mass_error_ppm'] = 1e6 * (df_ids['scan_mz'] - df_ids['mz'])/df_ids['mz']
