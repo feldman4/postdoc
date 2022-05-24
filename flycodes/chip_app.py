@@ -32,7 +32,7 @@ input_rt_dir = 'input/reverse_translations'
 
 # reverse translation
 dnaworks_input = 'process/DNAworks/DNA_input.list'
-dnaworks_output = 'process/DNAworks/DNA_sequence.list'
+dnaworks_output = 'process/DNAworks/*dwo'
 reverse_translation_table = 'process/reverse_translations.csv'
 missing_rt_fasta = 'process/missing_rt.fa'
 
@@ -420,6 +420,8 @@ def create_directories():
 
 
 def fake_reverse_translate():
+    """FOR TESTING ONLY!! Create random reverse translations.
+    """
     from postdoc.sequence import reverse_translate_random, write_fasta
     df = (pd.read_csv(chip_designs_table)
      .assign(design_dna=lambda x: 
@@ -605,7 +607,7 @@ def setup_DNAworks(designs, organism):
 def collect_reverse_translations():
     df_rt = load_input_reverse_translations()
     print(f'Loaded {len(df_rt):,} reverse translations from {input_rt_dir}')
-    if os.path.exists(dnaworks_output):
+    if glob(dnaworks_output):
         dnaworks_dir = os.path.dirname(dnaworks_input)
         df_dnaworks = load_DNAworks_output(dnaworks_dir)
         df_dnaworks['rt_source_file'] = 'DNAworks'
