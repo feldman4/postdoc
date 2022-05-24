@@ -1,0 +1,72 @@
+fetch:
+  layout_table: 
+    source: 'drive:chipmunk/chipXXX_JNS'
+    skiprows: 2
+  adapter_table:
+    source: 'drive:chipmunk/adapters'
+    gate: 'kind == ["outer", "inner"]'
+
+layout:
+  # design and barcode are special part names
+  # other part names are defined below 
+  # spacer is allowed to be variable to even out total lengths
+  cterm_barcoded: [design, linker, barcode, spacer]
+  parts:
+    linker:
+      aa: GSK
+      reverse_translation: random
+    spacer: 
+      aa: GSSGSGSSGSGSSGSGSSG
+      reverse_translation: random
+      expand_from: left
+    G:
+     aa: G
+     reverse_translation: max
+
+barcodes:
+  - name: cterm_BWLM
+    terminus: 'C'
+    source: /home/dfeldman/flycodes/pools/chip176/chip176_BWLM/input/barcodes.csv
+    # hydro_count_norm is # of hydrophobics / length
+    # hydro_levy2012 is per-aa "stickiness" score from Levy 2012 PNAS paper
+    # usable_ion_count is the # of fragment ions above a fixed % according to Prosit
+    #   these are used to identify the barcode in MS/MS
+    # mz is precursor ion m/z (doubly-charged)
+    # iRT is the predicted LC-MS elution time on a universal scale
+    # charge_pH7 is predicted net charge
+    gate: "hydro_count_norm < 0.4 \
+           & hydro_levy2012 < 2.5 \
+           & 450 < mz < 850 \
+           & 3 <= usable_ion_count \
+           & -10 < iRT < 115 \
+           & -4 < charge_pH7 \
+           "
+    mz_resolution: 80000
+    iRT_separation: 8
+    
+dna_design:
+  oligo_length: [300, 300]
+  restriction_sites:
+    - GGTCTC
+
+reverse_translation:
+  method: DNAworks
+
+assembly:
+  max_per_pool: 800
+  oligo_overlap_opt: 
+  Tm: 
+
+validate:
+    cloning:
+        vector: input/vectors/
+        # [restriction sites] inferred
+        upstream:
+        downstream:
+        method: BsaI golden gate
+    barcodes:
+        mz_resolution:
+        iRT_resolution:
+
+constants:
+    
