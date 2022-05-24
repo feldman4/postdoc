@@ -1,5 +1,5 @@
 tables:
-  templates: 'drive:IS intracellular binders/epigenetic_templates'
+  templates: 'drive:IS intracellular binders 2022/templates'
   parts: 'drive:reference/parts'
   features: 'drive:reference/benchling_features'
   restriction_enzymes: 
