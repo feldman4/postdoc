@@ -246,10 +246,10 @@ def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 
 
     it = (df_summary
      .dropna(subset=['num_ms_barcodes'])
-     [['design_name', 'dataset', 'export_name', 'description']].values
+     [['design_name', 'dataset', 'export_name']].values
     )
 
-    for design_name, dataset, export_name, description in tqdm(list(it)):
+    for design_name, dataset, export_name in tqdm(list(it)):
         X0 = traces[(dataset, 'barcodes')].loc[design_name].T
         X0 = X0.iloc[:, :13]
         X0 = X0 / X0.sum()
@@ -279,7 +279,15 @@ def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 
             pass
         ax0.set_ylim([0, y1])
 
-        title = ': '.join(df.iloc[0][['SystemName', 'MethodStartTime']])
+        # make title from AKTA db info
+        row = df.iloc[0]
+        if 'SystemName' in row.dropna():
+            title = ': '.join(row[['SystemName', 'MethodStartTime']])
+        elif 'csv_path' in row.dropna():
+            title = '/'.join(row['csv_path'].split('/')[-2:])
+        else:
+            title = 'title info missing'
+            
         ax1.set_title(title)
         ax1.set_xlabel('volume')
         ax1.set_ylabel('raw amplitude')
