@@ -608,6 +608,7 @@ def submit_from_command_list(
     clean_name = name.replace(':', '_')
 
     # write a clean list of commands so wrapper can use sed to pull out correct lines
+    os.makedirs('logs/.clean', exist_ok=True)
     filename = f'logs/.clean/{uuid.uuid1()}.sh'
     pd.Series(commands).to_csv(filename, header=None, index=None)
 
