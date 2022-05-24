@@ -16,6 +16,7 @@ alias l='ls -l --all --human-readable --no-group --color=auto --classify -v'
 alias rsin='rsync -Rr --progress --update'
 alias hist="sort | uniq -c | sort -r"
 alias less='less -S'
+alias tree='tree -C --filelimit=20'
 alias rgf='rg --files | rg'
 alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
@@ -77,7 +78,7 @@ export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_
 # csvkit uses tabulate, which is slow and lacks a streaming option
 function csvless() {
     # csvlook=/home/dfeldman/.conda/envs/df-pyr-tf/bin/csvlook
-    cat <(head -400 $1 | csvlook "${@:2}") <(csvlook $1 "${@:2}" | tail -n +402) | less
+    cat <(head -400 $1 | csvlook "${@:2}") <(csvlook $1 "${@:2}" | tail -n +402) | /usr/bin/less -S
 }
 
 # get typical digs paths
