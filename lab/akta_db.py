@@ -1,3 +1,10 @@
+"""A tool to automatically search, export, and plot SEC data from AKTA UNICORN
+database without having to manually export results or use the UNICORN Windows GUI.
+
+More info: https://wiki.ipd.uw.edu/protocols/wet_lab/sec/plot_sec#akta_db
+
+Indicated functions from akta_snap.py by Ryan/Luki.
+"""
 import fire
 
 from datetime import datetime, timedelta
@@ -9,10 +16,6 @@ import sys
 from zipfile import ZipFile
 
 # other imports delayed to keep command line interface snappy
-
-
-"""Indicated functions from akta_snap.py by Ryan/Luki
-"""
 
 # home of chroma.hdf and fractions.hdf
 default_location = '/home/dfeldman/for/akta_db'
@@ -863,6 +866,10 @@ def load_unicorn_data(unicorn_zipfile):
 
 
 def get_uv_data(fdata, pattern='UV.*\d\d\d'):
+    """Extract UV channels matching `pattern` and interpolate amplitudes so all channels are
+    sampled at the same points.
+    """
+
     import re
     import numpy as np
     import pandas as pd
@@ -888,6 +895,7 @@ def resample_linear(df, num_points):
         index=ix,
     )
 
+
 def export_unicorn_zipfile(f, output=None, num_points=512):
     """Export UV data from unicorn zip file in csv format. 
     
@@ -905,7 +913,7 @@ def export_unicorn_zipfile(f, output=None, num_points=512):
     
     if output is None:
         output = f[:-4] + '.csv'
-    df_uv_long.to_csv(output)
+    df_uv_long.to_csv(output, index=None)
 
 
 if __name__ == '__main__':
@@ -932,6 +940,3 @@ if __name__ == '__main__':
         fire.Fire(final)
     except BrokenPipeError:
         pass
-    
-
-
