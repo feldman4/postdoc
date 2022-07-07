@@ -1,15 +1,19 @@
 """Templated DNA and vector map generation.
+
+TODO: check that kozak (GCCACC) is always followed by ATG
 """
-from ..imports import *
 from ..drive import Drive
 from ..utils import load_yaml_table, assert_unique
 from ..sequence import read_fasta, write_fasta, translate_dna, reverse_translate_random
 from ..sequence import reverse_complement as rc
 
+import fire, os, re, subprocess, yaml
+from tqdm.auto import tqdm
+import numpy as np
+import pandas as pd
 import dnachisel as dc
-import Bio.Restriction
 from slugify import slugify
-import yaml
+import Bio.Restriction
 
 config_file = 'config.yaml'
 parts_table = 'parts.csv'
@@ -20,9 +24,9 @@ template_table = 'templates.csv'
 sites_to_avoid = 'reverse_translations/sites_to_avoid.csv'
 rt_input_fasta = 'reverse_translations/input.fa'
 rt_output_fasta = 'reverse_translations/output.fa'
-idt_rt_scores = 'reverse_translations/idt_scores.csv'
-idt_order_fasta = 'idt_order.fa'
-idt_order_scores = 'idt_order_scores.csv'
+rt_idt_scores = 'reverse_translations/idt_scores.csv'
+gene_order_fasta = 'gene_order.fa'
+gene_idt_scores = 'gene_order_idt_scores.csv'
 
 always_avoid = '6xA', '5xG'
 # queries against endpoint https://www.idtdna.com/api/complexities/screengBlockSequences
@@ -125,30 +129,20 @@ def do_reverse_translations(skip_existing=False):
     write_fasta(rt_output_fasta, df_seqs[['name', 'dna_seq']])
 
 
-def check_idt_order():
-    """Use domesticator3 to query IDT API for gblock complexity scores.
+def check_idt_complexity(fasta, output_table):
+    """Use domesticator3 to query IDT API for gene complexity scores.
+
+    :param fasta: FASTA file with genes
+    :param output_table: CSV file to write output
     """
-    cmd = [domesticator_idt, idt_order_fasta]
+    cmd = [domesticator_idt, fasta]
     output = subprocess.check_output(cmd)
     df_scores = pd.Series(output.decode().strip().split('\n')).str.split(' ', expand=True)
     df_scores.columns = 'short_name', 'dna_seq', 'score'
-    df_seqs = (pd.DataFrame(read_fasta(rt_output_fasta), columns=('name', 'dna_seq'))
+    df_seqs = (pd.DataFrame(read_fasta(fasta), columns=('name', 'dna_seq'))
      .merge(df_scores, how='left')
     )
-    df_seqs[['name', 'score']].to_csv(idt_rt_scores, index=None)
-
-
-def check_reverse_translations():
-    """Use domesticator3 to query IDT API for gblock complexity scores.
-    """
-    cmd = [domesticator_idt, rt_output_fasta]
-    output = subprocess.check_output(cmd)
-    df_scores = pd.Series(output.decode().strip().split('\n')).str.split(' ', expand=True)
-    df_scores.columns = 'short_name', 'dna_seq', 'score'
-    df_seqs = (pd.DataFrame(read_fasta(rt_output_fasta), columns=('name', 'dna_seq'))
-     .merge(df_scores, how='left')
-    )
-    df_seqs[['name', 'score']].to_csv(idt_order_scores, index=None)
+    df_seqs[['name', 'score']].to_csv(output_table, index=None)
 
 
 def convert_benchling_features(df_features):
@@ -185,21 +179,22 @@ def generate_vectors(gate=None):
             dna = record.seq
             print(f'Wrote {len(dna):,} nt ({len(record.features)} features) to {f}')
 
-    write_fasta(idt_order_fasta, arr)
+    write_fasta(gene_order_fasta, arr)
     lengths = [len(x[1]) for x in arr]
     total = sum(lengths) / 1000
     longest = max(lengths) / 1000
-    print(f'Wrote {total:.1f} kb (longest gene is {longest:.1f} kb) to {idt_order_fasta}')
+    print(
+        f'Wrote {total:.1f} kb (longest gene is {longest:.1f} kb) to {gene_order_fasta}')
 
 
 def split_order(cutoff=3000):
     less, more = [], []
-    for name, seq in read_fasta(idt_order_fasta):
+    for name, seq in read_fasta(gene_order_fasta):
         if len(seq) >= cutoff:
             more += [(name, seq)]
         else:
             less += [(name, seq)]
-    base = os.path.splitext(idt_order_fasta)[0]
+    base = os.path.splitext(gene_order_fasta)[0]
 
     write_fasta(f'{base}_gte_{cutoff}.fa', more)
     write_fasta(f'{base}_lt_{cutoff}.fa', less)
@@ -354,3 +349,75 @@ def add_features(record, features):
     new_record.features += arr
     os.wtf=  new_record
     return new_record
+
+
+def estimate_cost():
+    cost = 0
+    for _, seq in read_fasta(gene_order_fasta):
+        if len(seq) > 3000:
+            cost += 0.19 * len(seq)
+        else:
+            cost += 0.08 * len(seq)
+    return int(cost)
+
+
+def setup_block():
+    setup()
+    download_tables()
+
+
+def reverse_translate_block():
+    prepare_reverse_translations()
+    print(f'Wrote sequences to reverse translate (RT) to {rt_input_fasta}')
+    print('Running RT...')
+    do_reverse_translations()
+    print(f'Wrote RT outputs to {rt_output_fasta}')
+    print(f'More information in reverse_translations/dna_chisel/')
+
+
+def design_block():
+    generate_vectors()
+    print(f'Estimated cost (USD): {estimate_cost()}')
+
+
+def check_complexity_block():
+    work = ((rt_output_fasta, rt_idt_scores), (gene_order_fasta, gene_idt_scores))
+    for fasta, output_table in work:
+        print(f'Retrieving IDT complexity scores for {fasta}')
+        check_idt_complexity(fasta, output_table)
+        x = pd.read_csv(output_table)['score'].max()
+        print(f'Scores saved to {output_table}, worst score is {x}')
+    
+
+if __name__ == '__main__':
+
+    # order is preserved
+    commands = [
+        '0_setup',
+        '1_rt',
+        '2_design',
+        '3_check',
+        'split_order',
+        'estimate_cost',
+        ]
+
+    # if the command name is different from the function name
+    named = {
+        '0_setup': setup_block,
+        '1_rt': reverse_translate_block,
+        '2_design': generate_vectors,
+        '3_check': check_complexity_block,
+        }
+
+    final = {}
+    for k in commands:
+        try:
+            final[k] = named[k]
+        except KeyError:
+            final[k] = eval(k)
+
+    try:
+        fire.Fire(final)
+    except BrokenPipeError:
+        pass
+    
