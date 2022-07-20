@@ -566,7 +566,8 @@ def submit_from_command_list(
     cpus=1, with_gpu=None, stdout='default', stderr='default', dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
-    :param filename: file with one line per command, or "stdin" to pipe in a command list
+    :param filename: file with one line per command, or "stdin" to pipe in a command list;
+        lines that are blank or commented out are automatically removed
     :param group_size: runs a group of commands within each task, useful if commands run in 
       less than a few minutes (but group must finish in queue time limit!)
     :param limit_array: limit task array to this many concurrent jobs (e.g., --array=5)
