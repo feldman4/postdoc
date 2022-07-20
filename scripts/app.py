@@ -640,7 +640,9 @@ def submit_from_command_list(
 
     if with_gpu is not None:
         args += [f'--gres', f'gpu:{with_gpu}']
-
+    
+    # TODO: could use Luki's single-pass sed command
+    # TODO: could save file with #SBATCH flags that can be re-submitted with sbatch {uuid}.sh 
     wrap = (
         f'for I in $(seq 1 {group_size}); do '
         f'J=$(( ($SLURM_ARRAY_TASK_ID - 1) * {group_size} + $I )); '
