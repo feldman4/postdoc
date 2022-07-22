@@ -325,14 +325,14 @@ def get_kmers(s, k):
 
 
 def read_fastq(filename, max_reads=1e12, include_quality=False, include_name=False, 
-               include_index=False):
+               include_index=False, progress=lambda x: x):
     if filename.endswith('gz'):
         fh = gzip.open(filename, 'rt')
     else:
         fh = open(filename, 'r')
     reads, quality_scores, names, indices = [], [], [], []
     read_count = 0
-    for i, line in enumerate(fh):
+    for i, line in progress(enumerate(fh)):
         if i % 4 == 1:
             reads.append(line.strip())
             read_count += 1
