@@ -683,7 +683,8 @@ def submit_from_command_list(
             filename_submit_rename = f'logs/.clean/{clean_name}_{job_id}_submit.sh'
             os.symlink(filename, filename_rename)
             os.rename(filename_submit, filename_submit_rename)
-            print(f'{x.decode().strip()}; resubmit from this dir with:', file=sys.stderr)
+            print(f'{x.decode().strip()}; resubmit with:', file=sys.stderr)
+            print(f'  cd {os.getcwd()} &&')
             print(f'  sbatch {filename_rename}', file=sys.stderr)
         else:
             print('Job submission failed!')
