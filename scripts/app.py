@@ -580,11 +580,8 @@ def submit_from_command_list(
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
     """
     from math import ceil
-    import os
     import pandas as pd
-    import subprocess
-    import sys
-    import uuid
+    import os, re, subprocess, sys, time, uuid
     num_removed = 0
     if filename == 'stdin':
         lines = sys.stdin.read().strip().split('\n')
@@ -609,9 +606,10 @@ def submit_from_command_list(
     clean_name = name.replace(':', '_')
 
     # write a clean list of commands so wrapper can use sed to pull out correct lines
-    os.makedirs('logs/.clean', exist_ok=True)
-    filename = f'logs/.clean/{uuid.uuid1()}.sh'
-    pd.Series(commands).to_csv(filename, header=None, index=None)
+    os.makedirs('logs/.clean/.raw', exist_ok=True)
+    filename = f'logs/.clean/.raw/{clean_name}_{str(uuid.uuid1())[:8]}.sh'
+    with open(filename, 'w') as fh:
+        fh.write('\n'.join(commands))
 
     little_a = '_%a' if 1 < num_groups else ''
     stdout = f'logs/{clean_name}_%A{little_a}.out' if stdout == 'default' else stdout
@@ -632,7 +630,6 @@ def submit_from_command_list(
     removed = ''
     if num_removed:
         removed = f' (removed {num_removed} blank/comment lines)'
-    submit_message = f'Submitting {len(commands)} command{plural}{gs} to {queue} queue{removed}...'
     
     args = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
                 '-o', stdout, '-e', stderr, '--array', array]
@@ -641,23 +638,55 @@ def submit_from_command_list(
     if with_gpu is not None:
         args += [f'--gres', f'gpu:{with_gpu}']
     
-    # TODO: could use Luki's single-pass sed command
-    # TODO: could save file with #SBATCH flags that can be re-submitted with sbatch {uuid}.sh 
-    wrap = (
-        f'for I in $(seq 1 {group_size}); do '
-        f'J=$(( ($SLURM_ARRAY_TASK_ID - 1) * {group_size} + $I )); '
-        f'sed -n ${{J}}p {filename} | bash; '
-        'done'
-    )
-    args += ['--wrap', wrap]
-
-    print(submit_message, file=sys.stderr)
-    if dry_run:
-        args[-1] = '"' + args[-1] + '"'
-        print(' '.join(args))
-    else:
+    sbatch_args = {
+        '-p': queue,
+        '-J': name,
+        '--mem': memory,
+        '-c': cpus,
+        '-o': stdout,
+        '-e': stderr,
+        '--array': array,
+    }
         
-        subprocess.Popen(args, stdout=sys.stdout, stderr=sys.stderr)
+    sbatch_header = (
+        ['#!/bin/bash'] + 
+        [f'#SBATCH {a} {b}' for a, b in sbatch_args.items()] +
+        ['', f'GROUP_SIZE={group_size}', '']
+    )
+
+    sbatch_body = f"""
+    LINES=$(seq -s 'p;' $((($SLURM_ARRAY_TASK_ID-1)*$GROUP_SIZE+1)) $(($SLURM_ARRAY_TASK_ID*$GROUP_SIZE)))
+    sed -n "${{LINES}}p" {filename} | bash -x
+    """
+    sbatch_body = [x.lstrip() for x in sbatch_body.strip().split('\n')]
+
+    filename_submit = filename[:-3] + '_submit.sh'
+    content = '\n'.join(sbatch_header + sbatch_body)
+    with open(filename_submit, 'w') as fh:
+        fh.write(content)
+
+    submit_message = (f'Submitting {len(commands)} command{plural}{gs} to {queue}'
+                    f' queue{removed}...')
+
+    print(submit_message, file=sys.stderr, flush=True)
+    if dry_run:
+        print('DRY RUN: wrote sbatch file but did not submit')
+    else:
+        try:
+            x = subprocess.check_output(['sbatch', filename_submit])
+        except subprocess.CalledProcessError:
+            x = b''
+        job_id = re.findall('Submitted batch job (\d+)', x.decode())
+        if job_id:
+            job_id = job_id[0]
+            filename_rename = f'logs/.clean/{clean_name}_{job_id}.sh'
+            filename_submit_rename = f'logs/.clean/{clean_name}_{job_id}_submit.sh'
+            os.symlink(filename, filename_rename)
+            os.rename(filename_submit, filename_submit_rename)
+            print(f'{x.decode().strip()}; resubmit from this dir with:', file=sys.stderr)
+            print(f'  sbatch {filename_rename}', file=sys.stderr)
+        else:
+            print('Job submission failed!')
 
 
 def fasta_to_table(filename, name='name', sequence='sequence'):
