@@ -1,5 +1,4 @@
 import pandas as pd
-import wget
 
 
 def load_pools_from_html(filename):
