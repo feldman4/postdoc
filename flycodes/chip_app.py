@@ -69,7 +69,7 @@ FINAL_DESIGNS_COLS_REGEX = '^overlap$|^part_*'
 
 # global
 app_script = '/home/dfeldman/s/app.sh'
-
+dnaworks_rt_script = '/home/dfeldman/packages/rtRosetta/1_reverse_translate.py'
 
 def print(*args, file=sys.stderr, **kwargs):
     """Local print command goes to stderr by default.
@@ -576,7 +576,9 @@ def setup_DNAworks(designs, organism):
         organism = 'yeast'
     elif 'coli' in organism.lower():
         organism = 'ecoli'
-    if organism not in ('yeast', 'ecoli'):
+    elif 'sapiens' in organism.lower():
+        organism = 'human'
+    if organism not in ('yeast', 'ecoli', 'human'):
         raise ValueError(organism)
 
     
@@ -591,13 +593,12 @@ def setup_DNAworks(designs, organism):
     )
 
     seq_list = os.path.basename(dnaworks_input)
-    script = 'python2 /home/longxing/bin/DNAWorks/1_reverse_translate.py'
-    cmd = f'{script} -seq_list {seq_list} -organism {organism}'
-    print(f'Preparing DNAworks for {len(df):,} sequences...')
-    print(cmd)
+    cmd = f'python2 {dnaworks_rt_script} -seq_list {seq_list} -organism {organism}'
+    print(f'Preparing DNAworks for {len(df):,} sequences with command:')
+    print('  ' + cmd)
     subprocess.run(cmd, cwd=d, shell=True)
 
-    print(f"""DNAworks steps
+    print(f"""To run DNAworks:
     1. submit: cd {os.path.abspath('process/DNAworks')} && sh {os.path.abspath('process/DNAworks/submition_commands.list')}
     2. monitor: watch squeue --user=`whoami`
     3. collect and verify: cd {os.getcwd()} && chip_app.sh collect_reverse_translations
@@ -1020,6 +1021,9 @@ def export_oligos():
     arr = []
     for pool, df in df_final.groupby('pool'):
         outer_name, assembly_parts = df[['outer_adapter', 'assembly_parts']].iloc[0]
+        if outer_name.count(',') == 1:
+            key1, key2 = [x.strip() for x in outer_name.split(',')]
+            
         outer_5, outer_3 = adapter_seqs[outer_name].values()
 
         if assembly_parts == 1:
@@ -1120,12 +1124,12 @@ def collect_subdirectory_tables():
     """
     search = '*/process/5_oligos.csv'
     df_oligos = csv_frame(search)
-    print(f'Collected oligos from:', *nglob(search), sep='\n')
+    print(f'Collected oligos from:', *nglob(search), sep='\n  ')
     
     search = '*/input/barcodes.csv'
     df_barcodes = (csv_frame(search, sort=False)
     .drop_duplicates('sequence').drop(['mz_group', 'barcode_set'], axis=1))
-    print(f'Collected barcodes from:', *nglob(search), sep='\n')
+    print(f'Collected barcodes from:', *nglob(search), sep='\n  ')
 
     barcode_info = df_barcodes.set_index('sequence')[['iRT', 'mz']]
 
@@ -1133,7 +1137,7 @@ def collect_subdirectory_tables():
     df_designs = (csv_frame(search, sort=False)
     .join(barcode_info, on='barcode')
     )
-    print(f'Collected designs from:', *nglob(search), sep='\n')
+    print(f'Collected designs from:', *nglob(search), sep='\n  ')
 
     df_oligos.to_csv('oligos.csv', index=None)
     print(f'Wrote {df_oligos.shape[0]} oligos to oligos.csv')
