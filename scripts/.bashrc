@@ -9,6 +9,7 @@ export PATH="$PATH:$HOME/packages/silent_tools"
 export PYTHONPATH="$HOME/packages:$PYTHONPATH"
 export PYTHONPATH="$HOME/packages/NatureProtocols:$PYTHONPATH"
 export PYTHONPATH="$HOME/packages/codon_harmony:$PYTHONPATH"
+export PYTHONPATH="$HOME/packages/ppi_pipeline_tools:$PYTHONPATH"
 
 ######################### ALIASES #############################
 
@@ -50,6 +51,8 @@ source ~/.fire_completion # python fire completion
 source /software/mmseqs2/util/bash-completion.sh
 
 ########################### EXTRA ############################
+
+bind 'set mark-symlinked-directories on'
 
 # load z for fuzzy cd from scripts/external/z.sh (this is scripts/.bashrc)
 
@@ -100,3 +103,13 @@ function makewip() {
     rm ~/.wip 2>/dev/null
     ln -s $target ~/.wip
 }
+
+# SO 11456403, allows unquoted wildcards like
+# r path/to/stuff/X/
+reset_expansion(){ CMD="$1";shift;$CMD "$@";set +f;}
+
+function r {
+    remote_path="$1"; shift
+    rsync -rR --progress -z $@ ${DIGS_NODE:-jojo}:"${remote_path}" $HOME
+}
+alias r='set -f;reset_expansion r'
