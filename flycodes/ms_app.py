@@ -687,9 +687,13 @@ def format_title(design_name, pdb_name, width=60):
     return '\n'.join([design_name] + textwrap.wrap(pdb_name, width))
 
 
-def plot_design_range(first_design, num_to_plot):
+def plot_design_range(first_design, num_to_plot, progress='tqdm'):
     import pandas as pd
     import matplotlib.pyplot as plt
+    from tqdm.auto import tqdm
+    
+    if progress == 'tqdm':
+        progress = tqdm
 
     df_designs = pd.read_csv(design_table)
     df_samples = pd.read_csv(sample_table)
@@ -713,7 +717,7 @@ def plot_design_range(first_design, num_to_plot):
           f'({designs_present[0]} to {designs_present[-1]})')
 
     os.makedirs('figures/by_design', exist_ok=True)
-    for design_name, df in df_plot.groupby('design_name'):
+    for design_name, df in progress(df_plot.groupby('design_name')):
         # fig = plot_one_design(df, df_samples)
         fig = plot_one_design2(df)
         f = f'figures/by_design/{design_name}.png'
@@ -1087,7 +1091,7 @@ def plot_one_design2(df_intensities):
      .query('stage == "SEC"')['fraction_center'].pipe(sorted)
     )
     intensity = config['sec']['barcode']['intensity_metric']
-    fig = plot(df_intensities, stages, fraction_centers, intensity)
+    fig = plot(df_intensities.query('stage == @stages'), stages, fraction_centers, intensity)
     return fig
 
 
@@ -1282,7 +1286,8 @@ def overlay_validation_sec(uv_regex='230|260|280', peak_volume_gate='8 < volume 
         '01_UWPR_beta_barrels': '/projects/ms/analysis/01_UWPR_beta_barrels/process',
         '05_UWPR_rolls': '/projects/ms/analysis/05_UWPR_rolls/process',
         '19_UWPR_CN162': '/projects/ms/analysis/19_UWPR_CN162/process',
-        '26_UWPR_chip176_BWLM': '/projects/ms/analysis/26_UWPR_chip176_BWLM/process',
+        '26_chip176_BWLM_S75': '/projects/ms/analysis/26_UWPR_chip176_BWLM/process',
+        '28_chip176_BWLM_S200': '/projects/ms/analysis/28_UWPR_chip176_BWLM_S200/process',
     }
     traces = {}
     arr0, arr1, arr2 = [], [], []
@@ -1323,6 +1328,7 @@ def overlay_validation_sec(uv_regex='230|260|280', peak_volume_gate='8 < volume 
         x['export_name'].isin(df_uv_data['export_name']))
      .query('validation_sec_found')
      .merge(peaks)
+     # TODO: this is generating duplicate entries?
      .merge(dataset_info, how='left')
      .rename(columns={'note': 'validation_note'})
     )
