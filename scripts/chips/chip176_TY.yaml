@@ -1,32 +1,25 @@
 fetch:
   layout_table: 
-    source: 'drive:chipmunk/chip176_CN'
+    source: 'drive:chipmunk/chip176_TY'
     skiprows: 2
   adapter_table:
     source: 'drive:chipmunk/adapters'
     gate: 'kind == ["outer", "inner"]'
 
 layout:
-  cterm_DK: [design, linker, K, barcode, spacer]
+  # his tag is in adapter
+  cterm_TY: [design, linker, barcode, spacer]
   parts:
     spacer: 
-      aa: GSSGSGSSGSGSSGSGSSGGSSG
+      aa: GSSGSGSSGSGSSGSGSSGSSGSGSSSGSSGSSSGSSSGSSSGSSGSSSGSSGSSGSSGS
       reverse_translation: random
       expand_from: left
     linker:
-      aa: GS
+      aa: GSK
       reverse_translation: random
-    triple_stop:
-      dna: 'TAATGATAA'
-    R:
-      aa: R
-      reverse_translation: max
-    K:
-      aa: K
-      reverse_translation: max
 
 barcodes:
-  - name: cterm_filtered
+  - name: cterm_filtered_DK
     terminus: 'C'
     source: /net/scratch/dfeldman/flycodes/runs/run_014/all_barcodes.csv
     gate: "hydro_count_norm < 0.4 \
@@ -36,22 +29,15 @@ barcodes:
            & -10 < iRT < 115 \
            & -4 < charge_pH7 \
            "
-    mz_resolution: 100000
-    iRT_separation: 4
-
+    mz_resolution: 80000
+    iRT_separation: 8
 
 dna_design:
-  oligo_length: [300, 300]
   restriction_sites:
     - GGTCTC
 
 reverse_translation:
   method: DNAworks
-
-assembly:
-  max_per_pool: 800
-  oligo_overlap_opt: 
-  Tm: 
 
 validate:
     cloning:
@@ -63,6 +49,3 @@ validate:
     barcodes:
         mz_resolution:
         iRT_resolution:
-
-constants:
-    

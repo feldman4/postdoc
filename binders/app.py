@@ -163,6 +163,9 @@ def load_nd2_site(nd2_file, index):
 
 def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_table=file_table, 
                sites='all', luts=('GRAY', 'GREEN', 'RED'), **selectors):
+    """Exporting nd2 to output path, formatted using columns from file table. Can 
+    sub-select file table for parallel processing.
+    """
     from nd2reader import ND2Reader
     import numpy as np
     import pandas as pd
@@ -191,7 +194,6 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
             f = output.format(**info)
             save_stack(f, data, luts=luts)
             print(f'Saved to {f}', file=sys.stderr)
-
 
 
 def process_site(file_table, experiment, plate, well, site, mask_prefix=None):
@@ -654,6 +656,19 @@ def image_log_scale(data):
     return scaled - floor
 
 
+def segment_nuclei_for_titer(well):
+    from ops.io import save_stack, read_stack
+    import pandas as pd
+    from tqdm.auto import tqdm
+    from postdoc.binders.view import find_nuclei
+    df_files = pd.read_csv('export_files.csv').query('well == @well')
+    print(f'Processing {len(df_files)} sites')
+    for _, row in tqdm(list(df_files.iterrows())):
+        f_out = 'analysis/process/{well}_Site-{site}.nuclei.tif'.format(**row)
+        _, dapi = read_stack(row['file'])
+        masks = find_nuclei(dapi, 40)
+        save_stack(f_out, masks, compress=1)
+
 
 if __name__ == '__main__':
 
@@ -667,6 +682,7 @@ if __name__ == '__main__':
         'export_grid_nd2',
         'plot_all', 
         'export_nd2',
+        'segment_nuclei_for_titer',
     ]
 
     # if the command name is different from the function name

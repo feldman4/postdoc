@@ -456,7 +456,7 @@ def load_matched_tables(*matched_tables):
     return csv_frame(matched_tables)
 
 
-def plot(*matched_tables, output='figures/', filetype='png'):
+def plot(*matched_tables, output='figures/', filetype='png', fuzzy_distance=15):
     """Generate QC plots from result of `match` command.
 
     The design-barcode count and barcode purity plots require "design_name" and "match_barcode" 
@@ -481,7 +481,17 @@ def plot(*matched_tables, output='figures/', filetype='png'):
 
     os.makedirs(os.path.dirname(output), exist_ok=True)
 
-    fuzzy_distance = 15
+    if INSERT_BARCODE in df_matches:
+        non_redundant_barcodes = (df_designs
+            .drop_duplicates([SUBPOOL, BARCODE])
+            .drop_duplicates(BARCODE, keep=False)
+            [BARCODE].pipe(list)
+        )
+
+        redundant_barcodes = set(df_designs[BARCODE]) - set(non_redundant_barcodes)
+        if redundant_barcodes:
+            print(f'Detected {len(redundant_barcodes)} barcodes repeated across subpools, '
+                'these will be removed for purity and crossmapping analysis.')
 
     with sns.plotting_context('notebook'):
         try:
@@ -544,7 +554,7 @@ def plot(*matched_tables, output='figures/', filetype='png'):
                 df_plot.to_csv(f'{output}design_barcode_counts_{sample}-{subpool}.csv')
                 print(f'Saved design-barcode count heatmap ({sample}-{subpool}) to {f}')
 
-            fg, df_plot = plot_barcode_purity(df_matches)
+            fg, df_plot = plot_barcode_purity(df_matches, df_designs)
             f = f'{output}barcode_purity.{filetype}'
             fg.savefig(f)
             df_plot.to_csv(f'{output}barcode_purity.csv', index=None)
@@ -577,8 +587,6 @@ def plot_abundance(df_matches, df_designs, mode='insert'):
     elif mode == 'barcode':
         # only barcodes in the design table
         df_matches = df_matches.query(f'{INSERT_FROM_BARCODE} == {INSERT_FROM_BARCODE}')
-
-    df_matches.to_csv('test.csv', index=None)
 
     df_plot = (df_matches
     .groupby([SAMPLE, subpool, key])[COUNT].sum().reset_index()
@@ -671,7 +679,7 @@ def plot_detection_cutoffs_barcode(df_matches):
     return fig, df_plot
 
 
-def plot_barcode_purity(df_matches):
+def plot_barcode_purity(df_matches, df_designs):
     """Purity is defined relative to the barcode detected in the insert 
     (i.e., the barcode that will be pulled down for MS).
     """
@@ -679,8 +687,16 @@ def plot_barcode_purity(df_matches):
     import matplotlib.pyplot as plt
     import numpy as np
 
+
+    allowed_barcodes = (df_designs
+        .drop_duplicates([SUBPOOL, BARCODE])
+        .drop_duplicates(BARCODE, keep=False)
+        [BARCODE].pipe(list)
+    )
+    
     df_plot = (df_matches
     # only barcodes in the design table
+    .query(f'{INSERT_BARCODE} == @allowed_barcodes')
     .query(f'{INSERT_FROM_BARCODE} == {INSERT_FROM_BARCODE}')
     .pivot_table(index=[SAMPLE, INSERT_BARCODE], 
                 columns=MISMAPPED_BARCODE, values='count', aggfunc='sum')
@@ -705,6 +721,9 @@ def plot_barcode_purity(df_matches):
 
 
 def plot_crossmapping(df_matches, df_designs, mode='insert', max_insert_distance=0):
+    """If mode=insert, determine crossmapping from entire insert. If mode=barcode, use 
+    only barcodes that are unique across subpools.
+    """
     import matplotlib.pyplot as plt
     import seaborn as sns
 
@@ -736,7 +755,7 @@ def plot_crossmapping(df_matches, df_designs, mode='insert', max_insert_distance
     )
 
     sns.heatmap(df_plot, square=True, annot=True, fmt='d', 
-                xticklabels=True, yticklabels=True, cbar=False)
+                xticklabels=True, yticklabels=True, cbar=False, ax=ax)
 
     plt.xticks(rotation=30)
     plt.yticks(rotation=0)

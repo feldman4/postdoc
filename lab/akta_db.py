@@ -1,6 +1,13 @@
+"""A tool to automatically search, export, and plot SEC data from AKTA UNICORN
+database without having to manually export results or use the UNICORN Windows GUI.
+
+More info: https://wiki.ipd.uw.edu/protocols/wet_lab/sec/plot_sec#akta_db
+
+Indicated functions from akta_snap.py by Ryan/Luki.
+"""
 import fire
 
-from datetime import datetime,timezone,timedelta
+from datetime import datetime, timedelta
 import dateutil
 import io
 import os
@@ -9,10 +16,6 @@ import sys
 from zipfile import ZipFile
 
 # other imports delayed to keep command line interface snappy
-
-
-"""Indicated functions from akta_snap.py by Ryan/Luki
-"""
 
 # home of chroma.hdf and fractions.hdf
 default_location = '/home/dfeldman/for/akta_db'
@@ -747,7 +750,7 @@ def export(search_result, num_samples=512):
      # retrieve zipped data
      .pipe(add_uv_curves)
      # unzip and resample
-     .pipe(expand_bcp_data)
+     .pipe(expand_bcp_data, num_samples=num_samples)
      [cols]
      .pipe(dataframe_to_csv_string)
     )
@@ -849,9 +852,78 @@ def export_and_plot(search_result, num_samples=512):
     plot(f, overlay=True, normalize=True, output=f'{base}_normalized_')
 
 
+# FOR UNICORN ZIP FILE
+
+def load_unicorn_data(unicorn_zipfile):
+    from pycorn import pc_uni6
+    import contextlib
+    with contextlib.redirect_stdout(None):
+        fdata = pc_uni6(unicorn_zipfile)
+        fdata.load()
+        fdata.xml_parse()
+        fdata.clean_up()
+    return fdata
+
+
+def get_uv_data(fdata, pattern='UV.*\d\d\d'):
+    """Extract UV channels matching `pattern` and interpolate amplitudes so all channels are
+    sampled at the same points.
+    """
+
+    import re
+    import numpy as np
+    import pandas as pd
+    uv_channels = [x for x in fdata if re.match(pattern, x)]
+
+    arr = []
+    for chan in uv_channels:
+        volume, amplitude = np.array(fdata[chan]['data']).T
+        (pd.DataFrame({'volume': volume, chan: amplitude})
+         .drop_duplicates('volume').set_index('volume').pipe(arr.append))
+
+    return pd.concat(arr, axis=1).interpolate(method='index')
+
+
+def resample_linear(df, num_points):
+    """Linearly interpolate dataframe over the range of its index.
+    """
+    import numpy as np
+    import pandas as pd
+    ix = pd.Index(np.linspace(df.index[0], df.index[-1], num_points), name=df.index.name)
+    return pd.DataFrame(
+        {col: np.interp(ix, df.index, df[col]) for col in df.sort_index()},
+        index=ix,
+    )
+
+
+def export_unicorn_zipfile(f, output=None, num_points=512):
+    """Export UV data from unicorn zip file in csv format. 
+    
+    :param output: filepath for output csv, otherwise based on input filename
+    :param num_points: the volume index is resampled to this many points
+
+    """
+    fdata = load_unicorn_data(f)
+    df_uv_wide = get_uv_data(fdata).pipe(resample_linear, num_points)
+    df_uv_long = (df_uv_wide.stack().reset_index()
+     .set_axis(['volume', 'channel', 'amplitude'], 1)
+     .sort_values(['channel', 'volume'])
+     [['channel', 'volume', 'amplitude']]
+    )
+    
+    if output is None:
+        output = f[:-4] + '.csv'
+    df_uv_long.to_csv(output, index=None)
+
+
 if __name__ == '__main__':
     # order is preserved
-    commands = ['search', 'export', 'plot','split_experiments', 'export_and_plot', 'export_hdf']
+    commands = [
+        'search', 'export', 'plot', 'export_and_plot',
+        'split_experiments', 
+        'export_hdf',
+        'export_unicorn_zipfile',        
+    ]
     # if the command name is different from the function name
     named = {
         'search': search_app,
@@ -868,6 +940,3 @@ if __name__ == '__main__':
         fire.Fire(final)
     except BrokenPipeError:
         pass
-    
-
-

@@ -7,8 +7,6 @@ import numpy as np
 import re
 
 import pandas as pd
-from Bio import SeqIO
-from Levenshtein import distance
 
 from .constants import resources
 
@@ -197,6 +195,7 @@ def sanger_database(drive):
 
 
 def read_ab1(f):
+    from Bio import SeqIO
     with open(f, 'rb') as fh:
         records = list(SeqIO.parse(fh, 'abi'))
         assert len(records) == 1
@@ -326,14 +325,14 @@ def get_kmers(s, k):
 
 
 def read_fastq(filename, max_reads=1e12, include_quality=False, include_name=False, 
-               include_index=False):
+               include_index=False, progress=lambda x: x):
     if filename.endswith('gz'):
         fh = gzip.open(filename, 'rt')
     else:
         fh = open(filename, 'r')
     reads, quality_scores, names, indices = [], [], [], []
     read_count = 0
-    for i, line in enumerate(fh):
+    for i, line in progress(enumerate(fh)):
         if i % 4 == 1:
             reads.append(line.strip())
             read_count += 1
@@ -393,6 +392,8 @@ def make_kmer_dict(sequences, k):
 
 
 def match_nearest(query, sequences, kmers):
+    from Levenshtein import distance
+
     k = len(next(iter(kmers.keys())))
 
     candidates = []
@@ -468,6 +469,8 @@ def add_design_matches(df_reads, col, reference, window, k):
 def calculate_distance_matches(queries, results):
     """Get columns `design_distance` and `design_match` from results of match_queries`.
     """
+    from Levenshtein import distance
+
     arr = []
     for q, rs in zip(queries, results):
         if len(rs) == 0:
@@ -485,6 +488,8 @@ def match_and_check(queries, reference, window, k, ignore_above=40, progress=lam
     and check the results by brute force calculation (all pairs). Mismatches
     with an edit distance greater than `ignore_above` are ignored.
     """
+    from Levenshtein import distance
+
     print(f'Matching {len(queries)} queries to {len(reference)} '
           f'reference sequences, window={window} and k={k}')
     df_matched = (pd.DataFrame({'sequence': queries})
@@ -509,6 +514,7 @@ def load_abi_zip(filename):
     """
     import zipfile
     from io import BytesIO
+    from Bio import SeqIO
     zh = zipfile.ZipFile(filename, 'r')
     arr = []
     for zi in zh.filelist:

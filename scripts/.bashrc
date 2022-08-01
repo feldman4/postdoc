@@ -4,10 +4,12 @@ export PATH="$HOME/packages/postdoc/scripts:$PATH"
 export PATH="$HOME/packages/rtRosetta/scripts:$PATH"
 export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
 export PATH="$HOME/.bin:$PATH" # .local/bin got polluted with random python crap
+export PATH="$PATH:$HOME/packages/silent_tools"
 
 export PYTHONPATH="$HOME/packages:$PYTHONPATH"
 export PYTHONPATH="$HOME/packages/NatureProtocols:$PYTHONPATH"
 export PYTHONPATH="$HOME/packages/codon_harmony:$PYTHONPATH"
+export PYTHONPATH="$HOME/packages/ppi_pipeline_tools:$PYTHONPATH"
 
 ######################### ALIASES #############################
 
@@ -15,6 +17,7 @@ alias l='ls -l --all --human-readable --no-group --color=auto --classify -v'
 alias rsin='rsync -Rr --progress --update'
 alias hist="sort | uniq -c | sort -r"
 alias less='less -S'
+alias tree='tree -C --filelimit=20'
 alias rgf='rg --files | rg'
 alias kol="column -s, -t"
 alias watch='watch ' # triggers alias expansion
@@ -49,6 +52,8 @@ source /software/mmseqs2/util/bash-completion.sh
 
 ########################### EXTRA ############################
 
+bind 'set mark-symlinked-directories on'
+
 # load z for fuzzy cd from scripts/external/z.sh (this is scripts/.bashrc)
 
 SCRIPTPATH="$( cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 ; pwd -P )"
@@ -76,7 +81,7 @@ export REMOTE=/home/wyang12/Documents/Binders/CTLA4/CTLA4_hits/L1_H1-3/2c_split_
 # csvkit uses tabulate, which is slow and lacks a streaming option
 function csvless() {
     # csvlook=/home/dfeldman/.conda/envs/df-pyr-tf/bin/csvlook
-    cat <(head -400 $1 | csvlook "${@:2}") <(csvlook $1 "${@:2}" | tail -n +402) | less
+    cat <(head -400 $1 | csvlook "${@:2}") <(csvlook $1 "${@:2}" | tail -n +402) | /usr/bin/less -S
 }
 
 # get typical digs paths
@@ -98,3 +103,13 @@ function makewip() {
     rm ~/.wip 2>/dev/null
     ln -s $target ~/.wip
 }
+
+# SO 11456403, allows unquoted wildcards like
+# r path/to/stuff/X/
+reset_expansion(){ CMD="$1";shift;$CMD "$@";set +f;}
+
+function r {
+    remote_path="$1"; shift
+    rsync -rR --progress -z $@ ${DIGS_NODE:-jojo}:"${remote_path}" $HOME
+}
+alias r='set -f;reset_expansion r'

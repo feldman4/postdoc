@@ -7,7 +7,7 @@ then
     source activate $ENV
 fi
 
-PYTHONPATH=/home/dfeldman/packages python /home/dfeldman/packages/postdoc/lab/ms_qc_app.py "$@"
+PYTHONPATH=/home/dfeldman/packages python -m postdoc.lab.ms_qc_app "$@"
 
 <<'###EXAMPLES'
 

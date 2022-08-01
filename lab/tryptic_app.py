@@ -46,11 +46,12 @@ def setup_from_fasta(search):
 def drop_duplicate_designs(df_seqs):
     num_dupes = df_seqs['design'].duplicated().sum()
     if num_dupes:
-        print(f'Dropping {len(num_dupes)} duplicate designs')
+        print(f'Dropping {num_dupes} duplicate designs')
     return df_seqs.drop_duplicates('design')
 
 
-def digest(pattern='trypsin', pH=2, min_length=4, max_length=25, missed_cleavages=0):
+def digest(pattern='trypsin', pH=2, min_length=4, max_length=25, missed_cleavages=0, 
+           keep_cterm=True):
     """Digest designs with indicated enzyme. 
     """
     enzymes = {
@@ -63,25 +64,36 @@ def digest(pattern='trypsin', pH=2, min_length=4, max_length=25, missed_cleavage
     arr = []
     for design in df_designs['design']:
         peptides = split_by_regex(pattern, design)
-        for x in peptides:
+        n = len(peptides)
+        for i, x in enumerate(peptides):
+            if i == n - 1 and not keep_cterm:
+                break
             arr.append({'peptide': x, 'missed_cleavages': 0, 'design': design})
         for i in range(1, missed_cleavages + 1):
-            for j in range(len(peptides) - i):
+            for j in range(n - i):
+                if n - 1 <= j + i + 1  and not keep_cterm:
+                    continue
                 x = ''.join(peptides[j:j + i + 1])
                 arr.append({'peptide': x, 'missed_cleavages': i, 'design': design})
 
 
-    df_peptides = pd.DataFrame(arr)
-    df_peptides['count'] = df_peptides.groupby('peptide')['design'].transform('size')
-    df_peptides['electro_charge'] = df_peptides['peptide'].apply(electrochem.charge, pH=pH)
-    df_peptides['mz_2'] = df_peptides['peptide'].apply(fast_mass, charge=2)
-    df_peptides['peptide_length'] = df_peptides['peptide'].str.len()
-    df_peptides = df_peptides.query('@min_length <= peptide_length <= @max_length')
+    df_peptides = (pd.DataFrame(arr).pipe(annotate_peptides, pH=pH)
+     .query('@min_length <= peptide_length <= @max_length')
+    )
 
     cols = [x for x in df_peptides.columns if x != 'design'] + ['design']
     df_peptides[cols].to_csv(tryptic_table, index=None)
 
     print(f'Wrote {len(df_peptides)} peptides digested with {original_pattern} to {tryptic_table}')
+
+
+def annotate_peptides(df_peptides, pH):
+    df_peptides = df_peptides.copy()
+    df_peptides['count'] = df_peptides.groupby('peptide')['design'].transform('size')
+    df_peptides['electro_charge'] = df_peptides['peptide'].apply(electrochem.charge, pH=pH)
+    df_peptides['mz_2'] = df_peptides['peptide'].apply(fast_mass, charge=2)
+    df_peptides['peptide_length'] = df_peptides['peptide'].str.len()
+    return df_peptides
 
 
 def predict_iRT():
@@ -100,7 +112,11 @@ def predict_iRT():
     peptides.to_csv(prosit_input_table)
 
     if os.path.exists(iRT_table):
-        iRT_peptides = pd.read_csv(iRT_table)['sequence']
+        try:
+            iRT_peptides = pd.read_csv(iRT_table)['sequence']
+        except pd.errors.EmptyDataError:
+            # failed prosit run generates empty table
+            iRT_peptides = []
         if peptides.isin(iRT_peptides).all():
             print(f'iRT values already available in {iRT_table}, skipping prediction')
             return
@@ -117,7 +133,7 @@ def predict_iRT():
 
 def analyze_results(mz_iRT_gate='-20 < iRT < 175 & 400 < mz_2 < 1400', 
                     base_gate='1 < electro_charge < 2 & count == 1'):
-    gate = f'{mz_iRT_gate} & {base_gate}'
+    gate = f'({mz_iRT_gate}) & ({base_gate})'
     print('Filtering peptides')
     print(f'  Unique, doubly-charged: {base_gate}')
     print(f'  Reasonable mz/iRT range: {mz_iRT_gate}')
@@ -125,9 +141,9 @@ def analyze_results(mz_iRT_gate='-20 < iRT < 175 & 400 < mz_2 < 1400',
     iRT_info = pd.read_csv(iRT_table).drop_duplicates('sequence').set_index('sequence')
     df_peptides = pd.read_csv(tryptic_table).join(iRT_info, on='peptide')
 
-    peptide_counts = df_peptides.query(gate).groupby('pdb').size().rename('candidate_peptides')
+    peptide_counts = df_peptides.query(gate).groupby('design').size().rename('candidate_peptides')
     df_design_peptides = (pd.read_csv(design_table)
-    .join(peptide_counts, on='pdb_file')
+    .join(peptide_counts, on='design')
     .fillna(0).pipe(cast_cols, int_cols='candidate_peptides')
     .assign(gate=gate)
     )

@@ -2,7 +2,7 @@ import fire
 
 # modules that are fast to import
 # others are imported locally to keep CLI snappy
-import builtins, re, os, shutil, signal, subprocess, tempfile
+import builtins, os, shutil, signal, subprocess, tempfile
 from glob import glob
 
 
@@ -39,13 +39,13 @@ def validate(raw_file, output='qc', databases='/home/dfeldman/for/ms_qc_app/fast
     Prosit iRT (real detected peptides will have a high correlation). Plot total ion current from
     all MS1 peaks, as well as ion current from MS1 peaks mapped to barcodes.
 
-    :param raw_file: Path to .raw file :param output: Path to directory where QC data will be saved
-    :param databases: Path or wildcard string matching peptide databases against which to search
+    :param raw_file: path to .raw file 
+    :param output: path to directory where QC data will be saved
+    :param databases: path or wildcard string matching peptide databases against which to search
     :param comet_filter: maximum score (lower is better) and mz error retained in .filtered.idXML
-    :param plot_filter:
+    :param plot_filter: filter peptide IDs included in plots
     :param ms1_filter: entries to retain in saved MS1 hdf table.
     """
-    from natsort import natsorted
     import pandas as pd
     from postdoc.flycodes.explore import load_mzml_to_ms1_dataframe
 
@@ -112,6 +112,69 @@ def validate(raw_file, output='qc', databases='/home/dfeldman/for/ms_qc_app/fast
 
     print(f'Plotting total ion current...')
     plot_ion_current(df_ms1_plot, output_dir)
+
+
+def plot_batch(*tables, reference_sample=None, output='qc'):
+    """After running validate command, show some aggregate statistics.
+    
+    :param tables: paths to peptide_id tables, defaults to all in subdirectories of
+     `output`
+    :param output: path to directory where QC data will be saved
+    :param reference_sample: sample name for relative statistics, usually the one with
+     the most peptide IDs that will be used for RT calibration
+    """
+    from ..utils import csv_frame, nglob
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    if len(tables) == 0:
+        search = os.path.join(output, '*', 'peptide_ids.csv')
+        tables = nglob(search)
+        print(f'No tables provided, using {len(tables)} found at: {search}')
+        
+    df_ids = (csv_frame(tables)
+              .sort_values('score')
+              .drop_duplicates(['sample', 'sequence'])
+              .sort_values(['sample', 'sequence'])
+              )
+
+    samples = sorted(set(df_ids['sample']))
+    if reference_sample is None:
+        raise SystemExit(f'Must provide reference sample, options are: {", ".join(samples)}')
+
+    # average retention time differences to MS_834 SEC injection sample
+    times = df_ids.pivot_table(index='sequence', columns='sample',
+                               values='retention_time').query('MS_834 == MS_834')
+    times = times.subtract(times[reference_sample], axis=0)
+
+    # retention times are way off!!!
+    col = f'offset from {reference_sample} (s)'
+    offsets = times.stack().rename(col).reset_index().sort_values('sample')
+
+    num_samples = len(set(df_ids['sample']))
+
+    figsize = (4, 1 + num_samples/3)
+    fig, ax = plt.subplots(figsize=figsize)
+    sns.boxplot(data=offsets, x=col, y='sample',
+                orient='horiz', showfliers=False, ax=ax)
+    ax.autoscale(False)
+    ax.plot([0, 0], [-100, 100], 'black', ls=':')
+
+    f = os.path.join(output, 'rt_offset_per_sample.png')
+    fig.savefig(f, bbox_inches='tight')
+    print(f'Saved RT offsets relative to {reference_sample} to: {f}')
+
+    fig, ax = plt.subplots(figsize=figsize)
+    sns.boxplot(data=df_ids, x='mass_error_ppm',
+                y='sample', showfliers=False, ax=ax)
+    ax.autoscale(False)
+    ax.plot([0, 0], [-100, 100], 'black', ls=':')
+
+    f = os.path.join(output, 'mass_error_per_sample.png')
+    fig.savefig(f, bbox_inches='tight')
+    print(f'Saved mass error distributions to {reference_sample} to: {f}')
+
+
 
 
 def annotate_ms1_peptides(df_ms1, df_ids, database_path):
@@ -293,6 +356,8 @@ def load_peptide_ids(search):
     if len(files) == 0:
         return None
     df_ids = pd.concat([read_idxml(f).assign(file=f) for f in files])
+    if df_ids.shape[0] == 0:
+        return None
     
     df_ids['mz'] = df_ids['sequence'].apply(fast_mass, charge=2)
     df_ids['mass_error_ppm'] = 1e6 * (df_ids['scan_mz'] - df_ids['mz'])/df_ids['mz']
@@ -367,8 +432,9 @@ if __name__ == '__main__':
 
     # order is preserved
     commands = [
-        'validate',
         'check_raw_file',
+        'validate',
+        'plot_batch',
         'export_databases',
     ]
     # if the command name is different from the function name

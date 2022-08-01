@@ -102,6 +102,7 @@ def prepare_DNAworks():
     """)
 
 
+
 def reverse_translate_robby(repeats=1, enzymes=('bsai', 'bamhi')):
     from rtRosetta.reverse_translate_robby import main
     df_designs = csv_frame('process/rt_rtrobby*csv')
@@ -131,8 +132,6 @@ def run_codon_harmony():
     cmd = ' '.join(cmd.split())
 
     print(cmd)
-    # x = subprocess.check_output(cmd, shell=True)
-    # fix_codon_harmony()
 
 
 def fix_codon_harmony():

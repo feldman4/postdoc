@@ -76,7 +76,7 @@ class Drive():
 def get_service():
     with open(token, 'rb') as fh:
         creds = pickle.load(fh)
-    return build('drive', 'v3', credentials=creds)
+    return build('drive', 'v3', credentials=creds, cache_discovery=False)
 
 
 def list_files(service):

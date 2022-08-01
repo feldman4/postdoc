@@ -13,8 +13,10 @@ import pyteomics.mzxml
 import pyteomics.pepxml
 from pyteomics.mass import fast_mass
 import numpy as np
+import wget
 
 from ..constants import HOME
+from .design import bin_by_value
 
 
 class Ecoli:
@@ -83,7 +85,7 @@ def e_coli_crap_mz(drive, metadata):
 
     mz_list = []
     for p in peptides:
-        mz_list.append(calc_mz(p, charge=2))
+        mz_list.append(fast_mass(p, charge=2))
 
     bins = bin_by_value(mz_list, metadata.precursor_bins, metadata.precursor_bin_width)
     bad_bins = pd.Series(bins).dropna().drop_duplicates().pipe(sorted)

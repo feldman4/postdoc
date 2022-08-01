@@ -1,6 +1,5 @@
 import fire
 
-import contextlib
 from glob import glob
 import numpy as np
 import os
@@ -12,7 +11,6 @@ import sys
 from tqdm.auto import tqdm
 import yaml
 
-from postdoc.pyrosetta import diy
 from postdoc.sequence import read_fasta, write_fasta, translate_dna, try_translate_dna
 from postdoc.sequence import reverse_complement as rc
 from postdoc.sequence import reverse_translate_random, reverse_translate_max
@@ -22,6 +20,7 @@ from postdoc.utils import (
 from postdoc.flycodes.pool2 import remove_restriction_sites, findone
 from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.pool2 import remove_restriction_sites
+from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.design import add_barcode_metrics
 
 
@@ -33,7 +32,7 @@ input_rt_dir = 'input/reverse_translations'
 
 # reverse translation
 dnaworks_input = 'process/DNAworks/DNA_input.list'
-dnaworks_output = 'process/DNAworks/DNA_sequence.list'
+dnaworks_output = 'process/DNAworks/*dwo'
 reverse_translation_table = 'process/reverse_translations.csv'
 missing_rt_fasta = 'process/missing_rt.fa'
 
@@ -70,7 +69,7 @@ FINAL_DESIGNS_COLS_REGEX = '^overlap$|^part_*'
 
 # global
 app_script = '/home/dfeldman/s/app.sh'
-
+dnaworks_rt_script = '/home/dfeldman/packages/rtRosetta/1_reverse_translate.py'
 
 def print(*args, file=sys.stderr, **kwargs):
     """Local print command goes to stderr by default.
@@ -196,6 +195,8 @@ def summarize_lengths(by_source=True, width=64):
     print()
     header('Barcode usage by length (aa)')
     df_barcodes = pd.read_csv(barcode_table)
+    if no_terminal_R():
+        df_barcodes['length'] -= 1
     A = (df_barcodes.groupby(['barcode_set', 'length'])
         .size().unstack('barcode_set')
         )
@@ -419,6 +420,8 @@ def create_directories():
 
 
 def fake_reverse_translate():
+    """FOR TESTING ONLY!! Create random reverse translations.
+    """
     from postdoc.sequence import reverse_translate_random, write_fasta
     df = (pd.read_csv(chip_designs_table)
      .assign(design_dna=lambda x: 
@@ -573,7 +576,9 @@ def setup_DNAworks(designs, organism):
         organism = 'yeast'
     elif 'coli' in organism.lower():
         organism = 'ecoli'
-    if organism not in ('yeast', 'ecoli'):
+    elif 'sapiens' in organism.lower():
+        organism = 'human'
+    if organism not in ('yeast', 'ecoli', 'human'):
         raise ValueError(organism)
 
     
@@ -588,26 +593,24 @@ def setup_DNAworks(designs, organism):
     )
 
     seq_list = os.path.basename(dnaworks_input)
-    script = 'python2 /home/longxing/bin/DNAWorks/1_reverse_translate.py'
-    cmd = f'{script} -seq_list {seq_list} -organism {organism}'
-    print(f'Preparing DNAworks for {len(df):,} sequences...')
-    print(cmd)
+    cmd = f'python2 {dnaworks_rt_script} -seq_list {seq_list} -organism {organism}'
+    print(f'Preparing DNAworks for {len(df):,} sequences with command:')
+    print('  ' + cmd)
     subprocess.run(cmd, cwd=d, shell=True)
 
-    print(f"""DNAworks steps
+    print(f"""To run DNAworks:
     1. submit: cd {os.path.abspath('process/DNAworks')} && sh {os.path.abspath('process/DNAworks/submition_commands.list')}
-    2. monitor: watch sq
-    3. collect: python2 /home/longxing/bin/DNAWorks/2_collect_dnaseq.py
-    4. verify: python /home/longxing/bin/DNAWorks/3_check_seq.py DNA_sequence.list
+    2. monitor: watch squeue --user=`whoami`
+    3. collect and verify: cd {os.getcwd()} && chip_app.sh collect_reverse_translations
     """)
 
 
 def collect_reverse_translations():
     df_rt = load_input_reverse_translations()
     print(f'Loaded {len(df_rt):,} reverse translations from {input_rt_dir}')
-    if os.path.exists(dnaworks_output):    
-        df_dnaworks = pd.read_csv(dnaworks_output, sep='\s+', header=None)
-        df_dnaworks.columns = 'hash', 'design_name', 'design', 'design_dna'
+    if glob(dnaworks_output):
+        dnaworks_dir = os.path.dirname(dnaworks_input)
+        df_dnaworks = load_DNAworks_output(dnaworks_dir)
         df_dnaworks['rt_source_file'] = 'DNAworks'
         print(f'Loaded {len(df_dnaworks):,} reverse translations from {dnaworks_output}')
         df_rt = pd.concat([df_rt, df_dnaworks])
@@ -615,6 +618,44 @@ def collect_reverse_translations():
     (df_rt[['design_dna', 'rt_source_file']]
     .to_csv(reverse_translation_table, index=None)
     )
+
+
+def read_dwo(dwo_file):
+    """Extract DNA sequence from a DNAworks output file.
+    """
+    s = ''
+    with open(dwo_file) as f:
+        lines = [line.strip() for line in f]
+    count = 0
+    for i, line in enumerate(lines):
+        if 'The DNA sequence' in line:
+            break
+
+    dna = ''
+    for line in lines[i+2:]:
+        if line.startswith('---'):
+            break
+        try:
+            _, x = line.split(' ')
+            dna += x
+        except ValueError:
+            # sometimes there's no DNA on the last line...
+            pass
+
+    return dna
+
+
+def load_DNAworks_output(working_dir):
+    """Same as 2_collect_dnaseq.py and 3_check_seq.py from /home/longxing/bin/DNAWorks/
+    """
+    f = f'{working_dir}/rename.list'
+    df_seqs = pd.read_csv(f, header=None, sep='\s+',
+                          names=('hash', 'design_name', 'design'))
+    df_seqs['design_dna'] = [read_dwo(f'{working_dir}/{x}.dwo')
+                      for x in df_seqs['hash']]
+    assert (df_seqs['design_dna'].apply(translate_dna) == df_seqs['design']).all()
+    df_seqs.to_csv('DNA_sequence.list', index=None, header=None, sep=' ')
+    return df_seqs
 
 
 def load_barcode_sets():
@@ -666,6 +707,11 @@ def load_barcode_sets():
                 df_2['dummy'] = df_2.eval(entry['sort_by'])
                 df_2 = df_2.sort_values('dummy').drop('dummy', axis=1)
 
+        if no_terminal_R():
+            # strip terminal R from barcode (gets added back in pT09 cloning)
+            df_2['sequence'] = df_2['sequence'].str[:-1]
+            print(f'  Removed terminal R from `sequence` column')
+
         arr += [df_2.sort_values(['mz', 'iRT'])]
         print(f'  Retained {len(df_2):,} after filtering by mz,iRT separation')
 
@@ -673,7 +719,6 @@ def load_barcode_sets():
     pd.concat(arr).to_csv(barcode_table, index=None)
     print(f'Available barcodes written to {barcode_table}')
     plot_barcode_sets()
-
 
 
 def get_separated_components(xs, separation):
@@ -976,6 +1021,9 @@ def export_oligos():
     arr = []
     for pool, df in df_final.groupby('pool'):
         outer_name, assembly_parts = df[['outer_adapter', 'assembly_parts']].iloc[0]
+        if outer_name.count(',') == 1:
+            key1, key2 = [x.strip() for x in outer_name.split(',')]
+            
         outer_5, outer_3 = adapter_seqs[outer_name].values()
 
         if assembly_parts == 1:
@@ -1003,6 +1051,10 @@ def export_oligos():
 
     cols = FINAL_DESIGNS_COLS + list(df_final.filter(regex=FINAL_DESIGNS_COLS_REGEX))
     df_final['assembly'] = df_final['assembly_dna'].apply(try_translate_dna)
+
+    if no_terminal_R():
+        df_final['barcode'] = df_final['barcode'] + 'R'
+
     df_final[cols].to_csv(final_design_table, index=None)
     print(f'Exported {len(df_final):,} barcoded designs to {final_design_table}')
     
@@ -1031,6 +1083,10 @@ def export_oligos():
         fh.write(txt)
     txt = '\n'.join('  ' + line for line in txt.split('\n'))
     print(txt)
+
+
+def no_terminal_R():
+    return load_config()['dna_design'].get('no_terminal_R', False)
 
 
 def find_orfs(seq):
@@ -1068,12 +1124,12 @@ def collect_subdirectory_tables():
     """
     search = '*/process/5_oligos.csv'
     df_oligos = csv_frame(search)
-    print(f'Collected oligos from:', *nglob(search), sep='\n')
+    print(f'Collected oligos from:', *nglob(search), sep='\n  ')
     
     search = '*/input/barcodes.csv'
     df_barcodes = (csv_frame(search, sort=False)
     .drop_duplicates('sequence').drop(['mz_group', 'barcode_set'], axis=1))
-    print(f'Collected barcodes from:', *nglob(search), sep='\n')
+    print(f'Collected barcodes from:', *nglob(search), sep='\n  ')
 
     barcode_info = df_barcodes.set_index('sequence')[['iRT', 'mz']]
 
@@ -1081,7 +1137,7 @@ def collect_subdirectory_tables():
     df_designs = (csv_frame(search, sort=False)
     .join(barcode_info, on='barcode')
     )
-    print(f'Collected designs from:', *nglob(search), sep='\n')
+    print(f'Collected designs from:', *nglob(search), sep='\n  ')
 
     df_oligos.to_csv('oligos.csv', index=None)
     print(f'Wrote {df_oligos.shape[0]} oligos to oligos.csv')

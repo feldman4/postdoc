@@ -1,8 +1,8 @@
+from sre_constants import SRE_FLAG_TEMPLATE
 import fire
 
 from glob import glob
 import os
-import re
 import sys
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
@@ -60,22 +60,28 @@ def setup():
         shutil.rmtree('commands')
     os.makedirs('figures', exist_ok=True)
     
-    print('Downloading sample info from MS barcoding gsheet...')
-    gate = config['samples']['gate'].replace('\n', ' ')
-    df_samples = (load_sample_info(gate)
-     .pipe(assert_unique, 'sample', 'file', 'short_name')
-     .pipe(add_sec_fractions)
-    )
-    df_samples.to_csv(sample_table, index=None)
+    if 'table' in config['samples']:
+        print('Skipping sample info setup, loading provided table instead.')
+        df_samples = pd.read_csv(config['samples']['table'])
+        df_samples.to_csv(sample_table, index=None)
+    else:
+        print('Downloading sample info from MS barcoding gsheet...')
+        gate = config['samples']['gate'].replace('\n', ' ')
+        df_samples = (load_sample_info(gate)
+        .pipe(assert_unique, 'sample', 'file', 'short_name')
+        .pipe(add_sec_fractions)
+        )
+        df_samples.to_csv(sample_table, index=None)
+
     print(f'Wrote {len(df_samples)} samples to {sample_table}')
-    for stage, df in df_samples.groupby('stage'):
-        n = (~df['fraction_center'].isnull()).sum()
-        print(f'  {stage}: {len(df)} ({n} with SEC elution volumes)')
+    if 'stage' in df_samples:
+        for stage, df in df_samples.groupby('stage'):
+            n = (~df['fraction_center'].isnull()).sum()
+            print(f'  {stage}: {len(df)} ({n} with SEC elution volumes)')
 
     symlink_input(df_samples)
 
     df_designs = load_designs()
-    num_designs = df_designs.shape[0]
     validate_designs(df_designs).to_csv(design_table, index=None)
     print(f'  Wrote design info to {design_table}')
     try:
@@ -195,7 +201,9 @@ def setup_dinosaur(df_samples, df_designs):
         pass
     tolerance = config['python']['mz_tolerance_search']
     min_intensityApex = config['python']['min_intensityApex']
-    format_dinosaur_targets(targets, tolerance, min_intensityApex).to_csv(target_table, sep='\t')
+    df_targets = format_dinosaur_targets(targets, tolerance, min_intensityApex)
+    df_targets.to_csv(target_table, sep='\t')
+    print(f'Wrote {len(df_targets)} targets to {target_table}')
 
     dino_base = format_dinosaur_command(**config['dinosaur'])
     scripts = write_openms_dinosaur_commands(df_samples['sample'], dino_base)
@@ -283,14 +291,19 @@ def format_dinosaur_command(executable, options, filters, advParams, targets):
     write_dinosaur_advParams(dinosaur_params, **advParams)
     cmd = f'{executable} {options} {filters} --advParams=advParams.txt'
     if targets:
-        cmd = (f'{cmd} --targets=targets.tsv '
-                '--targetPreference=intensity --reportTargets')
+        cmd += ' --targets=targets.tsv --targetPreference=intensity --reportTargets'
     return cmd
 
 
-def format_openms_commands():
-    # TODO: implement?
-    pass
+def format_openms_commands(sample, filters):
+    input = 'input/' + sample
+    convert = 'convert/' + sample
+    return [
+    f'{openms_dir}/FileConverter -in {input}.mzData -out {convert}.mzML -lossy_compression',
+    f'{openms_dir}/FileInfo -in {convert}.mzML -out {convert}.mzML.info',
+    f'{openms_dir}/FileFilter -in {convert}.mzML -out {convert}.filt.mzML {filters}',
+    f'{openms_dir}/FileInfo -in {convert}.filt.mzML -out {convert}.filt.mzML.info',
+    ]
 
 
 def write_openms_dinosaur_commands(samples, dino_base):
@@ -298,15 +311,16 @@ def write_openms_dinosaur_commands(samples, dino_base):
     config = load_config()['openms']
 
     os.makedirs('commands/0', exist_ok=True)
+    os.makedirs('convert', exist_ok=True)
     arr = []
     for sample in samples:
         cmds = format_openms_commands(sample, **config)
         cmds += [
             f'mkdir -p dinosaur/{sample}',
             f'cd dinosaur/{sample}',
-            f'ln -s ../../input/{sample}.filt.mzML .',
-            f'ln -s ../../{dinosaur_params} .',
-            f'ln -s ../../{target_table} .',
+            f'ln -sf ../../convert/{sample}.filt.mzML .',
+            f'ln -sf ../../{dinosaur_params} .',
+            f'ln -sf ../../{target_table} .',
             f'{dino_base} {sample}.filt.mzML',
             ]
         f = f'commands/0/{sample}.sh'
@@ -382,7 +396,9 @@ def load_dino_features(file_template=feature_output):
         mz_corrector = lambda x: x
 
     keep = ['sample', 'short_name', 'stage', 'fraction_center', 'fraction_size']
-    df_samples = pd.read_csv(sample_table)[keep]
+
+    df_samples = pd.read_csv(sample_table)
+    df_samples = df_samples[[x for x in keep if x in df_samples]]
     df_designs = load_design_table()
 
     files = [file_template.format(sample=sample) 
@@ -671,9 +687,13 @@ def format_title(design_name, pdb_name, width=60):
     return '\n'.join([design_name] + textwrap.wrap(pdb_name, width))
 
 
-def plot_design_range(first_design, num_to_plot):
+def plot_design_range(first_design, num_to_plot, progress='tqdm'):
     import pandas as pd
     import matplotlib.pyplot as plt
+    from tqdm.auto import tqdm
+    
+    if progress == 'tqdm':
+        progress = tqdm
 
     df_designs = pd.read_csv(design_table)
     df_samples = pd.read_csv(sample_table)
@@ -697,7 +717,7 @@ def plot_design_range(first_design, num_to_plot):
           f'({designs_present[0]} to {designs_present[-1]})')
 
     os.makedirs('figures/by_design', exist_ok=True)
-    for design_name, df in df_plot.groupby('design_name'):
+    for design_name, df in progress(df_plot.groupby('design_name')):
         # fig = plot_one_design(df, df_samples)
         fig = plot_one_design2(df)
         f = f'figures/by_design/{design_name}.png'
@@ -958,8 +978,7 @@ def get_trace_metrics(df_traces, df_intensities):
      .assign(num_consensus_barcodes=lambda x: 
         x.groupby('design_name')['consensus_gate'].transform('sum'))
      .join(stage_means, on='barcode')
-     .join(barcode_metrics, on='barcode')
-    )
+     .join(barcode_metrics, on='barcode'))
 
 
 def get_consensus(df_traces):
@@ -1072,7 +1091,7 @@ def plot_one_design2(df_intensities):
      .query('stage == "SEC"')['fraction_center'].pipe(sorted)
     )
     intensity = config['sec']['barcode']['intensity_metric']
-    fig = plot(df_intensities, stages, fraction_centers, intensity)
+    fig = plot(df_intensities.query('stage == @stages'), stages, fraction_centers, intensity)
     return fig
 
 
@@ -1118,6 +1137,8 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
 
 
 def link_plots(clear=True, no_broken=True):
+    """Generate symlinks to per-design SEC plots based on specifications in config:sec:rank_plots
+    """
     import pandas as pd
     # load results of analyze_sec
     df_consensus_metrics = pd.read_csv(sec_consensus_metrics_table).set_index('design_name')
@@ -1163,6 +1184,16 @@ def search_sec(df_chroma, *terms):
 
 
 def load_validation_sec(limit=None):
+    """Download validation table and export matching SEC data using akta_db. If 
+    "search_0" is a path to a csv file, load UV data from there instead and assign
+    a random ChromatogramID.
+
+    The output is a long table with one row per UV data point, merged with AKTA run 
+    info and validation table columns.
+
+    :param limit: regex used to filter "description" column of validation table
+    """
+
     from postdoc.lab import akta_db
     from io import StringIO
     import pandas as pd
@@ -1174,14 +1205,25 @@ def load_validation_sec(limit=None):
     n = df_sec.shape[0]
     if limit is not None:
         df_sec = df_sec.loc[lambda x: x['description'].str.contains(limit)]
-    print(f'Processing {n}/{df_sec.shape[0]} entries from {validation_sec_drive}')
+    print(f'Processing {df_sec.shape[0]}/{n} matching entries from {validation_sec_drive}')
 
+    # first, search for matching ChromatogramIDs
+    csv_data = []
     arr = []
     for search_0, df_block in df_sec.groupby('search_0'):
+        if search_0.endswith('.csv'):
+            # load UV data from table (original may be missing from the AKTA database)
+            assert df_block.shape[0] == 1, 'only one entry per csv please'
+            (pd.read_csv(search_0)
+             .assign(csv_path=search_0, sec_index=df_block.index[0], 
+                     ChromatogramID=hash(search_0))
+             .pipe(csv_data.append)
+            )
+            continue
         # do the first search in blocks for speed
         df_result, _ = akta_db.search(search_0)
         if df_result.shape[0] == 0:
-            raise ValueError(f'No match at row\n{df_block.iloc[0]}')
+            raise ValueError(f'No AKTA SEC match at row\n{df_block.iloc[0]}')
         for ix, row in df_block.iterrows():
             terms = [] if pd.isnull(row['search_1']) else [row['search_1']]
             df = (df_result.pipe(search_sec, *terms)
@@ -1193,17 +1235,18 @@ def load_validation_sec(limit=None):
                 raise ValueError(f'{n} matches at row\n{row}')
             arr += [df]
 
-    df_chroma = pd.concat(arr)
-    sec_index = df_chroma[['sec_index', 'ChromatogramID']].drop_duplicates()
+    akta_data = []
+    if arr:
+        df_chroma = pd.concat(arr)
+        sec_index = df_chroma[['sec_index', 'ChromatogramID']].drop_duplicates()
+        # export UV data for matching chromatograms
+        txt = akta_db.export(StringIO(df_chroma.to_csv()))
+        akta_data += [pd.read_csv(StringIO(txt)).merge(sec_index)]
+     
+    return pd.concat(akta_data + csv_data).join(df_sec, on='sec_index')
 
-    txt = akta_db.export(StringIO(df_chroma.to_csv()))
-    return (pd.read_csv(StringIO(txt))
-     .merge(sec_index)
-     .join(df_sec, on='sec_index')
-    )
 
-
-def export_validation_sec():
+def export_validation_sec(limit=None):
     """Find validation SEC data and export plots.
     """
     from slugify import slugify
@@ -1211,7 +1254,7 @@ def export_validation_sec():
     from postdoc.lab import akta_db
 
     print('Loading validation data and searching akta_db')
-    df_uv_data = load_validation_sec()
+    df_uv_data = load_validation_sec(limit=limit)
     df_uv_data['Description'] = df_uv_data['export_name']
     for description, df in df_uv_data.groupby('description'):
         d = slugify(description, lowercase=False, separator='_')
@@ -1224,13 +1267,12 @@ def export_validation_sec():
             akta_db.plot('uv_data.csv', output='normalized_', fractions=False, description_as_name=True)    
 
 
-def overlay_validation_sec(uv_regex='230|260|280'):
+def overlay_validation_sec(uv_regex='230|260|280', peak_volume_gate='8 < volume < 20'):
     """Combine validation SEC with pooled SEC.
     """
     from postdoc.flycodes import plot_sec
     import pandas as pd
     from postdoc.utils import set_cwd, csv_frame
-    import shutil
     from postdoc.drive import Drive
     
     drive = Drive()
@@ -1244,6 +1286,8 @@ def overlay_validation_sec(uv_regex='230|260|280'):
         '01_UWPR_beta_barrels': '/projects/ms/analysis/01_UWPR_beta_barrels/process',
         '05_UWPR_rolls': '/projects/ms/analysis/05_UWPR_rolls/process',
         '19_UWPR_CN162': '/projects/ms/analysis/19_UWPR_CN162/process',
+        '26_chip176_BWLM_S75': '/projects/ms/analysis/26_UWPR_chip176_BWLM/process',
+        '28_chip176_BWLM_S200': '/projects/ms/analysis/28_UWPR_chip176_BWLM_S200/process',
     }
     traces = {}
     arr0, arr1, arr2 = [], [], []
@@ -1270,16 +1314,27 @@ def overlay_validation_sec(uv_regex='230|260|280'):
      .merge(df_consensus_metrics, how='left')
     )
 
+    peaks = (df_uv_data
+    .query(peak_volume_gate)
+    .sort_values('amplitude', ascending=False)
+    .drop_duplicates('design_name')
+    [['design_name', 'volume']]
+    .rename(columns={'volume': 'individual_sec_peak'})
+    )
+
     cols = ['description', 'export_name', 'note', 'design_name']
     df_summary = (df_sec[cols]
      .assign(validation_sec_found=lambda x: 
         x['export_name'].isin(df_uv_data['export_name']))
+     .query('validation_sec_found')
+     .merge(peaks)
+     # TODO: this is generating duplicate entries?
      .merge(dataset_info, how='left')
      .rename(columns={'note': 'validation_note'})
     )
     
     f = 'validation_summary.csv'
-    print(f'Wrote to {f}')
+    print(f'Wrote summary of individual and pooled data to {f}')
     df_summary.to_csv(f, index=None)
     
     os.makedirs('combined', exist_ok=True)
@@ -1306,7 +1361,7 @@ def export_ms1(mzml_file, progress=lambda x: x):
 def validation_block(limit=None, uv_regex='230|260|280'):
     """Export validation SEC data and plots for entries in MS barcoding shared/
     """
-    export_validation_sec()
+    export_validation_sec(limit=limit)
     overlay_validation_sec(uv_regex=uv_regex)
 
 

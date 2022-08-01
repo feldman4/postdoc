@@ -1,14 +1,12 @@
 from collections import defaultdict, Counter
 import contextlib
 from glob import glob
-import logging
 import io
 import hashlib
 import os
 import re
 import subprocess
 import shutil
-import sys
 import time
 
 import decorator
@@ -36,13 +34,13 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
 
 
 def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None,  
-              include_cols=None, exclude_cols=None, 
-              join='outer', ignore_missing=True, ignore_index=True, 
+              include_cols=None, exclude_cols=None, ignore_missing=True, ignore_index=True, 
+              ignore_empty=True,
               sort=False, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
 
-    TODO:
+    TODO: parameter documentation
     """
     
     def read_csv(f):
@@ -88,8 +86,17 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
         files = files_or_search
         if ignore_missing:
             files = [f for f in files if os.path.exists(f)]
-        
-    arr = [read_csv(f).assign(**extra_fields.get(f, {})) for f in progress(files)]
+    
+    arr = []
+    for f in progress(files):
+        df = read_csv(f)
+        if df is None:
+            if ignore_empty:
+                continue
+            else:
+                raise ValueError(f'Empty table: {f}')
+        arr += [df.assign(**extra_fields.get(f, {}))]
+
     return pd.concat(arr, ignore_index=ignore_index, sort=sort)
 
 
@@ -243,7 +250,7 @@ def flatten_cols(df, f='underscore'):
     """Flatten column multi index.
     """
     if f == 'underscore':
-        def f(x): return '_'.join(str(y) for y in x if y != '')
+        f = lambda x: '_'.join(str(y) for y in x if y != '')
     df = df.copy()
     df.columns = [f(x) for x in df.columns]
     return df
@@ -538,9 +545,12 @@ def dataframe_to_csv_string(df, index=None):
     return txt
 
 
-def pd_display_all(df, max_rows=10000, max_cols=100):
+def pd_display_all(df, max_rows=10000, max_cols=100, string_width=None):
     from IPython.display import display
-    with pd.option_context('display.max_rows', max_rows, 'display.max_columns', max_cols):
+    options = ['display.max_rows', max_rows, 'display.max_columns', max_cols]
+    if string_width:
+        options += ['display.max_colwidth', string_width]
+    with pd.option_context(*options):
         display(df)
 
 
@@ -706,6 +716,10 @@ def force_symlink(src, dst=None):
     """
     if dst is None:
         dst = os.path.basename(src)
+    if os.path.isdir(dst):
+        # if the destination is a directory, make a link
+        # to source basename in that directory
+        dst = os.path.join(dst, os.path.basename(src))
     if os.path.islink(dst):
         os.remove(dst)
     os.symlink(src, dst)
@@ -734,7 +748,7 @@ def load_yaml_table(config, verbose=True):
         remote = config['table'][len('drive:'):]
         df = drive(remote, **kwargs)
     else:
-        df = pd.read_csv(config['table'], **kwargs)
+        df = pd.read_csv(config['table'], low_memory=False, **kwargs)
 
     if verbose:
         print(f'Loaded {len(df):,} entries from {config["table"]}')
@@ -757,3 +771,21 @@ def filter_yaml_table(df, gate=None, drop_duplicates=None, rename=None, verbose=
         df = df.rename(columns=rename)
     return df
 
+
+def parse_frame(search, ignore_missing=False):
+    """Convenience function to build file table from format string.
+    Example: parse_frame('analysis/export/10X_{well}_Site-{site}.tif')
+    """
+    import parse
+    extra_fields = {}
+    fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
+    search_glob = search.format(**{x: '*' for x in fieldnames})
+    files = nglob(search_glob)
+    arr = []
+    for f in files:
+        if ignore_missing and not os.path.exists(f):
+            continue
+        arr += [{'file': f}]
+        arr[-1].update(parse.parse(search, f).named)
+        
+    return pd.DataFrame(arr)

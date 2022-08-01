@@ -1,9 +1,25 @@
 import numpy as np
+import pandas as pd
+from tqdm.auto import tqdm
 
 from cellpose.models import Cellpose
 from skimage.segmentation import clear_border, relabel_sequential
 from skimage.restoration import rolling_ball
 from skimage.filters import gaussian
+
+import fire
+
+
+def prepare_dapi(dapi, background_radius, log_first):
+    sigma = background_radius / 10
+    dapi_blur = gaussian(dapi, sigma=sigma, preserve_range=True)
+    bsub = dapi - rolling_ball(dapi_blur, radius=background_radius)
+    bsub = bsub.clip(min=0).astype(dapi.dtype)
+
+    if log_first:
+        return np.log10(bsub + 1)
+    else:
+        return bsub
 
 
 def find_nuclei(dapi, diameter, background_radius=50, log_first=True, return_all=False):
@@ -54,3 +70,29 @@ def view(xs, **kwargs):
         im.visible = not im.visible
         
     return viewer
+
+
+if __name__ == '__main__':
+
+    # order is preserved
+    commands = [
+        'process_well',
+    ]
+
+    # if the command name is different from the function name
+    named = {
+        # 'search': search_app,
+        }
+
+    final = {}
+    for k in commands:
+        try:
+            final[k] = named[k]
+        except KeyError:
+            final[k] = eval(k)
+
+    try:
+        fire.Fire(final)
+    except BrokenPipeError:
+        pass
+    
