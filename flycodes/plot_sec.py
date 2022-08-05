@@ -109,10 +109,6 @@ def plot(df_int, stages, fraction_centers, intensity):
     axs_mean[-1].set_xticks(np.arange(len(stages)))
     axs_mean[-1].set_xticklabels(stages, rotation=30)
 
-    def plot_lines(ax, yvar):
-        for barcode, row in df_sec_means_wide[yvar].iterrows():
-            ax.plot(row, color=colors[barcode], label=barcode)
-
     # SEC plots
     
     df_plot_sec_wide = (df_plot_sec
@@ -250,6 +246,9 @@ def plot_validation_overlays(df_summary, df_uv_data, traces, baseline_range=(7, 
     )
 
     for design_name, dataset, export_name in tqdm(list(it)):
+        if design_name not in traces[(dataset, 'barcodes')].reset_index()['design_name'].values:
+            print(f'WTF!!! {design_name}')
+            continue
         X0 = traces[(dataset, 'barcodes')].loc[design_name].T
         X0 = X0.iloc[:, :13]
         X0 = X0 / X0.sum()
