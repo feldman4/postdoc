@@ -1,0 +1,9 @@
+tables:
+  templates: 
+    table: drive:IS intracellular binders 2022/templates
+    gate: experiment == "fibrillarin_attempt2"
+  parts: 'drive:reference/parts'
+  features: 'drive:reference/benchling_features'
+  restriction_enzymes: 
+    table: 'drive:reference/enzymes'
+    gate: 'pT02 == "yes"'

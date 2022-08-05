@@ -1,0 +1,58 @@
+fetch:
+  layout_table: 
+    source: 'drive:chipmunk/chip196_in_situ'
+    skiprows: 2
+  adapter_table:
+    source: 'drive:chipmunk/adapters'
+    gate: 'kind == ["outer", "inner"]'
+
+layout:
+  pT34: [spacer, design, stop, pL30_5, barcode]
+  parts:
+    spacer: 
+      aa: GSSGSGSSGSGSSGSGSSGSSGSGSSSGSSGSSSGSSSGSSSGSSGSSSGSSGSSGSSGS
+      reverse_translation: random
+      expand_from: left
+    stop:
+      dna: TAA
+    pL30_5:
+      dna: TGTTCAATCAACATTCC
+    pL30_3:
+      dna: ACTGGCTATTCATTCGC
+    RT:
+      dna: CCTTTGGGTAAGCACACGTC
+    EcoRI:
+      dna: GAATTC
+    GS_BamHI:
+      dna: GGATCC
+    SG:
+      aa: SG
+      reverse_translation: random
+
+barcodes:
+  - name: dummy
+    terminus: 'N'
+    source:
+      - /net/scratch/dfeldman/ppi/dummy_barcodes.csv
+
+dna_design:
+  oligo_length: 300
+  restriction_sites:
+    - GGTCTC
+
+reverse_translation:
+  method: DNAworks
+
+assembly:
+  max_per_pool: 800
+
+validate:
+    cloning:
+        vector: input/vectors/
+        # [restriction sites] inferred
+        upstream:
+        downstream:
+        method: BsaI golden gate
+    barcodes:
+        mz_resolution:
+        iRT_resolution:
