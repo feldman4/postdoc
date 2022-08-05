@@ -34,13 +34,22 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
 
 
 def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None,  
-              include_cols=None, exclude_cols=None, ignore_missing=True, ignore_index=True, 
-              ignore_empty=True,
-              sort=False, **kwargs):
+              include_cols=None, exclude_cols=None, ignore_missing=True, 
+              ignore_empty=True, ignore_index=True, sort=False, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
 
-    TODO: parameter documentation
+    :param files_or_search: a single search string or a list of files; a search
+        string can use format fields enclosed by braces
+    :param progress: a progress function, such as tqdm
+    :param add_file: filenames will be stored in this column
+    :param file_pat: a regex with capture groups applied to filenames
+    :param include_cols: columns to include
+    :param exclude_cols: columns to exclude
+    :param ignore_missing: if given a list of files, ignore the missing ones
+    :param ignore_empty: ignore empty files
+    :param ignore_index: passed to `pd.concat`
+    :param sort: passed to `pd.concat`
     """
     
     def read_csv(f):
@@ -714,6 +723,7 @@ def add_gates(df, exist_ok=False, **gates):
 def force_symlink(src, dst=None):
     """Same as ln -sf {src} {dst}
     """
+    src = src.rstrip(os.sep)
     if dst is None:
         dst = os.path.basename(src)
     if os.path.isdir(dst):
