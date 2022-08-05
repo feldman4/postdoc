@@ -14,6 +14,8 @@ import pandas as pd
 import dnachisel as dc
 from slugify import slugify
 import Bio.Restriction
+import warnings
+
 
 config_file = 'config.yaml'
 parts_table = 'parts.csv'
@@ -90,7 +92,7 @@ def prepare_reverse_translations():
         )
 
 
-def do_reverse_translations(skip_existing=False):
+def do_reverse_translations(skip_existing=False, **rt_args):
     """Use DNA Chisel to codon optimize with constraints. Save to fasta and individual genbanks 
     with DNA Chisel annotations.
     """
@@ -114,7 +116,7 @@ def do_reverse_translations(skip_existing=False):
             continue
 
         clean = clean_name(name)
-        problem = dnachisel_rt(aa_seq, avoid)
+        problem = dnachisel_rt(aa_seq, avoid, **rt_args)
         problem.to_record(filepath=f'reverse_translations/dna_chisel/{clean}.gb', 
                         record_id=clean, with_sequence_edits=False)
         f = f'reverse_translations/dna_chisel/{name}.log'
@@ -175,7 +177,9 @@ def generate_vectors(gate=None):
         record = add_features(record, df_features.values)
         f = f'vectors/{name}.gb'
         with open(f, 'w') as fh:
-            SeqIO.write(record, fh, 'genbank')
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='Increasing length of locus')
+                SeqIO.write(record, fh, 'genbank')
             dna = record.seq
             print(f'Wrote {len(dna):,} nt ({len(record.features)} features) to {f}')
 
@@ -366,11 +370,14 @@ def setup_block():
     download_tables()
 
 
-def reverse_translate_block():
+def reverse_translate_block(**rt_args):
+    """
+    :param rt_args: optional arguments to `dnachisel_rt`, such as `k` (kmer size)
+    """
     prepare_reverse_translations()
     print(f'Wrote sequences to reverse translate (RT) to {rt_input_fasta}')
     print('Running RT...')
-    do_reverse_translations()
+    do_reverse_translations(**rt_args)
     print(f'Wrote RT outputs to {rt_output_fasta}')
     print(f'More information in reverse_translations/dna_chisel/')
 
@@ -389,10 +396,18 @@ def check_complexity_block():
         print(f'Scores saved to {output_table}, worst score is {x}')
     
 
+def run():
+    setup_block()
+    reverse_translate_block()
+    design_block()
+    check_complexity_block()
+    
+
 if __name__ == '__main__':
 
     # order is preserved
     commands = [
+        'run',
         '0_setup',
         '1_rt',
         '2_design',
