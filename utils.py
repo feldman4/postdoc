@@ -85,8 +85,8 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
     if isinstance(files_or_search, str):
         if '{' in files_or_search:
             search = files_or_search
-            fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
-            search_glob = search.format(**{x: '*' for x in fieldnames})
+            fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname is not None]
+            search_glob = search.format('*', **{x: '*' for x in fieldnames})
             files = nglob(search_glob)
             extra_fields.update({f: parse.parse(search, f).named for f in files})
         else:
