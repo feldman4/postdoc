@@ -567,7 +567,7 @@ def setup_reverse_translations():
         raise ValueError(method)
 
 
-def setup_DNAworks(designs, organism):
+def setup_DNAworks(designs, organism, **flags):
     """Clears previous results.
     """
     import subprocess
@@ -594,6 +594,8 @@ def setup_DNAworks(designs, organism):
 
     seq_list = os.path.basename(dnaworks_input)
     cmd = f'python2 {dnaworks_rt_script} -seq_list {seq_list} -organism {organism}'
+    for key, value in flags.items():
+        cmd += f' -{key} {value}'
     print(f'Preparing DNAworks for {len(df):,} sequences with command:')
     print('  ' + cmd)
     subprocess.run(cmd, cwd=d, shell=True)
