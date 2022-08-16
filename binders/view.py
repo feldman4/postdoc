@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 from cellpose.models import Cellpose
-from skimage.segmentation import clear_border
+from skimage.segmentation import clear_border, relabel_sequential
 from skimage.restoration import rolling_ball
 from skimage.filters import gaussian
 
@@ -23,18 +23,31 @@ def prepare_dapi(dapi, background_radius, log_first):
 
 
 def find_nuclei(dapi, diameter, background_radius=50, log_first=True, return_all=False):
-    
+    bsub = subtract_background(dapi, background_radius)
     model_nuclei = Cellpose(model_type='nuclei', net_avg=False)
     
-    model_input = prepare_dapi(dapi, background_radius, log_first)
+    to_return = [bsub]
+    if log_first:
+        model_input = np.log10(bsub.astype(float) + 1)
+        to_return += [model_input]
+    else:
+        model_input = bsub
     
-    masks, _, _, _ = model_nuclei.eval(model_input, diameter=diameter)
-    masks = clear_border(masks)
+    nuclei, _, _, _ = model_nuclei.eval(model_input, diameter=diameter)
+    nuclei = relabel_sequential(clear_border(nuclei))[0]
     
     if return_all:
-        return masks, model_input
+        return [nuclei] + to_return
     else:
-        return masks
+        return nuclei
+
+
+def subtract_background(img, background_radius):
+    sigma = background_radius / 10
+    dapi_blur = gaussian(img, sigma=sigma, preserve_range=True)
+    # dapi_blur = dapi_blur.astype(img.dtype)
+    bsub = img - rolling_ball(dapi_blur, radius=background_radius)
+    return bsub.clip(min=0).astype(img.dtype)
 
 
 def view(xs, **kwargs):
