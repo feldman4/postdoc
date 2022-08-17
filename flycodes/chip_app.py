@@ -628,23 +628,26 @@ def read_dwo(dwo_file):
     s = ''
     with open(dwo_file) as f:
         lines = [line.strip() for line in f]
-    count = 0
+
+    locations = []    
     for i, line in enumerate(lines):
         if 'The DNA sequence' in line:
-            break
+            locations += [i]
 
-    dna = ''
-    for line in lines[i+2:]:
-        if line.startswith('---'):
-            break
-        try:
-            _, x = line.split(' ')
-            dna += x
-        except ValueError:
-            # sometimes there's no DNA on the last line...
-            pass
+    arr = []
+    for i in locations:
+        dna = ''
+        for line in lines[i+2:]:
+            if line.startswith('---'):
+                break
+            try:
+                _, x = line.split(' ')
+                dna += x
+            except ValueError:
+                # sometimes there's no DNA on the last line...
+                pass
 
-    return dna
+    return arr
 
 
 def load_DNAworks_output(working_dir):
