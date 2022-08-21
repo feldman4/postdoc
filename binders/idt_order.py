@@ -205,10 +205,16 @@ def split_order(cutoff=3000):
 
 
 def dnachisel_rt(aa_seq, avoid, k=6, species='h_sapiens', logger=None, seed=0):
-    """Use DNA Chisel to reverse translate a protein coding sequence. Optimize for best codons while
-    avoiding restriction sites and controlling GC content and kmer diversity for synthesis.
+    """Use DNA Chisel to reverse translate a protein coding sequence. 
+    
+    Optimizes for the best codons while avoiding restriction sites and controlling GC content 
+    and kmer diversity for synthesis.
 
     Set `logger='bar'` to see progress.
+
+    :param aa_seq: amino acid sequence to reverse translate
+    :param avoid: tuple of DNA sequences to avoid
+    :param k: length of repeat to avoid
     """
     np.random.seed(seed)
     # default seed is the input itself
