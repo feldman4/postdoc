@@ -679,9 +679,12 @@ def submit_from_command_list(
         
         if job_id:
             job_id = job_id[0]
+            # link to work script with job ID, keep original for job to run
             filename_rename = f'logs/.clean/{clean_name}_{job_id}.sh'
+            filename_relative = '.raw/' + os.path.basename(filename)
+            os.symlink(filename_relative, filename_rename)
+            # rename submission script with job ID
             filename_submit_rename = f'logs/.clean/{clean_name}_{job_id}_submit.sh'
-            os.symlink(filename, filename_rename)
             os.rename(filename_submit, filename_submit_rename)
             print(f'{x.decode().strip()}; resubmit with:', file=sys.stderr)
             print(f'  cd {os.getcwd()} &&')
