@@ -64,18 +64,20 @@ sec:
     method: 'median'
     # parameters for consensus metrics
     deviation_threshold: 0.02
-    volume_windows:
-      aggregate: [9, 11.5]
-      oligomer: [11.5, 13.5]
-      monomer: [13.5, 19]
+    volume_windows: # ~2 mL shift on Jester
+      aggregate: [11, 14]
+      oligomer: [14, 16]
+      monomer: [16, 20]
   rank_plots:
     all:
+      link_name: pdb_file
       gate: >- 
         1 <= num_consensus_barcodes
-      sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
-      sort_descending: [monomer, oligomer, aggregate, median_l2]
+      sort_ascending: [] 
+      sort_descending: [peak_center, monomer, oligomer, aggregate]
     multi:
+      link_name: pdb_file
       gate: >- 
         2 <= num_consensus_barcodes
       sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
-      sort_descending: [monomer, oligomer, aggregate, median_l2]
+      sort_descending: [peak_center, monomer, oligomer, aggregate, median_l2]

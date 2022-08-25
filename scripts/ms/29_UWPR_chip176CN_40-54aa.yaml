@@ -20,7 +20,7 @@ process_mzml:
   comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
   idXML_filter: -score:pep 30 -mz:error 10
   mz_calibration: -offset 0 -ms_level 1 # offset of 1 decreases mz by 1 ppm
-  rt_reference: MS_1033 # injection
+  rt_reference: MS_1009 # injection
   rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
 
 skyline:
@@ -64,18 +64,20 @@ sec:
     method: 'median'
     # parameters for consensus metrics
     deviation_threshold: 0.02
-    volume_windows:
-      aggregate: [9, 11.5]
-      oligomer: [11.5, 13.5]
-      monomer: [13.5, 19]
+    volume_windows: # ~2 mL shift on Jester
+      aggregate: [11, 14]
+      oligomer: [14, 16]
+      monomer: [16, 20]
   rank_plots:
     all:
+      link_name: pdb_file
       gate: >- 
         1 <= num_consensus_barcodes
-      sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
-      sort_descending: [monomer, oligomer, aggregate, median_l2]
+      sort_ascending: [] 
+      sort_descending: [peak_center, monomer, oligomer, aggregate]
     multi:
+      link_name: pdb_file
       gate: >- 
         2 <= num_consensus_barcodes
       sort_ascending: [mean_abs_distance, mean_wass_distance, mean_deviation_count]
-      sort_descending: [monomer, oligomer, aggregate, median_l2]
+      sort_descending: [peak_center, monomer, oligomer, aggregate, median_l2]
