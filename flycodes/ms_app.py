@@ -1095,7 +1095,8 @@ def plot_one_design2(df_intensities):
     return fig
 
 
-def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=False, no_broken=True):
+def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=False, 
+    no_broken=True, link_name=None):
     """Create symlinks to images in figures/by_design at location
      `figures/{prefix}/{design_rank}_{design_name}.png`. Duplicate designs are dropped.
     """
@@ -1110,6 +1111,10 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
     else:
         designs = df_or_designs
 
+    if link_name is None:
+        link_names = {x:x for x in designs}
+    else:
+        link_names = df_or_designs.set_index('design_name')[link_name].to_dict()
 
     prefix = str(prefix)
     os.makedirs(f'figures/{prefix}', exist_ok=True)
@@ -1127,7 +1132,7 @@ def create_plot_links(df_or_designs, prefix, source='figures/by_design', clear=F
             if no_broken:
                 continue
         rank = rank_format.format(i)
-        dst = f'figures/{prefix}/{rank}_{design}.png'
+        dst = f'figures/{prefix}/{rank}_{link_names[design]}.png'
         depth = os.path.normpath(dst).count('/')
         src = '../' * depth + f'{source}/{design}.png'
         if os.path.islink(dst):
@@ -1141,13 +1146,18 @@ def link_plots(clear=True, no_broken=True):
     """
     import pandas as pd
     # load results of analyze_sec
-    df_consensus_metrics = pd.read_csv(sec_consensus_metrics_table).set_index('design_name')
+    df_designs = pd.read_csv(design_table)
+    df_consensus_metrics = (pd.read_csv(sec_consensus_metrics_table)
+    .merge(df_designs, on='design_name')
+    # .set_index('design_name')
+    )
 
     config = load_config()['sec']['rank_plots']
 
     broken = set()
     for prefix, info in config.items():
-        df = df_consensus_metrics.query(info['gate'])
+        link_name = info.get('link_name', None)
+        df = df_consensus_metrics.query(info['gate']).copy()
         if len(df) == 0:
             print(f'No designs passed gate for {prefix}!!')
             continue
@@ -1155,14 +1165,16 @@ def link_plots(clear=True, no_broken=True):
             broken |= (df.sort_values(metric)
             .pipe(create_plot_links,
                 prefix=f'{prefix}/{metric}',
-                  source='figures/by_design', clear=clear, no_broken=no_broken)
+                  source='figures/by_design', clear=clear, no_broken=no_broken,
+                  link_name=link_name)
             )
 
         for metric in info['sort_descending']:
             broken |= (df.sort_values(metric, ascending=False)
             .pipe(create_plot_links,
                 prefix=f'{prefix}/{metric}',
-                  source='figures/by_design', clear=clear, no_broken=no_broken)
+                  source='figures/by_design', clear=clear, no_broken=no_broken,
+                  link_name=link_name)
             )
     if no_broken:
         print(f'Skipped {len(broken)} broken links')
@@ -1267,7 +1279,8 @@ def export_validation_sec(limit=None):
             akta_db.plot('uv_data.csv', output='normalized_', fractions=False, description_as_name=True)    
 
 
-def overlay_validation_sec(uv_regex='230|260|280', peak_volume_gate='8 < volume < 20'):
+def overlay_validation_sec(uv_regex='230|260|280', 
+        peak_volume_gate='8 < volume < 20'):
     """Combine validation SEC with pooled SEC.
     """
     from postdoc.flycodes import plot_sec
@@ -1288,6 +1301,8 @@ def overlay_validation_sec(uv_regex='230|260|280', peak_volume_gate='8 < volume 
         '19_UWPR_CN162': '/projects/ms/analysis/19_UWPR_CN162/process',
         '26_chip176_BWLM_S75': '/projects/ms/analysis/26_UWPR_chip176_BWLM/process',
         '28_chip176_BWLM_S200': '/projects/ms/analysis/28_UWPR_chip176_BWLM_S200/process',
+        '30_UWPR_chip176CN_54-60aa': '/projects/ms/analysis/30_UWPR_chip176CN_54-60aa/process',
+        '31_UWPR_chip176CN_65-68aa': '/projects/ms/analysis/31_UWPR_chip176CN_65-68aa/process',
     }
     traces = {}
     arr0, arr1, arr2 = [], [], []
@@ -1358,7 +1373,8 @@ def export_ms1(mzml_file, progress=lambda x: x):
     return load_mzml_to_ms1_dataframe(mzml_file, progress=progress)
 
 
-def validation_block(limit=None, uv_regex='230|260|280'):
+def validation_block(limit=None, uv_regex='230|260|280', 
+        peak_volume_gate='8 < volume < 21'):
     """Export validation SEC data and plots for entries in MS barcoding shared/
     """
     export_validation_sec(limit=limit)
