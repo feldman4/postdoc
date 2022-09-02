@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from tqdm.auto import tqdm
 import yaml
 
@@ -16,8 +17,8 @@ from postdoc.sequence import reverse_complement as rc
 from postdoc.sequence import reverse_translate_random, reverse_translate_max
 from postdoc.utils import (
     hash_set, approx_max_clique, csv_frame, gb_apply_parallel, assert_unique, 
-    expand_repeats, split_by_regex, nglob)
-from postdoc.flycodes.pool2 import remove_restriction_sites, findone
+    expand_repeats, split_by_regex, nglob, set_cwd)
+from postdoc.flycodes.pool2 import remove_restriction_sites
 from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.pool2 import remove_restriction_sites
 from postdoc.pyrosetta.diy import read_pdb_sequences
@@ -646,6 +647,7 @@ def read_dwo(dwo_file):
             except ValueError:
                 # sometimes there's no DNA on the last line...
                 pass
+        arr += [dna]
 
     return arr
 
@@ -661,6 +663,45 @@ def load_DNAworks_output(working_dir):
     assert (df_seqs['design_dna'].apply(translate_dna) == df_seqs['design']).all()
     df_seqs.to_csv('DNA_sequence.list', index=None, header=None, sep=' ')
     return df_seqs
+
+
+def run_dnaworks(aa_sequence, num_solutions, repeat_length=8, time_limit=1,
+                min_codon_freq=0.2,
+                 dnaworks='/home/longxing/bin/DNAWorks/dnaworks'):
+    
+    template = f"""
+solutions {num_solutions}
+repeat {repeat_length}
+timelimit {time_limit}
+frequency threshold {int(100 * min_codon_freq)} random
+LOGFILE {{logfile}}
+pattern
+  BsaI GGTCTC
+  BsaI GAGACC
+  BsmBI CGTCTC
+  BsmBI GAGACG
+  PolyA AAAAAAAA
+  PolyG GGGGG
+  PolyT TTTTTTTT
+  PolyC CCCCCCCC
+//
+
+codon E. coli
+
+protein
+{aa_sequence}
+//
+"""
+    with set_cwd(tempfile.gettempdir()):
+        with tempfile.NamedTemporaryFile('w', delete=False) as fh:
+            logfile = os.path.basename(fh.name)
+            fh.write(template.format(logfile=logfile))
+            print(template.format(logfile=logfile))
+            fh.flush()
+            os.system(f'{dnaworks} {logfile}')
+            dna = read_dwo(logfile)
+            os.remove(logfile)
+            return dna
 
 
 def load_barcode_sets():

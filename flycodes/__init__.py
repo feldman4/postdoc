@@ -1,4 +1,4 @@
-from . import design, designs, ms
+from . import design, designs, ms, paper
 
 from .design import (
     generate_peptide_set, 

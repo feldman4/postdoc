@@ -614,7 +614,6 @@ def submit_from_command_list(
     little_a = '_%a' if 1 < num_groups else ''
     stdout = f'logs/{clean_name}_%A{little_a}.out' if stdout == 'default' else stdout
     stderr = f'logs/{clean_name}_%A{little_a}.err' if stderr == 'default' else stderr
-    os.makedirs('logs/.clean', exist_ok=True)
 
     if with_gpu is None:
         if queue == 'gpu':
@@ -631,13 +630,6 @@ def submit_from_command_list(
     if num_removed:
         removed = f' (removed {num_removed} blank/comment lines)'
     
-    args = ['sbatch', '-p', queue, '-J', name, '--mem', memory, '-c', cpus, 
-                '-o', stdout, '-e', stderr, '--array', array]
-    args = [str(x) for x in args]
-
-    if with_gpu is not None:
-        args += [f'--gres', f'gpu:{with_gpu}']
-    
     sbatch_args = {
         '-p': queue,
         '-J': name,
@@ -647,7 +639,11 @@ def submit_from_command_list(
         '-e': stderr,
         '--array': array,
     }
-        
+
+    if with_gpu is not None:
+        sbatch_args['--gres'] = f'gpu:{with_gpu}'
+
+
     sbatch_header = (
         ['#!/bin/bash'] + 
         [f'#SBATCH {a} {b}' for a, b in sbatch_args.items()] +
@@ -672,22 +668,29 @@ def submit_from_command_list(
     if dry_run:
         print('DRY RUN: wrote sbatch file but did not submit')
     else:
+        #TODO: handle sbatch errors properly
         try:
             x = subprocess.check_output(['sbatch', filename_submit])
-        except subprocess.CalledProcessError:
-            x = b''
-        job_id = re.findall('Submitted batch job (\d+)', x.decode())
+            job_id = re.findall('Submitted batch job (\d+)', x.decode())
+        except subprocess.CalledProcessError as e:
+            #TODO: not printing the actual error
+            print('Job submission failed! Error:', e)
+            return
+        
         if job_id:
             job_id = job_id[0]
+            # link to work script with job ID, keep original for job to run
             filename_rename = f'logs/.clean/{clean_name}_{job_id}.sh'
+            filename_relative = '.raw/' + os.path.basename(filename)
+            os.symlink(filename_relative, filename_rename)
+            # rename submission script with job ID
             filename_submit_rename = f'logs/.clean/{clean_name}_{job_id}_submit.sh'
-            os.symlink(filename, filename_rename)
             os.rename(filename_submit, filename_submit_rename)
             print(f'{x.decode().strip()}; resubmit with:', file=sys.stderr)
             print(f'  cd {os.getcwd()} &&')
             print(f'  sbatch {filename_rename}', file=sys.stderr)
         else:
-            print('Job submission failed!')
+            print(f'Job submission failed! sbatch output: {x}')
 
 
 def fasta_to_table(filename, name='name', sequence='sequence'):

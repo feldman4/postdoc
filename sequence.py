@@ -566,3 +566,17 @@ def findone(aa, dna):
     aa_ = translate_dna(dna)
     i = aa_.index(aa)
     return dna[i * 3:(i + len(aa)) * 3]
+
+
+def select_most_different(xs, n):
+    """Quickly select sequences with high mutual Levenshtein distance.
+    """
+    from Levenshtein import distance
+    xs = list(xs)
+    arr = [xs.pop()]
+    for _ in range(n - 1):
+        new = sorted(xs, key=lambda x: -min(distance(x, y) for y in arr))[0]
+        xs.remove(new)
+        arr += [new]
+    return arr
+

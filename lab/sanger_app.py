@@ -36,9 +36,9 @@ def parse_files(files, pat):
     arr = []
     for file, name in zip(files, names):
         seq = load_sanger(file)
-        matches = re.findall(pat, seq)
+        matches = re.findall(pat, seq, flags=re.IGNORECASE)
         if not matches:
-            matches = re.findall(pat, reverse_complement(seq))
+            matches = re.findall(pat, reverse_complement(seq), flags=re.IGNORECASE)
         dna = None
         if matches:
             dna = matches[0]

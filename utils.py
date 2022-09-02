@@ -9,16 +9,16 @@ import subprocess
 import shutil
 import time
 
+from natsort import natsorted
+from string import Formatter
+from tqdm.auto import tqdm
 import decorator
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
 import pandas as pd
-from natsort import natsorted
-from tqdm.auto import tqdm
-
 import parse
-from string import Formatter
+import seaborn as sns
+import yaml
 
 
 def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
@@ -34,13 +34,22 @@ def timestamp(filename='', fmt='%Y%m%d_%H%M%S', sep='.'):
 
 
 def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=None,  
-              include_cols=None, exclude_cols=None, ignore_missing=True, ignore_index=True, 
-              ignore_empty=True,
-              sort=False, **kwargs):
+              include_cols=None, exclude_cols=None, ignore_missing=True, 
+              ignore_empty=True, ignore_index=True, sort=False, **kwargs):
     """Convenience function, pass either a list of files or a 
     glob wildcard search term.
 
-    TODO: parameter documentation
+    :param files_or_search: a single search string or a list of files; a search
+        string can use format fields enclosed by braces
+    :param progress: a progress function, such as tqdm
+    :param add_file: filenames will be stored in this column
+    :param file_pat: a regex with capture groups applied to filenames
+    :param include_cols: columns to include
+    :param exclude_cols: columns to exclude
+    :param ignore_missing: if given a list of files, ignore the missing ones
+    :param ignore_empty: ignore empty files
+    :param ignore_index: passed to `pd.concat`
+    :param sort: passed to `pd.concat`
     """
     
     def read_csv(f):
@@ -76,8 +85,8 @@ def csv_frame(files_or_search, progress=lambda x: x, add_file=None, file_pat=Non
     if isinstance(files_or_search, str):
         if '{' in files_or_search:
             search = files_or_search
-            fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname]
-            search_glob = search.format(**{x: '*' for x in fieldnames})
+            fieldnames = [fname for _, fname, _, _ in Formatter().parse(search) if fname is not None]
+            search_glob = search.format('*', **{x: '*' for x in fieldnames})
             files = nglob(search_glob)
             extra_fields.update({f: parse.parse(search, f).named for f in files})
         else:
@@ -316,7 +325,8 @@ def _memoize(f, *args, **kwargs):
     return f.cache[key]
 
 
-def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None, add_parameters=False):
+def predict_ransac(df, x, y, y_pred, query=None, drop_duplicates=None, 
+                   add_parameters=False, add_inlier_mask=False, random_state=0):
     """
     Example:
         (df_frag_ions
@@ -324,21 +334,43 @@ def predict_ransac(df, x, y, y_pred, dupe_cols=None, query=None, add_parameters=
          .apply(predict_ransac, 'iRT', 'RTime', 'RTime_pred', ['sequence'])
          .reset_index(drop=True)
         )
+    :param df: dataframe
+    :param x: x variable (one or more columns)
+    :param y: y variable
+    :param y_pred: name to give predicted
+    :param query: perform fit only on data points passing this gate
+    :param drop_duplicates: list of columns to drop duplicates on before fitting
+    :param add_parameters: add linear fit parameters (intercept and coefficient(s))
+    :param add_inlier_mask: evaluates to True only for data points used for fitting 
+        that are also RANSAC inliers
+    :param random_state: random seed for RANSAC
     """
     from sklearn.linear_model import RANSACRegressor
-    df_ = df.drop_duplicates(dupe_cols) if dupe_cols else df
+
+    df_ = df.reset_index(drop=True)
     if query is not None:
         df_ = df_.query(query)
-    model = RANSACRegressor().fit(df_[[x]], df_[y])
+    if drop_duplicates:
+        df_ = df_.drop_duplicates(drop_duplicates)
+
+    model = RANSACRegressor(random_state=random_state).fit(df_[[x]], df_[y])
+
     df = df.assign(**{y_pred: model.predict(df[[x]])})
+
     if add_parameters:
         df[f'{y_pred}_intercept'] = model.estimator_.intercept_
         if model.estimator_.coef_.size == 1:
             df[f'{y_pred}_coef'] = model.estimator_.coef_[0]
         else:
             df[f'{y_pred}_coef'] = [model.estimator_.coef_] * df.shape[0]
+    if add_inlier_mask:
+        df[f'{y_pred}_inlier'] = False
+        df.iloc[df_.index, -1] = model.inlier_mask_
 
     return df
+
+
+add_ransac = predict_ransac
 
 
 def to_list_dict(series):
@@ -714,6 +746,10 @@ def add_gates(df, exist_ok=False, **gates):
 def force_symlink(src, dst=None):
     """Same as ln -sf {src} {dst}
     """
+    # os.system(f'ln -sf "{src}" "{dst}"')
+    # return
+    src = src.rstrip(os.sep)
+    dst = dst.rstrip(os.sep)
     if dst is None:
         dst = os.path.basename(src)
     if os.path.isdir(dst):
@@ -789,3 +825,8 @@ def parse_frame(search, ignore_missing=False):
         arr[-1].update(parse.parse(search, f).named)
         
     return pd.DataFrame(arr)
+
+
+def load_yaml(filename):
+    with open(filename, 'r') as fh:
+        return yaml.safe_load(fh)
