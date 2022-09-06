@@ -5,16 +5,15 @@ https://developers.google.com/drive/api/v3/quickstart/python
 Use python3 to execute quickstart.py after editing SCOPES to include
 'https://www.googleapis.com/auth/drive.readonly' 
 """
-import io
 import os
-import pickle
 
 import numpy as np
 import pandas as pd
 
 import pygsheets
 
-service_file = '/home/dfeldman/bii/bilf-service-1e5b06b41655.json'
+
+service_file = f'{os.environ["HOME"]}/bii/bilf-service-1e5b06b41655.json'
 
 
 class Drive():
