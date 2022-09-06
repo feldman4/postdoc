@@ -1,31 +1,45 @@
+# define what samples from the google sheet, these go into samples.csv
 samples:
   gate: >-
     date == "2022-08-17" & "MS_1031" <= sample <= "MS_1054"
 
+# pull designs into designs.csv
 designs:
   table: /home/dfeldman/flycodes/chip_orders/chip176_designs.csv.gz
   gate: library == "scaffolds_1"
   rename:
     design_name_original: pdb_file
 
+# this step generates centroided mzML, nothing special
 convert_raw:
   flags: [
     # '--noPeakPicking'
     ]
 
+# parameters for a mini snakemake pipeline that generates filtered, calibrated
+# mzML that's ready for skyline; uses comet and OpenMS
 process_mzml:
-  snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
-  request: 'calibratedRT'
+  # first, filter to reduce data size
   mzML_filter: -rt 600:5100 -mz 495:850 # 90 minute gradient
-  comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
-  idXML_filter: -score:pep 30 -mz:error 10
+  # then, apply a fixed offset to MS1 (sometimes this is needed)
   mz_calibration: -offset 0 -ms_level 1 # offset of 1 decreases mz by 1 ppm
-  rt_reference: MS_1033 # injection
+  # then, calibrate retention times based on preliminary comet search
+  # need to set a reference sample, usually this is the SEC injection
+  rt_reference: MS_1033
+  # RT calibration parameters are rarely changed
   rt_calibration: -model:b_spline:num_nodes 10 -algorithm:max_rt_shift 60
+  # comet params are rarely changed
+  comet_params: /home/dfeldman/packages/postdoc/scripts/ms/comet_lowres.params
+  snakefile: /home/dfeldman/packages/postdoc/scripts/ms/process_mzml.smk
+  request: 'calibratedRT' # this is the mzML that the pipeline generates
+  # this is applied to filter all comet searches
+  idXML_filter: -score:pep 30 -mz:error 10
 
 skyline:
   input_tag: 'calibratedRT'
   gui_settings:
+    # these are the only settings that are set manually in the Skyline gui
+    # could be replaced with Skyline Batch?
     peaks: 3
     mass_accuracy: 3 ppm
     rt_filtering: 0.75 minutes

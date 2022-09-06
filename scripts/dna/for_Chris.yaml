@@ -1,0 +1,9 @@
+tables:
+  templates: 
+    table: drive:Target selection/templates_22Q4
+    gate: experiment == "GPCR test"
+  parts: 'drive:BII reference/parts'
+  features: 'drive:BII reference/benchling_features'
+  restriction_enzymes: 
+    table: 'drive:BII reference/enzymes'
+    gate: 'pT02_BsaI == "yes"'

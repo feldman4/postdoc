@@ -113,15 +113,18 @@ def setup():
 
     if 'skyline' in config:
         setup_skyline()
+        print('Import peptide search into Skyline with parameters from config.yaml, export barcode_results.csv')
 
     if 'plot' in config:
         setup_plots(df_designs)
-        print('Plot design SEC with bash command:')
-        print(f'  /home/dfeldman/s/app.sh submit {command_list_plot_designs} '
-            '--cpus=1 --memory=4g')
             
         print('Plot MS QC with bash command:')
         print(f'  sh {command_list_plot_qc}')
+
+        print('Plot design SEC with bash command:')
+        print(f'  /home/dfeldman/s/app.sh submit {command_list_plot_designs} '
+            '--cpus=1 --memory=4g')
+
 
 
 def load_config():

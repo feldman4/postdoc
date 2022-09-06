@@ -658,7 +658,7 @@ def load_DNAworks_output(working_dir):
     f = f'{working_dir}/rename.list'
     df_seqs = pd.read_csv(f, header=None, sep='\s+',
                           names=('hash', 'design_name', 'design'))
-    df_seqs['design_dna'] = [read_dwo(f'{working_dir}/{x}.dwo')
+    df_seqs['design_dna'] = [read_dwo(f'{working_dir}/{x}.dwo')[0]
                       for x in df_seqs['hash']]
     assert (df_seqs['design_dna'].apply(translate_dna) == df_seqs['design']).all()
     df_seqs.to_csv('DNA_sequence.list', index=None, header=None, sep=' ')

@@ -779,7 +779,7 @@ def load_yaml_table(config, verbose=True):
     load_keys = 'skiprows',
     kwargs = {k: config[k] for k in load_keys if k in config}
     if config['table'].startswith('drive:'):
-        from postdoc.drive import Drive
+        from postdoc.drive2 import Drive
         drive = Drive()
         remote = config['table'][len('drive:'):]
         df = drive(remote, **kwargs)

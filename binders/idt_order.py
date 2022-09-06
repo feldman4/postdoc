@@ -2,7 +2,7 @@
 
 TODO: check that kozak (GCCACC) is always followed by ATG
 """
-from ..drive import Drive
+from ..drive2 import Drive
 from ..utils import load_yaml_table, assert_unique
 from ..sequence import read_fasta, write_fasta, translate_dna, reverse_translate_random
 from ..sequence import reverse_complement as rc

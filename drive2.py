@@ -9,42 +9,30 @@ import io
 import os
 import pickle
 
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
 import numpy as np
 import pandas as pd
 
+import pygsheets
 
-token = os.path.join(os.environ['HOME'], '.config/token.pickle')
-
-# https://developers.google.com/drive/api/v3/ref-export-formats
-xlsx_mime = ('application/vnd.openxmlformats-officedocument'
-            '.spreadsheetml.sheet')
-gsheet_mime = 'application/vnd.google-apps.spreadsheet'
+service_file = '/home/dfeldman/bii/bilf-service-1e5b06b41655.json'
 
 
 class Drive():
     def __init__(self):
-        self.service = get_service()
-        self.file_ids = list_files(self.service)
+        self.service = pygsheets.authorize(service_file=service_file)
         
     def get_excel(self, name, dropna='all', normalize=True, fix_int=True, 
                   drop_unnamed=True, **kwargs):
         """Keyword arguments are passed to `pd.read_excel`.
         """
         if len(name.split('/')) == 2:
-            name, kwargs['sheet_name'] = name.split('/')
-            
-        file_id = self.file_ids[name]
-        request = self.service.files().export_media(
-            fileId=file_id, mimeType=xlsx_mime)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-            
-        df = pd.read_excel(fh, **kwargs)
+            spreadsheet_title, worksheet_title = name.split('/')
+
+        sh = self.service.open(spreadsheet_title)
+        ws = sh.worksheet_by_title(worksheet_title)
+
+        # change defaults?
+        df = ws.get_as_df(has_header=True, numerize=True)
         return self.clean(df, dropna=dropna, normalize=normalize, fix_int=fix_int, 
                      drop_unnamed=drop_unnamed)
     
@@ -71,21 +59,6 @@ class Drive():
 
     def __call__(self, *args, **kwargs):
         return self.get_excel(*args, **kwargs)
-
-
-def get_service():
-    with open(token, 'rb') as fh:
-        creds = pickle.load(fh)
-    return build('drive', 'v3', credentials=creds, cache_discovery=False)
-
-
-def list_files(service):
-    results = service.files().list(
-        q=f"mimeType='{xlsx_mime}' or mimeType='{gsheet_mime}'",
-        fields="files(id, name)",
-        ).execute()
-    items = results.get('files', [])
-    return {x['name']: x['id'] for x in items}
 
 
 def update_resources():
