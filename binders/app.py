@@ -704,6 +704,9 @@ def process_one_P32(i):
     save(f_nuclei, nuclei, compress=1)
     save(f_cells, cells, compress=1)
 
+    if nuclei.max() == 0:
+        return
+    
     wildcards = row[['well', 'site']]
     df_ph = get_phenotype(data, nuclei, cells, wildcards)
     df_ph.to_csv(f_phenotype_data, index=None)
