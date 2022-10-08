@@ -45,23 +45,25 @@ def generate_features():
     from ops.features import correlate_channels, masked
     import numpy as np
 
+    DAPI, GFP, RFP = 0, 1, 2
+
     return {
-        'dapi_gfp_corr' : lambda r: correlate_channels(r, 0, 1),
-        'dapi_rfp_corr' : lambda r: correlate_channels(r, 0, 2),
-        'gfp_rfp_corr' : lambda r: correlate_channels(r, 1, 2),
+        'dapi_gfp_corr' : lambda r: correlate_channels(r, DAPI, GFP),
+        'dapi_rfp_corr' : lambda r: correlate_channels(r, DAPI, RFP),
+        'gfp_rfp_corr' : lambda r: correlate_channels(r, GFP, RFP),
         
-        'dapi_mean'  : lambda r: masked(r, 0).mean(),
-        'dapi_median': lambda r: np.median(masked(r, 0)),
-        'gfp_median' : lambda r: np.median(masked(r, 1)),
-        'gfp_mean'   : lambda r: masked(r, 1).mean(),
-        'rfp_mean'   : lambda r: masked(r, 2).mean(),
-        'rfp_median'   : lambda r: masked(r, 2).mean(),
-        'dapi_int'   : lambda r: masked(r, 0).sum(),
-        'gfp_int'    : lambda r: masked(r, 1).sum(),
-        'rfp_int'    : lambda r: masked(r, 2).sum(),
-        'dapi_max'   : lambda r: masked(r, 0).max(),
-        'gfp_max'    : lambda r: masked(r, 1).max(),
-        'rfp_max'    : lambda r: masked(r, 2).max(),
+        'dapi_mean'  : lambda r: masked(r, DAPI).mean(),
+        'dapi_median': lambda r: np.median(masked(r, DAPI)),
+        'gfp_median' : lambda r: np.median(masked(r, GFP)),
+        'gfp_mean'   : lambda r: masked(r, GFP).mean(),
+        'rfp_mean'   : lambda r: masked(r, RFP).mean(),
+        'rfp_median'   : lambda r: masked(r, RFP).mean(),
+        'dapi_int'   : lambda r: masked(r, DAPI).sum(),
+        'gfp_int'    : lambda r: masked(r, GFP).sum(),
+        'rfp_int'    : lambda r: masked(r, RFP).sum(),
+        'dapi_max'   : lambda r: masked(r, DAPI).max(),
+        'gfp_max'    : lambda r: masked(r, GFP).max(),
+        'rfp_max'    : lambda r: masked(r, RFP).max(),
 
         'perimeter'  : lambda r: r.perimeter,
     }
@@ -136,7 +138,7 @@ def process_one_site(df_):
     data = read(list(df_['file']))
     wildcards = df_[['experiment', 'plate', 'well', 'site']].iloc[0].to_dict()
 
-    dapi, gfp, rfp = data
+    dapi, _, _ = data
 
 
     nuclei = Snake._segment_nuclei(dapi, dapi_threshold, nucleus_area_min, nucleus_area_max)
@@ -162,9 +164,11 @@ def load_nd2_site(nd2_file, index):
 
 
 def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_table=file_table, 
-               sites='all', luts=('GRAY', 'GREEN', 'RED'), **selectors):
+               sites='all', luts=('GRAY', 'GREEN', 'RED'), errors='warn', **selectors):
     """Exporting nd2 to output path, formatted using columns from file table. Can 
     sub-select file table for parallel processing.
+
+    :param errors: how to handle ND2 reading errors, one of "warn", "raise", or "ignore"
     """
     from nd2reader import ND2Reader
     import numpy as np
@@ -172,7 +176,6 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
     import ops.io
     from ops.io import save_stack
 
-    eval('ops.io')
     luts = [getattr(ops.io, x) for x in luts]
 
     df_files = pd.read_csv(file_table)
@@ -180,7 +183,7 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
     for col, val in selectors.items():
         df_files = df_files.loc[lambda x: x[col] == val]
 
-    print(f'Exporting {len(df_files)} sites...', file=sys.stderr)
+    print(f'Exporting from {len(df_files)} ND2 files...', file=sys.stderr)
     for nd2_file, df in df_files.groupby('file'):
         assert len(df) == 1
         with ND2Reader(nd2_file) as images:
@@ -188,7 +191,19 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
         if sites == 'all':
             sites = np.arange(index_count)
         for site in sites:
-            data = load_nd2_site(nd2_file, site)
+            try:
+                data = load_nd2_site(nd2_file, site)
+            except Exception as e:
+                if errors == 'warn':
+                    print(e)
+                    continue
+                elif errors == 'raise':
+                    raise e
+                elif errors == 'ignore':
+                    continue
+                else:
+                    raise ValueError(f'errors must be one of "warn", "raise", "ignore"; not {errors}')
+
             info = df.iloc[0].to_dict()
             info['site'] = site
             f = output.format(**info)
@@ -455,7 +470,6 @@ def process_one_site_nd2(nd2_file, index, wildcards, segment='cellpose', fast_di
                          nuclei_diameter=None, cell_diameter=None):
     from skimage.morphology import dilation
     import numpy as np
-    from ops.io import save_stack
 
     data = load_nd2_site(nd2_file, index)#[:, :1000, :1000]
     dapi, gfp, rfp = data
@@ -484,7 +498,6 @@ def segment_cellpose(dapi, cyto, nuclei_diameter, cell_diameter, gpu=False,
     """
     from cellpose.models import Cellpose
     import numpy as np
-    import contextlib
     # import logging
     # logging.getLogger('cellpose').setLevel(logging.WARNING)
 
@@ -556,7 +569,6 @@ def process_well_nd2(experiment, plate, well, segment='cellpose',
     df_ph = pd.concat(arr)
     df_ph.to_csv(f, index=None)
     print(f'Saved {len(df_ph)} cell records to {f}')
-
 
 
 def load_grid_nd2(df_phenotypes, df_files, padding=18):    
@@ -670,6 +682,33 @@ def segment_nuclei_for_titer(well):
         save_stack(f_out, masks, compress=1)
 
 
+def process_one_P32(i):
+    import pandas as pd
+    from ops.filenames import rename_file
+    from ops.io import read_stack as read
+    from ops.io import save_stack as save
+
+    df_files = pd.read_csv('phenotype_files.csv')
+    row = df_files.iloc[i]
+
+    f_nuclei = rename_file(row['file'], subdir='process', tag='nuclei')
+    f_cells = rename_file(row['file'], subdir='process', tag='cells')
+    f_phenotype_data = rename_file(row['file'], subdir='process', tag='phenotype', ext='csv')
+
+    data = read(row['file'])[[2, 0, 1]]
+    nuclei = read(row['nuclei'])
+    cells = read(row['cells'])
+
+    nuclei, cells = reconcile_nuclei_cells(nuclei, cells)
+
+    save(f_nuclei, nuclei, compress=1)
+    save(f_cells, cells, compress=1)
+
+    wildcards = row[['well', 'site']]
+    df_ph = get_phenotype(data, nuclei, cells, wildcards)
+    df_ph.to_csv(f_phenotype_data, index=None)
+
+
 if __name__ == '__main__':
 
     # order is preserved
@@ -683,6 +722,7 @@ if __name__ == '__main__':
         'plot_all', 
         'export_nd2',
         'segment_nuclei_for_titer',
+        'process_one_P32',
     ]
 
     # if the command name is different from the function name
