@@ -562,7 +562,7 @@ def find_nearest_sequence(
 
 
 def submit_from_command_list(
-    filename, group_size=1, limit_array=None, name=None, queue='short', memory='4g', 
+    filename, group_size=1, limit_array=None, time="3 hours", name=None, queue='cpu', memory='4g', 
     cpus=1, with_gpu=None, stdout='default', stderr='default', dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
@@ -571,6 +571,7 @@ def submit_from_command_list(
     :param group_size: runs a group of commands within each task, useful if commands run in 
       less than a few minutes (but group must finish in queue time limit!)
     :param limit_array: limit task array to this many concurrent jobs (e.g., --array=5)
+    :param time: time limit in human format (e.g., "10 minutes", or "4 days"), no fractions
     :param name: sbatch job name (-J), defaults to `filename`
     :param queue: sbatch queue (-p)
     :param memory: sbatch memory (--mem)
@@ -581,7 +582,8 @@ def submit_from_command_list(
     """
     from math import ceil
     import pandas as pd
-    import os, re, subprocess, sys, time, uuid
+    import os, re, subprocess, sys, uuid
+    import dateparser
     num_removed = 0
     if filename == 'stdin':
         lines = sys.stdin.read().strip().split('\n')
@@ -630,8 +632,16 @@ def submit_from_command_list(
     if num_removed:
         removed = f' (removed {num_removed} blank/comment lines)'
     
+    t = dateparser.parse('now') - dateparser.parse(time)
+    d = {}
+    d['D'] = t.days
+    d['H'], remainder = divmod(1 + t.seconds, 3600)
+    d['M'], d['S'] = divmod(remainder, 60)
+    time_limit = '{D}-{H:02d}:{M:02d}:{S:02d}'.format(**d)
+
     sbatch_args = {
         '-p': queue,
+        '-t': time_limit,
         '-J': name,
         '--mem': memory,
         '-c': cpus,

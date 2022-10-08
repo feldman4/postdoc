@@ -1,7 +1,8 @@
 tables:
   templates: 
     table: drive:Target selection/templates_22Q4
-    gate: experiment == "GPCR test"
+    gate: experiment == "GPCR exp test"
+    gate: experiment == "asdf"
   parts: 'drive:BII reference/parts'
   features: 'drive:BII reference/benchling_features'
   restriction_enzymes: 
