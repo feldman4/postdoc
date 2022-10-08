@@ -562,7 +562,7 @@ def find_nearest_sequence(
 
 
 def submit_from_command_list(
-    filename, group_size=1, limit_array=None, time="3 hours", name=None, queue='cpu', memory='4g', 
+    filename, group_size=1, limit_array=None, time='3 hours', name=None, queue='cpu', memory='4g', 
     cpus=1, with_gpu=None, stdout='default', stderr='default', dry_run=False):
     """Submit SLURM jobs from a list of commands.
 
