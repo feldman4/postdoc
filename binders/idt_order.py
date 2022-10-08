@@ -83,8 +83,8 @@ def prepare_reverse_translations():
 
     write_fasta(rt_input_fasta, needs_rt[['name', 'aa']])
     
+    # backwards compatibility
     if 'white_list' in df_features:
-        # backwards compatibility
         (df_features['white_list'].dropna().rename('enzyme').pipe(pd.DataFrame)
         .assign(site=lambda x: x['enzyme'].apply(
             lambda y: getattr(Bio.Restriction, y).site))
@@ -255,7 +255,6 @@ def create_genbank(name, template, parts, topology='circular'):
     from Bio import SeqIO
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
-    from Bio.Alphabet import IUPAC
     from Bio.SeqFeature import SeqFeature, FeatureLocation
     
     parts = dict(parts)
@@ -274,7 +273,7 @@ def create_genbank(name, template, parts, topology='circular'):
                            qualifiers=dict(label=key))]
         i += n
 
-    record = SeqRecord(Seq(dna, IUPAC.unambiguous_dna), name=name)
+    record = SeqRecord(Seq(dna), name=name, annotations={"molecule_type": "DNA"})
     record.annotations['topology'] = topology
     record.features = arr
     
@@ -426,7 +425,7 @@ if __name__ == '__main__':
     named = {
         '0_setup': setup_block,
         '1_rt': reverse_translate_block,
-        '2_design': generate_vectors,
+        '2_design': design_block,
         '3_check': check_complexity_block,
         }
 
