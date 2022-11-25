@@ -26,7 +26,7 @@ else:
 
 cmd.do('set fetch_path, {}'.format(os.path.join(pdbs_dir, 'fetch')))
 
-import os
+import os, glob
 log_file = os.path.join(os.environ['HOME'], '.pymol', 'log.pml')
 cmd.do(f'log_open {log_file}, a')
 python end
