@@ -1,6 +1,6 @@
 #!/bin/sh
 
-ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
+ENV="/net/software/conda/envs/pyrosetta"
 case $1 in 
     --env=prosit)
         ENV="/home/dfeldman/.conda/envs/prosit5"
@@ -13,7 +13,8 @@ then
 fi
 
 SCRIPTS_DIR=`dirname "$0"`
-PYTHONPATH=/home/dfeldman/packages python "${SCRIPTS_DIR}"/app.py "$@"
+EXTRA_PACKAGES="/home/dfeldman/packages/extra"
+PYTHONPATH=/home/dfeldman/packages:$EXTRA_PACKAGES python "${SCRIPTS_DIR}"/app.py "$@"
 
 <<'###EXAMPLES'
 

@@ -7,8 +7,7 @@ import postdoc.flycodes.prosit_app
 
 def parse_overlap_oligos(filename, output_prefix=None,
     oligo_A_5=18, oligo_A_3=19, oligo_B_5=19, oligo_B_3=18,
-    with_aa=True,
-    header=None, sep=None, name_col=None, dna_col=0, 
+    with_aa=True, header=None, sep=None, name_col=None, dna_col=0, 
     ):
     """Analyze list of oligo pairs designed for overlap assembly.
     
@@ -581,7 +580,6 @@ def submit_from_command_list(
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
     """
     from math import ceil
-    import pandas as pd
     import os, re, subprocess, sys, uuid
     import dateparser
     num_removed = 0
@@ -593,7 +591,8 @@ def submit_from_command_list(
         if name is None:
             name = 'stdin:' + first_word.split('/')[-1][:8]
     else:
-        lines = pd.read_csv(filename, header=None)[0]
+        with open(filename, 'r') as fh:
+            lines = fh.read().split('\n')
         commands = [x.strip() for x in lines if x and not x.lstrip().startswith('#')]
     num_removed = len(lines) - len(commands)
 
