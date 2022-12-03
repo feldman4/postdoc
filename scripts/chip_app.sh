@@ -1,15 +1,19 @@
 #!/bin/sh
+set -euo pipefail
 
-ENV=`readlink -f ~/.conda/envs/ppi`
+conda_env=`readlink -f ~/.conda/envs/ppi`
 
 script_path="$(readlink -f "$(readlink -f "${BASH_SOURCE[0]}")")"
 script_dir="$(cd "$(dirname "${script_path}")" && pwd)"
 package_dir="$(dirname "${script_dir}")"
 package_parent_dir="$(dirname "${package_dir}")"
 
-if [ "$CONDA_PREFIX" != "$ENV" ]
+if [ "$CONDA_PREFIX" != "$conda_env" ]
 then
-    micromamba activate $ENV
+    eval "$(micromamba shell hook -s posix)"
+    set +u
+    micromamba activate $conda_env
+    set -u
 fi
 
 PYTHONPATH=$package_parent_dir python -m postdoc.flycodes.chip_app "$@"
