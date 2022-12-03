@@ -52,7 +52,13 @@ source /software/mmseqs2/util/bash-completion.sh
 
 ########################### EXTRA ############################
 
-bind 'set mark-symlinked-directories on'
+case "$-" in
+*i*) # interactive shell
+	bind 'set mark-symlinked-directories on'
+	;;
+*) # not interactive shell
+	;;
+esac
 
 # load z for fuzzy cd from scripts/external/z.sh (this is scripts/.bashrc)
 
