@@ -121,12 +121,12 @@ def fasta_frame(files_or_search):
     else:
         files = files_or_search
 
-    cols = ['name', 'seq', 'file_ix', 'file']
+    cols = ['name', 'seq', 'record_index', 'file']
     records = []
     for f in files:
         for i, (name, seq) in enumerate(read_fasta(f)):
             records += [{
-                'name': name, 'seq': seq, 'file_ix': i, 
+                'name': name, 'seq': seq, 'record_index': i, 
                 'file': f,
             }]
 
