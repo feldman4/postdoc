@@ -1,15 +1,19 @@
 #!/bin/sh
 
-ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
+ENV=`readlink -f ~/.conda/envs/ppi`
+
+script_path="$(readlink -f "$(readlink -f "${BASH_SOURCE[0]}")")"
+script_dir="$(cd "$(dirname "${script_path}")" && pwd)"
+package_dir="$(dirname "${script_dir}")"
+package_parent_dir="$(dirname "${package_dir}")"
 
 if [ "$CONDA_PREFIX" != "$ENV" ]
 then
-    source activate $ENV
+    micromamba activate $ENV
 fi
 
-SCRIPTS_DIR=`dirname "$0"`
-PACKAGE_DIR=`dirname "$SCRIPTS_DIR"`
-PYTHONPATH=/home/dfeldman/packages python "${PACKAGE_DIR}"/flycodes/chip_app.py "$@"
+PYTHONPATH=$package_parent_dir python -m postdoc.flycodes.chip_app "$@"
+
 
 <<'###EXAMPLES'
 
