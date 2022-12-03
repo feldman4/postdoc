@@ -332,9 +332,9 @@ def add_features(record, features):
 
     n = len(vector)
 
-    features = dict(features)
+    features = {b: a for a,b in features}
     arr = []
-    for name, feature in features.items():
+    for feature, name in features.items():
         feature = feature.upper()
         m = len(feature)
 
