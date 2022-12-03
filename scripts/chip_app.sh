@@ -1,13 +1,15 @@
 #!/bin/sh
 set -euo pipefail
 
-conda_env=`readlink -f ~/.conda/envs/ppi`
+conda_env=~/.conda/envs/ppi
 
 script_path="$(readlink -f "$(readlink -f "${BASH_SOURCE[0]}")")"
 script_dir="$(cd "$(dirname "${script_path}")" && pwd)"
 package_dir="$(dirname "${script_dir}")"
 package_parent_dir="$(dirname "${package_dir}")"
 
+
+conda_env=`readlink -f $conda_env`
 if [ "$CONDA_PREFIX" != "$conda_env" ]
 then
     eval "$(micromamba shell hook -s posix)"
