@@ -1,4 +1,5 @@
 ._*
+*.sif
 *.DS_Store
 resources/._*
 resources/pdb_db.csv
