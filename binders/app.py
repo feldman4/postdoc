@@ -164,7 +164,8 @@ def load_nd2_site(nd2_file, index):
 
 
 def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_table=file_table, 
-               sites='all', luts=('GRAY', 'GREEN', 'RED'), errors='warn', **selectors):
+               sites='all', luts=('GRAY', 'GREEN', 'RED', 'MAGENTA', 'CYAN'), 
+               errors='warn', index=None, **selectors):
     """Exporting nd2 to output path, formatted using columns from file table. Can 
     sub-select file table for parallel processing.
 
@@ -181,7 +182,7 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
     df_files = pd.read_csv(file_table)
     
     for col, val in selectors.items():
-        df_files = df_files.loc[lambda x: x[col] == val]
+        df_files = df_files.query(f'{col} == @val') # allow list selection
 
     print(f'Exporting from {len(df_files)} ND2 files...', file=sys.stderr)
     for nd2_file, df in df_files.groupby('file'):
@@ -190,9 +191,12 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
             index_count = images.sizes['v']
         if sites == 'all':
             sites = np.arange(index_count)
+        print(f'Found {len(sites)} sites')
         for site in sites:
             try:
                 data = load_nd2_site(nd2_file, site)
+                if index is not None:
+                    data = data[list(index)]
             except Exception as e:
                 if errors == 'warn':
                     print(e)
@@ -372,7 +376,7 @@ def plot_all(phenotype_table=phenotype_table_filtered, min_cell_count=30):
         fg = plot_box_grid(df_ph_filt, row)
         f = f'figures/box_grid_by_{row}.pdf'
         fg.savefig(f)
-        print(f'Saved box plot grid to {f}')
+        print(f'Saved box plot grid to {f}', file=sys.stderr)
 
 
 def collect_phenotype_results(experiment, file_table=file_table, 
@@ -526,11 +530,8 @@ def process_well_nd2(experiment, plate, well, segment='cellpose',
                      limit=None, progress=lambda x: x):
     import pandas as pd
     from nd2reader import ND2Reader
-    from tqdm.auto import tqdm
-    from postdoc.utils import dataframe_to_csv_string
     from skimage.io import imsave
     import numpy as np
-    print('output is', output)
     
     df_files = (pd.read_csv(file_table)
      .query('experiment == @experiment & plate == @plate & well == @well')
