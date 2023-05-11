@@ -21,15 +21,20 @@ import inspect
 # CONSTANTS
 
 GPU_MEM_FRACTION = 0.1
-MODEL_IRT = ('/home/dfeldman/flycodes/ref/prosit_models/'
-             'model_irt_prediction/')
-MODEL_SPECTRA = ('/home/dfeldman/flycodes/ref/prosit_models/'
-                 'model_fragmentation_prediction/')
+
+get_first = lambda xs: [x for x in xs if os.path.exists(x)][0]
+MODEL_IRT = get_first([
+    '/root/model_spectra', # apptainer
+    '/projects/ms/prosit/models/irt/',
+])
+MODEL_SPECTRA = get_first([
+    '/root/model_irt', # apptainer
+    '/projects/ms/prosit/models/spectra/',
+])
 
 # CONFIG
 
 M = designs.runs[config['run']]
-M = M
 RUN_NAME = f'{M.name}_{config["timestamp"]}' # unique name for this snakemake run
 if 'exhaustive' in dir(M):
     RUNS = fly.design.get_prefixes(M.rule_set)
@@ -42,8 +47,12 @@ def expand_ms1_range(wildcards):
 
 rule all:
     input: 
+        # get all barcodes, no MS1 filtering
+        # 'all_barcodes.csv',
+
+        # get barcodes at each MS1 resolution specified in design
         expand('barcodes_ms1_{ms1_res}.csv', ms1_res=M.ms1_resolution),
-        'all_barcodes.csv',
+
         # expand('process/{design}_{run}_{bin_mz}.peptides.csv', 
         #     design=M.name,
         #     run=RUNS,
@@ -54,7 +63,9 @@ rule all:
         #     bin_mz=M.precursor_bin_names.values()),
         # expand('process/{design}_iRT_{bin_iRT}.ms1_{ms1_res}.csv',
         #     design=M.name,
-        #     bin_iRT=M.iRT_bin_names.values()),
+        #     bin_iRT=M.iRT_bin_names.values(),
+        #     ms1_res=M.ms1_resolution,
+        #     ),
         # expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.barcode_ions.csv',
         #     design=M.name,
         #     bin_iRT=M.iRT_bin_names.values(),
@@ -119,8 +130,8 @@ rule predict_prosit:
     resources:
         gpu_mem_tenths=1
     run:
-        d_spectra, d_irt = fly.load_prosit_models(
-            MODEL_IRT, MODEL_SPECTRA, gpu_mem_fraction=GPU_MEM_FRACTION)
+        d_spectra, d_irt = fly.load_prosit_models_cpu(
+            MODEL_SPECTRA, MODEL_IRT)
         df_peptides = pd.concat([pd.read_csv(f) for f in input])
         if len(df_peptides) == 0:
             for f in output:
@@ -135,11 +146,15 @@ rule predict_prosit:
             .assign(iRT_bin=lambda x: 
                     x['iRT'].pipe(fly.bin_by_value, 
                                 M.iRT_bins, M.iRT_bin_width))
-            .query('iRT_bin == iRT_bin')
             .pipe(fly.sort_by_spectral_efficiency)
             )
+            df_predicted = df_predicted.query('iRT_bin == iRT_bin')
+            # df_predicted.to_csv('predicted.csv', index=None)
+            # print('iRT_bins', M.iRT_bin_names.values())
+
 
             for f, iRT_bin in zip(output, M.iRT_bin_names.values()):
+                iRT_bin = float(iRT_bin)
                 (df_predicted.query('iRT_bin == @iRT_bin')
                     .to_csv(f, index=None)
                     )
@@ -227,7 +242,7 @@ rule filter_by_ms1_resolution:
 
 
 rule complete_ms1_resolution:
-    """Consolidate. 
+    """Consolidate 
     """
     input:
         expand('process/{design}_iRT_{bin_iRT}.ms1_{{ms1_res}}.csv',
@@ -261,6 +276,8 @@ rule complete_ms1_resolution:
         )
 
 rule export_all_barcodes:
+    """Generate a master barcode table
+    """
     input:
         expand('process/{design}_iRT_{bin_iRT}_mz_{bin_mz}.precursors.csv', 
             design=M.name, 

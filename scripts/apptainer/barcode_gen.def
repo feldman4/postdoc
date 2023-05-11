@@ -1,0 +1,28 @@
+# install
+# cd ~/packages/postdoc/scripts/apptainer
+# apptainer build barcode_gen.sif barcode_gen.def
+
+# test
+# apptainer run barcode_gen.sif ../scripts/run.sh test
+
+BootStrap: docker
+From: ubuntu
+IncludeCmd: yes
+
+%files
+    /home/dfeldman/flycodes/ref/prosit_models/model_fragmentation_prediction /root/model_spectra
+    /home/dfeldman/flycodes/ref/prosit_models/model_irt_prediction /root/model_irt
+
+    ~/.bin/micromamba /bin/micromamba
+    ../environments/barcode_gen.yml /opt/barcode_gen.yml
+    /projects/ms/prosit
+
+    /etc/apt/sources.list
+
+%post
+    apt-get update
+    apt-get install -y ca-certificates
+    micromamba create -y --file /opt/barcode_gen.yml
+
+%runscript
+    MAMBA_ROOT_PREFIX=/root/micromamba/ "$@"
