@@ -18,9 +18,10 @@ barcode_iRT_table = '/home/dfeldman/for/ms_qc_app/barcode_iRT.csv'
 
 chips = {
 'chip137': '/home/dfeldman/flycodes/chip_orders/chip137_design.csv',
-'chip137-rolls': '/home/dfeldman/flycodes/chip_orders/chip137_design_rick_rolls.csv',
+'chip137-rolls': '/home/dfeldman/flycodes/chip_orders/chip137_designs_rick_rolls.csv',
 'chip162': '/home/dfeldman/flycodes/chip_orders/chip162_designs.csv.gz',
 'chip166': '/home/dfeldman/flycodes/chip_orders/chip166_CR_designs.csv',
+'chip176': '/home/dfeldman/flycodes/chip_orders/chip176_designs.csv.gz',
 }
 
 
