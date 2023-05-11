@@ -1,15 +1,17 @@
 #!/bin/sh
 
-ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
+conda_env=~/.conda/envs/df-pyr-tf
 case $1 in 
     --env=cellpose)
-        ENV="/home/dfeldman/.conda/envs/cellpose"
+        conda_env=~/.conda/envs/cellpose
         shift
 esac
 
-if [ "$CONDA_PREFIX" != "$ENV" ]
+
+conda_env=`readlink -f $conda_env`
+if [ "$CONDA_PREFIX" != "$conda_env" ]
 then
-    source activate $ENV
+    source activate $conda_env
 fi
 
 PYTHONPATH=/home/dfeldman/packages:/home/dfeldman/packages/NatureProtocols python -m postdoc.binders.app "$@"

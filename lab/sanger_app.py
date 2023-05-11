@@ -3,6 +3,8 @@ clustalw = '/net/software/ccp4/ccp4-7.1/libexec/clustalw2'
 
 
 def load_sanger(filename):
+    """If the target is a zip file, run on all files at the top level.
+    """
     from postdoc.sequence import read_ab1, read_fasta
     if filename.endswith('.ab1'):
         return read_ab1(filename)

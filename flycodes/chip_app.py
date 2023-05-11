@@ -17,7 +17,7 @@ from postdoc.sequence import reverse_complement as rc
 from postdoc.sequence import reverse_translate_random, reverse_translate_max
 from postdoc.utils import (
     hash_set, approx_max_clique, csv_frame, gb_apply_parallel, assert_unique, 
-    expand_repeats, split_by_regex, nglob, set_cwd)
+    expand_repeats, split_by_regex, nglob, set_cwd, dont_warn)
 from postdoc.flycodes.pool2 import remove_restriction_sites
 from postdoc.pyrosetta.diy import read_pdb_sequences
 from postdoc.flycodes.pool2 import remove_restriction_sites
@@ -68,9 +68,14 @@ FINAL_DESIGNS_COLS = [
 # matches are added
 FINAL_DESIGNS_COLS_REGEX = '^overlap$|^part_*'
 
+# simulate cloning
+simulation_table = 'simulate/summary.csv'
+simulation_maps = 'simulate/genbanks.zip'
+
 # global
 app_script = '/home/dfeldman/s/app.sh'
 dnaworks_rt_script = '/home/dfeldman/packages/rtRosetta/1_reverse_translate.py'
+
 
 def print(*args, file=sys.stderr, **kwargs):
     """Local print command goes to stderr by default.
@@ -324,6 +329,8 @@ def create_assembly_dna(df_assemblies, design_dna_map):
         else:
             raise ValueError(info['reverse_translation'])
 
+    rs = np.random.RandomState(0)
+
     config = load_config()['layout']
     arr = []
     arr_ = []
@@ -345,11 +352,14 @@ def create_assembly_dna(df_assemblies, design_dna_map):
             elif part == 'spacer':
                 if spacer_length == 0:
                     continue
-                elif info['expand_from'] == 'left':
+                elif info.get('expand_from') == 'left':
                     s = info['aa'][:spacer_length]
-                elif info['expand_from'] == 'right':
+                    dna = do_rt(s, info, organism)
+                elif info.get('expand_from') == 'right':
                     s = info['aa'][-spacer_length:]
-                dna = do_rt(s, info, organism)
+                    dna = do_rt(s, info, organism)
+                elif info.get('random_dna') == True:
+                    dna = random_spacer_clean(rs, spacer_length)
             elif 'aa' in info:
                 dna = do_rt(info['aa'], info, organism)
             else:
@@ -365,7 +375,20 @@ def create_assembly_dna(df_assemblies, design_dna_map):
     return assembly_dna, df_parts
 
 
-def generate_chip_designs():
+def random_spacer_clean(rs, length):
+    avoid = 'cgtctc', 'gagacg', 'ggtctc', 'gagacc', 'aaaa', 'tttt', 'cccc', 'gggg'
+    for _ in range(1000):
+        dna = ''.join(rs.choice(list('ACGT'), size=3*length))
+        gc = (dna.count('G') + dna.count('C')) / len(dna)
+
+        if (not 0.40 < gc < 0.6) and (5 < length):
+            continue
+        if not any(x.upper() in dna.upper() for x in avoid):
+            return dna
+    raise ValueError
+
+
+def generate_chip_designs(dedupe=True):
     config = load_config()
     df_layout = (pd.read_csv(layout_table)
     .pipe(validate_layout_table)
@@ -403,8 +426,10 @@ def generate_chip_designs():
         else:
             raise ValueError(row['assembly_parts'])
         arr += [df]
-    df_chip_designs = (pd.concat(arr)
-    .pipe(remove_duplicate_designs)
+    df_chip_designs = pd.concat(arr)
+    if dedupe:
+        df_chip_designs = df_chip_designs.pipe(remove_duplicate_designs)
+    df_chip_designs = (df_chip_designs
     .assign(design_name=lambda x: 
         hash_set(x['design'], width=DESIGN_NAME_WIDTH, no_duplicates=False))
     [CHIP_DESIGNS_COLS].sort_values(['library', 'pool', 'source'])
@@ -415,7 +440,10 @@ def generate_chip_designs():
 
 
 def create_directories():
-    dirs = 'input', 'process', 'output', 'figures', input_rt_dir, overlap_dir
+    dirs = (
+        'input', 'process', 'output', 'figures', 'simulate',
+        input_rt_dir, overlap_dir
+    )
     for d in dirs:
         os.makedirs(d, exist_ok=True)
 
@@ -444,7 +472,8 @@ def fetch_tables():
         kwargs = {k: entry[k] for k in load_keys if k in entry}
         if entry['source'].startswith('drive:'):
             if drive is None:
-                from postdoc.drive import Drive
+                # from postdoc.drive import Drive
+                from swallow.drive import Drive
                 drive = Drive()
             remote = entry['source'].replace('drive:', '')
             df = drive(remote, **kwargs)
@@ -1135,14 +1164,19 @@ def no_terminal_R():
     return load_config()['dna_design'].get('no_terminal_R', False)
 
 
-def find_orfs(seq):
+def find_orfs(seq, kozak=False):
     """Find open reading frames in circular DNA sequence.
     """
     plasmid = str(seq)
-    pat = '(ATG(?:...)*?)(?:TAA|TAG|TGA)'
+    if kozak:
+        pat = 'GCCACC(ATG(?:...)*?)(?:TAA|TAG|TGA)'
+
+    else:
+        pat = '(ATG(?:...)*?)(?:TAA|TAG|TGA)'
+
     orfs = [translate_dna(x) for x in re.findall(pat, plasmid + plasmid)]
     orfs += [translate_dna(x) for x in re.findall(pat, rc(plasmid + plasmid))]
-    return orfs
+    return sorted(set(orfs), key=lambda x: -1 * len(x))
 
 
 def purified_peptides(protein, his_tag='HHH'):
@@ -1193,12 +1227,122 @@ def collect_subdirectory_tables():
     print(f'Wrote {df_barcodes.shape[0]} unique barcodes to barcodes.csv')
     
 
-def setup_block():
+def export_simulation_genbanks(
+    df_summary, simulation, output=simulation_maps,
+    reindex=lambda x: x,
+    vector_features=None,
+    template='{assembly_index}_{chip_design_index}_{pool}_{library}_'
+             '{barcode}_{design_name}_{design_name_original}.gb',
+    progress=lambda x: x):
+    from io import StringIO
+    import warnings
+    import zipfile
+    from Bio import SeqIO
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+    from postdoc.binders.idt_order import add_features
+
+    zf = zipfile.ZipFile(output, 'w')
+        
+    records = {x.id: x for x in simulation.construct_records}
+
+    for _, row in progress(list(df_summary.iterrows())):
+        record = records[row['construct_id']]
+        reindexed = reindex(str(record.seq))
+        record = SeqRecord(Seq(reindexed), name=record.id, annotations={"molecule_type": "DNA"})
+        record.annotations['topology'] = 'circular'
+
+        # re-annotate
+        arr = []
+        for x in row.filter(regex='part_').dropna():
+            if x.count('_') != 1 or 'stop' in x:
+                continue
+            arr += [x.split('_')]
+        if vector_features is None:
+            vector_features = [[]]
+        all_features = np.concatenate([vector_features, arr])
+        record = add_features(record, all_features)
+        record.name = template.format(**row)
+
+        s = StringIO()
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='Increasing length of locus')
+            SeqIO.write(record, s, 'genbank')
+        zf.writestr(template.format(**row), s.getvalue())
+                
+    zf.close()
+    print(f'Wrote {df_summary.shape[0]} simulated plasmid maps to {output}')
+
+
+def simulate_cloning(df_oligos, entry_vectors):
+    import dnacauldron as dc
+
+    repository = dc.SequenceRepository()
+    with dont_warn('Attempting to fix invalid location'):
+        repository.import_records(files=entry_vectors)
+
+    for ix, oligo in df_oligos[['assembly_index', 'oligo']].values:
+        repository.add_record((str(ix), oligo.upper()))
+    
+    parts_list = list(repository.collections['parts'])
+
+    assembly = dc.Type2sRestrictionAssembly(
+        parts=parts_list,
+        max_constructs=100_000,
+        enzyme='BsmBI',
+    )
+    return assembly.simulate(sequence_repository=repository)
+
+
+def export_simulation_summary(df_designs, simulation, reindex=lambda x: x):
+    df_summary = simulation.compute_summary_dataframe()
+    
+    df_seqs = pd.DataFrame([{
+        'construct_id': x.id, 'plasmid': reindex(x.seq), 
+        'orf': find_orfs(reindex(x.seq), kozak=True)} 
+        for x in simulation.construct_records])
+    assert (df_seqs['orf'].str.len() == 1).all()
+    df_seqs['orf'] = df_seqs['orf'].str[0]
+
+    assembly_info = (pd.DataFrame(simulation.compute_all_construct_data_dicts())
+     .assign(assembly_index=lambda x: x['parts'].str[1])
+     .set_index('construct_id')['assembly_index'].astype(int)
+    )
+
+    df_summary = (df_summary
+     .join(assembly_info, on='construct_id')
+     .merge(df_seqs, on='construct_id')
+     .merge(df_designs)
+    )
+
+    print(f'Assembly simulated for {df_summary.shape[0]}'
+          f' oligos, results saved to {simulation_table}')
+    df_summary.to_csv(simulation_table, index=None)
+
+
+def setup_block(dedupe=True):
     print('Creating directories...')
     create_directories()
     fetch_tables()
     print('Generating chip designs...')
-    generate_chip_designs()
+    generate_chip_designs(dedupe=dedupe)
+    collect_reverse_translations()
+    validate_reverse_translations()
+
+
+def setup_block_no_rt(dedupe=True):
+    """Sometimes we do this first, then separate RT.
+    """
+    print('Creating directories...')
+    create_directories()
+    fetch_tables()
+    print('Generating chip designs...')
+    generate_chip_designs(dedupe=dedupe)
+
+
+def setup_block_rt_only(dedupe=True):
+    """Run after setup_block_no_rt and independent RT.
+    """
     collect_reverse_translations()
     validate_reverse_translations()
 

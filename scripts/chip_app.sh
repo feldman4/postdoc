@@ -1,15 +1,25 @@
 #!/bin/sh
+set -euo pipefail
 
-ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
+conda_env=~/.conda/envs/ppi
 
-if [ "$CONDA_PREFIX" != "$ENV" ]
+script_path="$(readlink -f "$(readlink -f "${BASH_SOURCE[0]}")")"
+script_dir="$(cd "$(dirname "${script_path}")" && pwd)"
+package_dir="$(dirname "${script_dir}")"
+package_parent_dir="$(dirname "${package_dir}")"
+
+
+conda_env=`readlink -f $conda_env`
+if [ "$CONDA_PREFIX" != "$conda_env" ]
 then
-    source activate $ENV
+    eval "$(micromamba shell hook -s posix)"
+    set +u
+    micromamba activate $conda_env
+    set -u
 fi
 
-SCRIPTS_DIR=`dirname "$0"`
-PACKAGE_DIR=`dirname "$SCRIPTS_DIR"`
-PYTHONPATH=/home/dfeldman/packages python "${PACKAGE_DIR}"/flycodes/chip_app.py "$@"
+PYTHONPATH=$package_parent_dir python -m postdoc.flycodes.chip_app "$@"
+
 
 <<'###EXAMPLES'
 

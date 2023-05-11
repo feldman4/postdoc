@@ -8,6 +8,7 @@ import re
 import subprocess
 import shutil
 import time
+import warnings
 
 from natsort import natsorted
 from string import Formatter
@@ -830,3 +831,13 @@ def parse_frame(search, ignore_missing=False):
 def load_yaml(filename):
     with open(filename, 'r') as fh:
         return yaml.safe_load(fh)
+
+
+@contextlib.contextmanager
+def dont_warn(message):
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message=message)
+        try:
+            yield
+        finally:
+            pass

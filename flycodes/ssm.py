@@ -36,3 +36,10 @@ def add_mutations2(df_ssm, design, col='aa_seq'):
             .assign(mutation=[','.join(x) for x in all_codes])
             .assign(num_mutations=[len(x) for x in all_codes])
             )
+
+
+def make_ssm(parent_seq):
+    arr = [parent_seq[:i] + aa + parent_seq[i+1:] for i in range(len(parent_seq)) for aa in aa_order]
+    assert 20 * len(parent_seq) == len(arr)
+    return [x for x in arr if x != parent_seq]
+
