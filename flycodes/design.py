@@ -552,7 +552,7 @@ def format_for_prosit(peptides, collision_energy, precursor_charge=2):
            )
 
 
-def load_prosit_models(irt_dir, spectra_dir, gpu_mem_fraction=1):
+def load_prosit_models(spectra_dir, irt_dir, gpu_mem_fraction=1):
     """Must run in properly versioned python environment.
     pip install tensorflow-gpu==1.10.1 keras==2.2.1 h5py \
         tables flask pyteomics lxml pandas
@@ -588,10 +588,35 @@ def load_prosit_models(irt_dir, spectra_dir, gpu_mem_fraction=1):
     return d_spectra, d_irt
 
 
+def load_prosit_models_cpu(spectra_dir, irt_dir):
+    """Works with prosit repo updated for 2023 keras and tensorflow-cpu
+    """
+    from prosit import model
+    from tensorflow.compat.v1 import Session, Graph
+
+    d_spectra, d_irt = {}, {}
+    d_spectra['graph'] = Graph()
+    with d_spectra['graph'].as_default():
+        d_spectra['session'] = Session()
+        with d_spectra['session'].as_default():
+            d_spectra['model'], d_spectra['config'] = model.load(
+                spectra_dir,
+                trained=True
+            )
+            d_spectra['model'].compile(optimizer='adam', loss='mse')
+    d_irt['graph'] = Graph()
+    with d_irt['graph'].as_default():
+        d_irt['session'] = Session()
+        with d_irt['session'].as_default():
+            d_irt['model'], d_irt['config'] = model.load(irt_dir,
+                    trained=True)
+            d_irt['model'].compile(optimizer='adam', loss='mse')
+    return d_spectra, d_irt
+
+
 def predict_prosit(peptides, d_spectra, d_irt, collision_energy=27, stdout_to=sys.stderr):
     """Redirect prosit's internal progress bar to `stdout_to`.
     """
-    import prosit
     from prosit import tensorize, prediction
     df = format_for_prosit(peptides, collision_energy)
     data = tensorize.csv(df)
@@ -725,7 +750,7 @@ def prosit_ion_names():
     
 
 def add_prosit(df, d_spectra, d_irt, collision_energy, col='sequence',
-              intensity_threshold=0.01, chunk_size=int(1e7)):
+              intensity_threshold=0.01, chunk_size=int(1e6)):
     """Add columns for retention time and fragmentation efficiency
     predictions. Columns where all fragmentation efficiencies are below
     `intensity_threshold` are discarded. Prosit should predict either -1 
@@ -814,7 +839,7 @@ def add_ion_properties(df):
             ion = sequence[:length]
         arr.append([ion, fast_mass(ion, charge=charge)])
     ions, ion_mz = zip(*arr)
-    return (df.assign(ion=ions, ion_mz=ion_mz))
+    return df.assign(ion=ions, ion_mz=ion_mz)
 
 
 def plot_ion_usage(df_wide, barcode_ix, ion_bins):
@@ -863,6 +888,9 @@ def peptides_to_ions(df_peptides, usable_ion_gate,
      .reset_index()
      .rename(columns={0: 'intensity_prosit', 'level_1': 'ion_name'})
     )
+
+    if valid_ions.shape[0] == 0:
+        return
 
     cols = ['run', 'sequence', 'mz', 'mz_bin', 'iRT', 'iRT_bin']
     join_cols = ['sequence']
@@ -989,11 +1017,15 @@ def add_usable_ion_count(df_peptides, METADATA):
             METADATA.ignore_ion_intensity,
             METADATA.ion_bins,
             METADATA.ion_bin_width)
-    counts = (df_ions
-     .query('intensity_prosit > @METADATA.usable_ion_intensity')
-     .groupby('sequence').size().to_dict())
+    if df_ions is None:
+        counts = {}
+    else:
+        min_intensity = METADATA.usable_ion_intensity
+        counts = (df_ions
+        .query('@min_intensity < intensity_prosit')
+        .groupby('sequence').size().to_dict())
     final_counts = df_peptides['sequence'].map(counts).fillna(0)
-    return (df_peptides.assign(usable_ion_count=list(final_counts)))
+    return df_peptides.assign(usable_ion_count=list(final_counts))
 
 
 def make_linker(length, base, repeat, cap):
