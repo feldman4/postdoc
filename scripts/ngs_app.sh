@@ -1,13 +1,13 @@
 #!/bin/sh
 
-ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
+ENV="/software/conda/envs/tensorflow2"
 
 if [ "$CONDA_PREFIX" != "$ENV" ]
 then
     source activate $ENV
 fi
 
-PYTHONPATH=/home/dfeldman/packages python /home/dfeldman/packages/postdoc/lab/ngs_app.py "$@"
+PYTHONPATH=/home/dfeldman/packages:/home/dfeldman/misc/extra_python/ngs_app python /home/dfeldman/packages/postdoc/lab/ngs_app.py "$@"
 
 <<'###EXAMPLES'
 
