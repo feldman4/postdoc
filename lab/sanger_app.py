@@ -39,15 +39,15 @@ def parse_files(files, pat):
         matches = re.findall(pat, seq, flags=re.IGNORECASE)
         if not matches:
             matches = re.findall(pat, reverse_complement(seq), flags=re.IGNORECASE)
-        dna = None
+        aa, dna = None, None
         if matches:
             dna = matches[0]
             try:
                 aa = translate_dna(dna)
             except AssertionError:
                 aa = None
-            arr += [{'sample': name, 'file': file, 'aa_match': aa, 'dna_match': dna,
-                    'sequence': seq}]
+        arr += [{'sample': name, 'file': file, 'aa_match': aa, 'dna_match': dna,
+                'sequence': seq}]
     return pd.DataFrame(arr)
 
 
