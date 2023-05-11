@@ -12,7 +12,7 @@ then
     source activate $ENV
 fi
 
-PYTHONPATH=/home/dfeldman/packages:/home/dfeldman/packages/NatureProtocols python /home/dfeldman/packages/postdoc/binders/app.py "$@"
+PYTHONPATH=/home/dfeldman/packages:/home/dfeldman/packages/NatureProtocols python -m postdoc.binders.app "$@"
 
 <<'###EXAMPLES'
 
