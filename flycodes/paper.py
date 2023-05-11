@@ -3,7 +3,6 @@ from contextlib import contextmanager
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from loess.loess_1d import loess_1d
 
 rc_params = {
     'savefig.transparent': True,
@@ -29,6 +28,7 @@ def paper_context():
 
 
 def predict_iRT_loess(df_peptides, sample=1000):
+    from loess.loess_1d import loess_1d
     x_var, y_var = 'RTime', 'iRT'
     x, y = df_peptides.sample(sample, random_state=0)[[x_var, y_var]].values.T
     xnew = df_peptides['RTime'].drop_duplicates().values
