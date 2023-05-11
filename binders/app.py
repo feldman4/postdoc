@@ -164,10 +164,14 @@ def load_nd2_site(nd2_file, index):
 
 
 def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_table=file_table, 
-               sites='all', luts=('GRAY', 'GREEN', 'RED'), errors='warn', **selectors):
+               sites='all', luts=('GRAY', 'GREEN', 'RED'), errors='warn', 
+               reindex=None,
+               **selectors):
     """Exporting nd2 to output path, formatted using columns from file table. Can 
     sub-select file table for parallel processing.
 
+    :param reindex: index from nd2 channel order to exported channel order
+        e.g., flip the 2nd and 3rd channels with reindex=[0, 2, 1]
     :param errors: how to handle ND2 reading errors, one of "warn", "raise", or "ignore"
     """
     from nd2reader import ND2Reader
@@ -207,6 +211,8 @@ def export_nd2(output='analysis/export/{plate}_{well}_Site-{site}.tif', file_tab
             info = df.iloc[0].to_dict()
             info['site'] = site
             f = output.format(**info)
+            if reindex:
+                data = data[list(reindex)]
             save_stack(f, data, luts=luts)
             print(f'Saved to {f}', file=sys.stderr)
 
