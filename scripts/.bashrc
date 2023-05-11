@@ -119,3 +119,9 @@ function r {
     rsync -rR --progress -z $@ ${DIGS_NODE:-jojo}:"${remote_path}" $HOME
 }
 alias r='set -f;reset_expansion r'
+
+function rmnot {
+    pat="$1"; shift
+    ls -1 $@ | grep -v $pat | xargs rm
+}
+
