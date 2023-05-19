@@ -48,7 +48,7 @@ alias fname='readlink -f'
 ######################## COMPLETION ##########################
 
 source ~/.fire_completion # python fire completion
-source /software/mmseqs2/util/bash-completion.sh
+# source /software/mmseqs2/util/bash-completion.sh
 
 ########################### EXTRA ############################
 
@@ -120,6 +120,7 @@ function r {
 }
 alias r='set -f;reset_expansion r'
 
+export BASH_SILENCE_DEPRECATION_WARNING=1
 function rmnot {
     pat="$1"; shift
     ls -1 $@ | grep -v $pat | xargs rm

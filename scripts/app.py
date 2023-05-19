@@ -1,6 +1,6 @@
 import fire
 import postdoc.lab.sanger_app
-import postdoc.flycodes.prosit_app
+# import postdoc.flycodes.prosit_app
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
@@ -560,9 +560,24 @@ def find_nearest_sequence(
     return dataframe_to_csv_string(df_matched)
 
 
+def submit_chain(search, **kwargs):
+    from natsort import natsorted
+    from glob import glob
+    files = natsorted(glob(search))
+    job_id = None
+    print(f'Submitting chain of {len(files)} jobs:')
+    [print(' ', x) for x in files]
+    job_ids = []
+    for f in files:
+        job_id = submit_from_command_list(f, **kwargs, return_job_id=True, dependency=job_id)
+        job_ids += [job_id]
+    print('All job IDs:')
+    print('\n'.join(job_ids))
+
+
 def submit_from_command_list(
     filename, group_size=1, limit_array=None, time='3 hours', name=None, queue='cpu', memory='4g', 
-    cpus=1, with_gpu=None, stdout='default', stderr='default', dry_run=False):
+    cpus=1, with_gpu=None, dependency=None, stdout='default', stderr='default', dry_run=False, return_job_id=False):
     """Submit SLURM jobs from a list of commands.
 
     :param filename: file with one line per command, or "stdin" to pipe in a command list;
@@ -576,6 +591,7 @@ def submit_from_command_list(
     :param memory: sbatch memory (--mem)
     :param cpus: sbatch number of cpus (-c)
     :param with_gpu: GPU type and count, such as "rtx2080:1" (default value if using gpu queue)
+    ;param dependency: job ID, this job will execute after the dependency successfully completes
     :param stdout: file for sbatch output (-o), defaults to logs/ subdirectory
     :param stderr: file for sbatch error (-e), defaults to logs/ subdirectory
     """
@@ -652,6 +668,8 @@ def submit_from_command_list(
     if with_gpu is not None:
         sbatch_args['--gres'] = f'gpu:{with_gpu}'
 
+    if dependency is not None:
+        sbatch_args['--dependency'] = f'afterok:{dependency}'
 
     sbatch_header = (
         ['#!/bin/bash'] + 
@@ -700,6 +718,9 @@ def submit_from_command_list(
             print(f'  sbatch {filename_rename}', file=sys.stderr)
         else:
             print(f'Job submission failed! sbatch output: {x}')
+
+    if return_job_id:
+        return job_id
 
 
 def fasta_to_table(filename, name='name', sequence='sequence'):
@@ -791,4 +812,6 @@ if __name__ == '__main__':
         fire.Fire(final)
     except BrokenPipeError:
         pass
+    except Exception as e:
+        print(str(e))
     

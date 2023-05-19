@@ -1,13 +1,16 @@
 #!/bin/sh
 
-ENV="/software/conda/envs/tensorflow2"
+ENV="swallow"
 
 if [ "$CONDA_PREFIX" != "$ENV" ]
 then
-    source activate $ENV
+    eval "$(micromamba shell hook -s posix)"
+    set +u
+    micromamba activate $ENV
+    set -u
 fi
 
-PYTHONPATH=/home/dfeldman/packages:/home/dfeldman/misc/extra_python/ngs_app python /home/dfeldman/packages/postdoc/lab/ngs_app.py "$@"
+python -m postdoc.lab.ngs_app "$@"
 
 <<'###EXAMPLES'
 
