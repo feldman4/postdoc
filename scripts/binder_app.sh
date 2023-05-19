@@ -14,7 +14,7 @@ then
     source activate $conda_env
 fi
 
-PYTHONPATH=~/packages:~/packages/NatureProtocols python -m postdoc.binders.app "$@"
+PYTHONPATH=/home/dfeldman/packages:/home/dfeldman/packages/NatureProtocols python -m postdoc.binders.app "$@"
 
 <<'###EXAMPLES'
 

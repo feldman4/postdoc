@@ -5,6 +5,18 @@ import os
 import re
 import sys
 
+from natsort import natsorted
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from slugify import slugify
+
+from postdoc.sequence import (
+    reverse_translate_max, read_fastq, translate_dna, add_design_matches, try_translate_dna)
+from postdoc.utils import csv_frame, assert_unique, dataframe_to_csv_string
+
+
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
 sample_table = 'samples.csv'
@@ -66,8 +78,7 @@ def setup(design_table=design_table, sample_table=sample_table, min_counts=2,
     :param include_barcodes: whether to include barcode analysis; default is to include if 
         "barcode" is design table
     """
-    import pandas as pd
-    import subprocess
+    
 
     # make directories
     for d in ('assembled', 'commands', 'results'):
@@ -122,9 +133,6 @@ Pipeline ready. Submit to digs or run directly with:
 
 
 def validate_sample_table(df_samples, include_barcodes):
-    from postdoc.utils import assert_unique
-    from slugify import slugify
-
     df_samples = df_samples.copy()
     allowed = r'[^-a-zA-Z0-9_\.]+'
     df_samples[SAMPLE] = [slugify(x, regex_pattern=allowed, lowercase=False) 
@@ -138,8 +146,7 @@ def validate_sample_table(df_samples, include_barcodes):
 
 
 def load_design_table():
-    import pandas as pd
-    from postdoc.sequence import reverse_translate_max
+    
     df_designs = pd.read_csv(design_table)
 
     if INSERT in df_designs:
@@ -154,9 +161,6 @@ def load_design_table():
 
 
 def validate_design_table(df_designs, include_barcodes):
-    from postdoc.sequence import translate_dna
-    from postdoc.utils import assert_unique
-
     df_designs = df_designs.copy()
     if INSERT_DNA in df_designs:
         assert_unique(df_designs[INSERT_DNA])
@@ -221,7 +225,6 @@ def write_design_table_from_chip(include_barcodes=True):
     """Test function.
     """
     chip_table = '/home/dfeldman/flycodes/chip_orders/chip137_design.csv'
-    import pandas as pd
     sources = ['foldit_monomers', 'foldit_oligomers', 'DK_beta_barrels', 'TS_variants', 
     'CD98_binders', 'BH_IL6R_variants']
     cols = ['subpool', DESIGN_NAME, INSERT_DNA]
@@ -253,8 +256,6 @@ def get_chip_insert(df):
 
 
 def annotate_inserts(df_inserts, df_designs, window=30, k=12):
-    import pandas as pd
-    from postdoc.sequence import add_design_matches, try_translate_dna
 
     design_info = (df_designs
     .set_index(INSERT).drop(INSERT_DNA, axis=1)
@@ -287,7 +288,6 @@ def annotate_inserts(df_inserts, df_designs, window=30, k=12):
 
 
 def has_subpools():
-    import pandas as pd
     return SUBPOOL in pd.read_csv(design_table)
 
 
@@ -317,8 +317,6 @@ def annotate_match_barcodes(df_matches, df_designs, barcode_terminus):
 
 
 def parse_inserts(reads, pat):
-    import pandas as pd
-
     inserts = []
     for x in reads:
         match = re.findall(pat, x)
@@ -336,10 +334,6 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
           include_barcodes=False):
     """Match assembled DNA inserts to design library.
     """
-    import pandas as pd
-    from postdoc.utils import dataframe_to_csv_string
-    from postdoc.sequence import read_fastq
-
     df_designs = (load_design_table()
      .pipe(validate_design_table, include_barcodes=include_barcodes)
     )
@@ -390,12 +384,6 @@ def stats(*matched_tables):
 
     :param matched_tables: filename or pattern for match result tables; be sure to quote wildcards
     """
-    import pandas as pd
-    from postdoc.utils import dataframe_to_csv_string
-    from postdoc.sequence import read_fastq
-    from natsort import natsorted
-    import numpy as np
-
     df_matches = load_matched_tables(*matched_tables)
 
     cutoffs = 1e-2, 1e-3, 1e-4, 1e-5
@@ -446,9 +434,6 @@ def stats(*matched_tables):
 
 
 def load_matched_tables(*matched_tables):
-    from postdoc.utils import csv_frame
-    from natsort import natsorted
-
     matched_tables = natsorted([f for x in matched_tables for f in glob(x)])
     if len(matched_tables) == 0:
         raise SystemExit('ERROR: must provide at least one matched.csv table')
@@ -470,10 +455,6 @@ def plot(*matched_tables, output='figures/', filetype='png', fuzzy_distance=15):
     :param output: prefix of saved figures and figure data
     :param filetype: extension for saved plot (png, jpg, pdf, etc)
     """
-    import pandas as pd
-    from postdoc.sequence import read_fastq
-    import seaborn as sns
-
     print('Loading data...')
     df_matches = load_matched_tables(*matched_tables)
     df_designs = load_design_table()
@@ -567,9 +548,6 @@ def plot_abundance(df_matches, df_designs, mode='insert'):
     Otherwise, combine all samples onto one plot.
     Mode is either "insert" or "barcode"
     """
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-
     if mode == 'insert':
         key = INSERT
         subpool = SUBPOOL
@@ -631,11 +609,6 @@ def plot_detection_cutoffs_barcode(df_matches):
     """Number of designs with N barcodes above abundance cutoffs for a single sample.
     Abundance cutoffs are relative to number of inserts without stop codons.
     """
-    import numpy as np
-    import seaborn as sns
-    import pandas as pd
-    import matplotlib.pyplot as plt
-
     df_counts = (df_matches
     .groupby([SUBPOOL, DESIGN_NAME, INSERT, MATCH_BARCODE])[COUNT].sum().reset_index()
     )
@@ -683,11 +656,6 @@ def plot_barcode_purity(df_matches, df_designs):
     """Purity is defined relative to the barcode detected in the insert 
     (i.e., the barcode that will be pulled down for MS).
     """
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-
     allowed_barcodes = (df_designs
         .drop_duplicates([SUBPOOL, BARCODE])
         .drop_duplicates(BARCODE, keep=False)
@@ -724,9 +692,6 @@ def plot_crossmapping(df_matches, df_designs, mode='insert', max_insert_distance
     """If mode=insert, determine crossmapping from entire insert. If mode=barcode, use 
     only barcodes that are unique across subpools.
     """
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
     if mode == 'insert':
         key = SUBPOOL
         # only matched inserts within edit distance (but not -1)
@@ -764,12 +729,6 @@ def plot_crossmapping(df_matches, df_designs, mode='insert', max_insert_distance
 
 
 def plot_distance_distribution(df_matches):
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    import pandas as pd
-    import numpy as np
-
-
     threshold = 5
     df_plot = (df_matches
     .query('~insert_has_stop')
@@ -797,10 +756,7 @@ def plot_distance_distribution(df_matches):
 
 
 def plot_length_distribution(df_matches, df_designs, focus_window=50):
-    import pandas as pd
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-
+    
     xlabel = 'Insert DNA length'
 
     cols = [SAMPLE, xlabel, SUBPOOL]

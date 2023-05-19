@@ -1,0 +1,15 @@
+# interactive test
+# qlogin -n 1 -c 2 --gres=gpu:a4000:1 --mem=8G -p gpu
+
+# cd /projects/ms/analysis/prosit
+# apptainer exec --nv prosit.sif python3 -m prosit.server
+
+BootStrap: docker
+From: dennisgoldfarb/prosit
+
+%files
+    /home/dfeldman/flycodes/ref/prosit_models/model_fragmentation_prediction /root/model_spectra
+    /home/dfeldman/flycodes/ref/prosit_models/model_irt_prediction /root/model_irt
+
+%runscript
+    "$@"

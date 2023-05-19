@@ -121,3 +121,8 @@ function r {
 alias r='set -f;reset_expansion r'
 
 export BASH_SILENCE_DEPRECATION_WARNING=1
+function rmnot {
+    pat="$1"; shift
+    ls -1 $@ | grep -v $pat | xargs rm
+}
+

@@ -20,4 +20,6 @@ runs = {
     'run_013': DESIGN_12,
     'run_014': DESIGN_13,
     'run_015': DESIGN_14,
+
+    'run_101': DESIGN_noDE,
     }

@@ -1,0 +1,25 @@
+name: barcode_gen
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - fire
+  - flask
+  - glob2
+  - jupyter
+  - keras
+  - lxml
+  - natsort
+  - pandas
+  - parse
+  - pytables
+  - pyteomics
+  - python-wget
+  - pyyaml
+  - seaborn
+  - seaborn
+  - snakemake
+  - tensorflow-cpu
+  - tqdm
+  - pip:
+    - /projects/ms/prosit/
