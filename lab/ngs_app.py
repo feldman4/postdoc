@@ -357,7 +357,7 @@ def match(sample, sample_table=sample_table, design_table=design_table, min_coun
     reads = read_fastq(assembled_fastq)
     total_assembled = len(reads)
 
-    pat = f'{row["adapter_5"]}([ACGT]*?){row["adapter_3"]}'
+    pat = f'{row["adapter_5"].upper()}([ACGT]*?){row["adapter_3"].upper()}'
 
     df_matches = parse_inserts(reads, pat)
     total_with_adapters = df_matches['count'].sum()
