@@ -31,7 +31,7 @@ command_lists = {
     }
 
 # path to PEAR executable
-pear = '/home/dfeldman/.conda/envs/df/bin/pear'
+pear = '/home/dfeldman/micromamba/envs/swallow/bin/pear'
 ngs_app = '/home/dfeldman/s/ngs_app.sh'
 
 # columns
