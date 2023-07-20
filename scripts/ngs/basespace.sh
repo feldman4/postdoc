@@ -5,8 +5,6 @@
 # bs biosample list
 # bs biosample download
 
-BS="/home/dfeldman/from/software/bs"
-
 LOCAL="/home/dfeldman/NGS/basespace"
 LOCAL="."
 # BIOSAMPLES="499375 499376"

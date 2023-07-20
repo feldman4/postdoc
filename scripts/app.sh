@@ -1,6 +1,6 @@
 #!/bin/sh
 
-ENV="/net/software/conda/envs/pyrosetta"
+ENV="/home/dfeldman/.conda/envs/df-pyr-tf"
 case $1 in 
     --env=prosit)
         ENV="/home/dfeldman/.conda/envs/prosit5"
