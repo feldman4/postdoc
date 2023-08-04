@@ -324,7 +324,7 @@ def load_dna_parts():
 
 
 def add_features(record, features):
-    """Add features to `record` based on name=>DNA dictionary `features`.
+    """Add DNA features to `record` based on name=>DNA dictionary `features`.
     """
     from Bio.SeqFeature import SeqFeature, FeatureLocation
 
