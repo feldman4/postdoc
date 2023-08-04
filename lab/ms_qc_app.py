@@ -21,7 +21,7 @@ chips = {
 'chip137-rolls': '/home/dfeldman/flycodes/chip_orders/chip137_designs_rick_rolls.csv',
 'chip162': '/home/dfeldman/flycodes/chip_orders/chip162_designs.csv.gz',
 'chip166': '/home/dfeldman/flycodes/chip_orders/chip166_CR_designs.csv',
-'chip176': '/home/dfeldman/flycodes/chip_orders/chip176_designs.csv.gz,
+'chip176': '/home/dfeldman/flycodes/chip_orders/chip176_designs.csv.gz',
 # 'chip178': '/home/dfeldman/flycodes/chip_orders/chip178' # TODO: create table in ~/flycodes/chip_orders/
 }
 
