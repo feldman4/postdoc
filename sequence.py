@@ -580,3 +580,17 @@ def select_most_different(xs, n):
         arr += [new]
     return arr
 
+
+
+def translate_to_stop(dna):
+    n = len(dna) % 3
+    if n != 0:
+        dna = dna[:-(len(dna) % 3)]
+    dna = dna.upper()
+    assert len(dna) % 3 == 0
+    aa = translate_dna(dna)
+    if '*' in aa:
+        return aa.split('*')[0]
+    return aa
+    # assert '*' in aa
+
