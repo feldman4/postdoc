@@ -5,6 +5,7 @@ export PATH="$HOME/packages/rtRosetta/scripts:$PATH"
 export PATH="$HOME/.gem/ruby/2.5.0/bin:$PATH"
 export PATH="$HOME/.bin:$PATH" # .local/bin got polluted with random python crap
 export PATH="$PATH:$HOME/packages/silent_tools"
+export PATH="$PATH:$HOME/bii/swallow/scripts"
 
 export PYTHONPATH="$HOME/packages:$PYTHONPATH"
 export PYTHONPATH="$HOME/packages/NatureProtocols:$PYTHONPATH"
@@ -27,8 +28,8 @@ alias countfiles='du -a | cut -d/ -f2 | sort | uniq -c | sort -nr'
 
 ######################### TERMINAL ############################
 
-PS1='\[\033[0;33m\]\u@\h \[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
-PS1='\[\033[0;33m\]\h:\[\033[1;31m\]\w\[\033[${?/[^0]/39}m\]\$ \[\033[0;38m'
+PS1='\[\e[38;5;178m\]\h\[\e[38;5;178m\]:\[\e[38;5;202m\]\w\[\e[38;5;99m\] ► \[\e[0m\]'
+
 export TERM=xterm-color
 set bell-style none
 # can output a warning that messes with sftp
@@ -44,6 +45,12 @@ alias wstatus="watch 'clusterstatus | (head -n 31; grep $USER)'"
 alias sq='squeue --user `whoami`'
 alias sqh='sjob | less' 
 alias fname='readlink -f'
+
+if [ "$(hostname)" == "jojo" ]; then
+    ulimit -u 4096
+fi
+
+source ~/bii/cloud/nextflow.sh
 
 ######################## COMPLETION ##########################
 
@@ -124,5 +131,14 @@ export BASH_SILENCE_DEPRECATION_WARNING=1
 function rmnot {
     pat="$1"; shift
     ls -1 $@ | grep -v $pat | xargs rm
+}
+
+
+export MPLCONFIGDIR="$HOME/.config/matplotlib"
+
+
+# sets title of terminal tab in jupyter lab
+function title_terminal {
+   PROMPT_COMMAND="echo -ne \"\033]0;$1\007\""
 }
 
