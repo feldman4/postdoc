@@ -1,0 +1,27 @@
+name: ms_analysis
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - biopython # needed?
+  - fire
+  - glob2
+  - google-api-python-client
+  - jupyter
+  - lxml
+  - natsort
+  - openms
+  - pandas
+  - parse
+  - pymysql
+  - pytables
+  - pyteomics
+  - python-levenshtein
+  - python-slugify
+  - python-wget
+  - pyyaml
+  - seaborn
+  - snakemake
+  - tqdm
+  - thermorawfileparser
+  - proteowizard

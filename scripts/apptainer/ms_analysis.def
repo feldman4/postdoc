@@ -1,0 +1,30 @@
+# use: apptainer run ms_analysis.sif <command>
+# packages in ms_analysis.yaml will be available
+# executables not installable via 
+
+Bootstrap: docker
+From: ubuntu
+IncludeCmd: yes
+
+%files
+    ../environments/ms_analysis.yaml /opt/ms_analysis.yaml
+    ~/.bin/micromamba /bin/micromamba
+    /etc/apt/sources.list
+
+%post
+    apt-get update
+    apt-get install -y ca-certificates git wget
+
+    # could also apt-get install comet-ms
+    wget -O /usr/bin/comet https://github.com/UWPR/Comet/releases/download/v2023.01.2/comet.linux.exe
+    chmod a+x /usr/bin/comet
+    
+    micromamba create -y --file /opt/ms_analysis.yaml -r /opt/micromamba/
+
+%environment
+    export MAMBA_ROOT_PREFIX=/opt/micromamba
+    export SINGULARITY_SHELL=/bin/bash
+
+%runscript
+    micromamba run -n ms_analysis "$@"
+    
