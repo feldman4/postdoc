@@ -1,6 +1,6 @@
 import fire
 import postdoc.lab.sanger_app
-# import postdoc.flycodes.prosit_app
+import postdoc.flycodes.prosit_app
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
@@ -773,7 +773,7 @@ if __name__ == '__main__':
     # order is preserved
     commands = [
         # digs commands
-        'submit', 
+        'submit', 'submit_chain',
         'match_sanger',
         
         'update_sanger', 'update_sec',
