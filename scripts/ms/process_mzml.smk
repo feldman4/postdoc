@@ -1,14 +1,23 @@
+"""Ensure that OpenMS and Comet MS/MS search executables are on path,
+for example by using ms_analysis conda environment and installing 
+Comet MS/MS binary (must be named "comet").
+"""
+
 from postdoc.flycodes import ms_app
 import pandas as pd
 import os
+import shutil
 
 config = ms_app.load_config()['process_mzml']
 
 df_samples = pd.read_csv(ms_app.sample_table)
 SAMPLES = list(df_samples['sample'])
-os.environ['PATH'] += ':' + ms_app.openms_dir
-os.environ['PATH'] += ':' + ms_app.tpp_dir
 
+
+requires = 'comet', 'FileFilter'
+for exe in requires:
+    if shutil.which(exe) is None:
+        raise Exception(f'Failed to find executable {exe}')
 
 
 rule all:
