@@ -3,17 +3,14 @@ import fire
 
 from glob import glob
 import os
+import shutil
 import sys
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
 # global
 akta_db = '/home/dfeldman/for/akta_db/'
-thermorawfileparser = '/home/dfeldman/.conda/envs/df-pyr-tf/bin/thermorawfileparser'
-comet = '/home/dfeldman/.conda/envs/tpp/bin/comet'
 ms_app = '/home/dfeldman/packages/postdoc/scripts/ms_app.sh'
-tpp_dir = '/home/dfeldman/.conda/envs/tpp/bin/'
-openms_dir = '/home/dfeldman/.conda/envs/proteowizard/bin/'
 validation_sec_drive = 'MS barcoding shared/validation SEC'
 
 # local
@@ -145,7 +142,7 @@ def setup_convert_raw():
     
     arr = []
     for sample in df_samples['sample']:
-        arr += [f'{thermorawfileparser} -o {target}/ {flags} -i input/{sample}.raw']
+        arr += [f'thermorawfileparser -o {target}/ {flags} -i input/{sample}.raw']
 
     os.makedirs('commands', exist_ok=True)
     pd.Series(arr).to_csv(command_list_convert_raw, index=None, header=None)
@@ -165,11 +162,13 @@ def setup_process_mzml():
         force_symlink(src, dst)
     
     links = [
-        (config['snakefile'], 'process_mzml/snakefile'),
         (f'../{config_file}',  f'process_mzml/{config_file}'),
         (f'../{sample_table}', f'process_mzml/{sample_table}'),
     ]
     [force_symlink(src, dst) for src, dst in links]
+    
+    # copy the snakefile for apptainer compatibility
+    shutil.copy(config['snakefile'], 'process_mzml/snakefile')
 
     cmd = 'cd process_mzml && snakemake --cores'
     with open(command_list_process_mzml, 'w') as fh:
