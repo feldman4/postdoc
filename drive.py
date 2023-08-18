@@ -59,6 +59,8 @@ class Drive():
             df.columns = [normalize_col_name(x) for x in df.columns]
         if fix_int:
             for c in df.columns:
+                if df[c].dtype == 'datetime64[ns]':
+                    continue
                 try:
                     if (df[c] - df[c].astype(int)).sum() == 0:
                         df[c] = df[c].astype(int)
