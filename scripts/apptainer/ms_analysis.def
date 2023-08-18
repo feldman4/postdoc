@@ -1,6 +1,12 @@
+# build: 
+#  cd ~/packages/postdoc/scripts/apptainer
+#  apptainer build path/to/ms_analysis.sif ms_analysis.def
+
+# define: 
+#   add conda packages to ../environments/ms_analysis.yaml
+#   install other stuff in %post block below
+
 # use: apptainer run ms_analysis.sif <command>
-# packages in ms_analysis.yaml will be available
-# executables not installable via 
 
 Bootstrap: docker
 From: ubuntu
@@ -8,18 +14,32 @@ IncludeCmd: yes
 
 %files
     ../environments/ms_analysis.yaml /opt/ms_analysis.yaml
-    ~/.bin/micromamba /bin/micromamba
+    /home/dfeldman/.bin/micromamba /bin/micromamba
     /etc/apt/sources.list
 
 %post
+    ##### IPD STANDARD #####
+    # Switch shell to bash
+    rm /bin/sh; ln -s /bin/bash /bin/sh
+
+    # Common symlinks
+    ln -s /net/databases /databases
+    ln -s /net/software /software
+    ln -s /home /mnt/home
+    ln -s /projects /mnt/projects
+    ln -s /net /mnt/net
+    ### END IPD STANDARD ###
+
     apt-get update
     apt-get install -y ca-certificates git wget
+    apt-get clean
 
     # could also apt-get install comet-ms
     wget -O /usr/bin/comet https://github.com/UWPR/Comet/releases/download/v2023.01.2/comet.linux.exe
     chmod a+x /usr/bin/comet
     
     micromamba create -y --file /opt/ms_analysis.yaml -r /opt/micromamba/
+    micromamba clean -a -y
 
 %environment
     export MAMBA_ROOT_PREFIX=/opt/micromamba

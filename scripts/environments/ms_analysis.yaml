@@ -22,6 +22,7 @@ dependencies:
   - pyyaml
   - seaborn
   - snakemake
+  - scikit-learn
   - tqdm
   - thermorawfileparser
   - proteowizard
