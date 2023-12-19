@@ -1346,8 +1346,6 @@ def overlay_validation_sec(uv_regex='230|260|280',
     .rename(columns={'volume': 'individual_sec_peak'})
     )
 
-    df_sec.to_csv('df_sec.csv', index=None)
-    df_uv_data.to_csv('df_uv_data.csv', index=None)
     cols = ['description', 'export_name', 'note', 'design_name']
     df_summary = (df_sec[cols]
      .assign(validation_sec_found=lambda x: 
