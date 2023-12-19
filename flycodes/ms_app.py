@@ -122,6 +122,8 @@ def setup():
         print(f'  /home/dfeldman/s/app.sh submit {command_list_plot_designs} '
             '--cpus=1 --memory=4g')
 
+    if 'apptainer' in config:
+        print('Step process_mzml uses apptainer:', config['apptainer'])
 
 
 def load_config():
@@ -152,7 +154,8 @@ def setup_process_mzml():
     import pandas as pd
     from postdoc.utils import force_symlink
     df_samples = pd.read_csv(sample_table)
-    config = load_config()['process_mzml']
+    config_all = load_config()
+    config = config_all['process_mzml']
     os.makedirs('process_mzml', exist_ok=True)
     source = 'centroid'
 
@@ -167,10 +170,12 @@ def setup_process_mzml():
     ]
     [force_symlink(src, dst) for src, dst in links]
     
-    # copy the snakefile for apptainer compatibility
-    shutil.copy(config['snakefile'], 'process_mzml/snakefile')
-
-    cmd = 'cd process_mzml && snakemake --cores'
+    prefix = ' '
+    if 'apptainer' in config_all:
+        prefix = f'apptainer run {config_all["apptainer"]}'
+        # apptainer dislikes symlink
+        shutil.copy(config['snakefile'], 'process_mzml/snakefile')
+    cmd = f'cd process_mzml &&{prefix}snakemake --cores'
     with open(command_list_process_mzml, 'w') as fh:
         fh.write(cmd)
 
@@ -1294,7 +1299,7 @@ def overlay_validation_sec(uv_regex='230|260|280',
     df_sec = drive('MS barcoding shared/validation SEC', skiprows=1, dtype=str)
     # grab UV data saved by export_validation_sec
     df_uv_data = csv_frame('*/uv_data.csv')
-    df_uv_data = df_uv_data[df_uv_data['channel'].str.match(f'.*{uv_regex}.*')]
+    df_uv_data = df_uv_data[df_uv_data['channel'].str.match(f'.*({uv_regex}).*')]
 
     # load barcode SEC from these runs
     analysis_directories = {
@@ -1309,14 +1314,16 @@ def overlay_validation_sec(uv_regex='230|260|280',
     traces = {}
     arr0, arr1, arr2 = [], [], []
     for dataset, directory in analysis_directories.items():
-        with set_cwd(directory):
-            pd.read_csv('designs.csv').assign(dataset=dataset).pipe(arr0.append)
-            pd.read_csv('sec_barcode_metrics.csv').assign(dataset=dataset).pipe(arr1.append)
-            pd.read_csv('sec_consensus_metrics.csv').assign(dataset=dataset).pipe(arr2.append)
-            traces[(dataset, 'barcodes')] = (pd.read_csv('sec_barcodes.csv')
-                .set_index(['design_name', 'barcode']).rename(columns=float))
-            traces[(dataset, 'consensus')] = (pd.read_csv('sec_consensus.csv')
-                .set_index('design_name').rename(columns=float))
+            read = lambda x: (pd.read_csv(x, low_memory=False)
+                .assign(dataset=dataset))
+            with set_cwd(directory):
+                read('designs.csv').pipe(arr0.append)
+                read('sec_barcode_metrics.csv').pipe(arr1.append)
+                read('sec_consensus_metrics.csv').pipe(arr2.append)
+                traces[(dataset, 'barcodes')] = (pd.read_csv('sec_barcodes.csv')
+                    .set_index(['design_name', 'barcode']).rename(columns=float))
+                traces[(dataset, 'consensus')] = (pd.read_csv('sec_consensus.csv')
+                    .set_index('design_name').rename(columns=float))
     df_designs = pd.concat(arr0)
     df_barcode_metrics = (pd.concat(arr1)
      [['design_name', 'num_ms_barcodes']].drop_duplicates()
@@ -1339,6 +1346,8 @@ def overlay_validation_sec(uv_regex='230|260|280',
     .rename(columns={'volume': 'individual_sec_peak'})
     )
 
+    df_sec.to_csv('df_sec.csv', index=None)
+    df_uv_data.to_csv('df_uv_data.csv', index=None)
     cols = ['description', 'export_name', 'note', 'design_name']
     df_summary = (df_sec[cols]
      .assign(validation_sec_found=lambda x: 
@@ -1349,6 +1358,8 @@ def overlay_validation_sec(uv_regex='230|260|280',
      .merge(dataset_info, how='left')
      .rename(columns={'note': 'validation_note'})
     )
+    n = df_uv_data.drop_duplicates(['description', 'export_name']).shape[0]
+    print(f'Found validation SEC for {len(df_summary)}/{n} entries with UV data')
     
     f = 'validation_summary.csv'
     print(f'Wrote summary of individual and pooled data to {f}')
