@@ -5,6 +5,7 @@ from glob import glob
 import os
 import shutil
 import sys
+import warnings
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
@@ -892,19 +893,10 @@ def analyze_sec():
     enough at ranking designs by measurement uncertainty, though NN might be better. L1 or L2
     norm of median trace (highly correlated) is good at ranking traces by peak sharpness.
     """
-    from postdoc.flycodes import classify_sec
     import pandas as pd
-    import numpy as np
 
     df_intensities = pd.read_csv(intensities_table)
-    df_samples = pd.read_csv(sample_table)
-
     config = load_config()['sec']
-    stages = load_config()['plot']['stage_order']
-    
-    fraction_centers = (df_samples
-    .query('stage == "SEC"')['fraction_center'].pipe(sorted)
-    )
     intensity = config['barcode']['intensity_metric']
 
     # pivot to get peak-normalized per-barcode traces
@@ -930,8 +922,7 @@ def analyze_sec():
 
     df_traces_filt = df_traces.query('barcode == @consensus_barcodes')
     df_consensus = df_traces_filt.pipe(get_consensus)
-    df_consensus_metrics = (get_consensus_metrics(
-        df_consensus, df_traces_filt, config['consensus']['method'])
+    df_consensus_metrics = (get_consensus_metrics(df_consensus, df_traces_filt)
         .join(barcode_counts, on='design_name')
     )
     df_consensus.to_csv(sec_consensus_table)
@@ -945,7 +936,7 @@ def analyze_sec():
 def get_trace_metrics(df_traces, df_intensities):
     import pandas as pd
     from itertools import groupby
-    from postdoc.flycodes.classify_sec import find_crap
+    from postdoc.flycodes.classify_sec import find_crap, find_smoothed_peaks
     from postdoc.flycodes.design import add_barcode_metrics
 
     def longest_true_run(xs):
@@ -985,14 +976,16 @@ def get_trace_metrics(df_traces, df_intensities):
      .assign(num_consensus_barcodes=lambda x: 
         x.groupby('design_name')['consensus_gate'].transform('sum'))
      .join(stage_means, on='barcode')
-     .join(barcode_metrics, on='barcode'))
+     .join(barcode_metrics, on='barcode')
+     .assign(peak_center=find_smoothed_peaks(df_traces))
+     )
 
 
 def get_consensus(df_traces):
-    import warnings
     config = load_config()['sec']
     method = config['consensus']['method']
-    # consensus traces: L1-norm, then take median
+    # consensus traces: normalize sum to 1, median, normalize sum
+    # to 1 again
     if method == 'median':
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', category=RuntimeWarning)
@@ -1001,19 +994,19 @@ def get_consensus(df_traces):
              .groupby('design_name')
              .apply(lambda x: x.median())
              .dropna(how='all')
+             .pipe(lambda x: x.div(x.sum(axis=1), axis=0))
             )
     else:
         raise NotImplementedError(method)
 
 
-def get_consensus_metrics(df_consensus, df_traces, consensus):
+def get_consensus_metrics(df_consensus, df_traces):
     import pandas as pd
     from postdoc.flycodes import classify_sec
 
     config = load_config()['sec']
 
-    l1 = df_consensus.sum(axis=1).rename(f'{consensus}_l1')
-    l2 = ((df_consensus**2).sum(axis=1)**0.5).rename(f'{consensus}_l2')
+    l2 = ((df_consensus**2).sum(axis=1)**0.5).rename('l2_norm')
 
     # calculate earthmover distance with missing data...
     wass_distance = classify_sec.calculate_wasserstein_distance(df_consensus, df_traces)
@@ -1022,7 +1015,19 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
     df_traces_l1 = df_traces.div(df_traces.sum(axis=1), axis=0)
     abs_distance = (df_consensus - df_traces_l1).abs().sum(axis=1).rename('abs_distance')
     mean_abs_distance = abs_distance.groupby('design_name').mean().rename('mean_abs_distance')
+
+    # barcode elution peak distribution stats
+    gb = (df_traces
+    .assign(peak_center=classify_sec.find_smoothed_peaks)
+    .groupby('design_name')['peak_center']
+    )
+    barcode_stats = [
+        gb.mean().rename('barcode_peak_mean'), 
+        gb.std().rename('barcode_peak_std'), 
+        gb.sem().rename('barcode_peak_sem')
+    ]
     
+    # how many fractions deviate from consensus by more than a threshold?
     deviation_count = (df_traces_l1
     .pipe(lambda x: (x - df_consensus).abs() > config['consensus']['deviation_threshold'])
     .sum(axis=1).rename('deviation_count')
@@ -1030,10 +1035,11 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
     mean_deviation_count = (deviation_count.reset_index()
      .groupby('design_name')['deviation_count'].mean()
      .rename('mean_deviation_count'))
-    
-    df_consensus_metrics = (pd.concat([l1, l2, 
-        mean_wass_distance, mean_abs_distance, mean_deviation_count, integrate_fractions(df_consensus)
-        ], axis=1)
+
+    df_consensus_metrics = (pd.concat([
+        l2, mean_wass_distance, mean_abs_distance, mean_deviation_count, 
+        integrate_fractions(df_consensus),
+        ] + barcode_stats, axis=1)
      .assign(peak_center=classify_sec.find_smoothed_peaks(df_consensus))
      .reset_index()
     )
@@ -1286,7 +1292,7 @@ def export_validation_sec(limit=None):
             akta_db.plot('uv_data.csv', output='normalized_', fractions=False, description_as_name=True)    
 
 
-def overlay_validation_sec(uv_regex='230|260|280', 
+def overlay_validation_sec(uv_regex='215|230|260|280',
         peak_volume_gate='8 < volume < 20'):
     """Combine validation SEC with pooled SEC.
     """
@@ -1342,7 +1348,7 @@ def overlay_validation_sec(uv_regex='230|260|280',
     .query(peak_volume_gate)
     .sort_values('amplitude', ascending=False)
     .drop_duplicates('design_name')
-    [['design_name', 'volume']]
+    [['design_name', 'volume', 'ChromatogramID']]
     .rename(columns={'volume': 'individual_sec_peak'})
     )
 
@@ -1384,7 +1390,7 @@ def export_ms1(mzml_file, progress=lambda x: x):
     return load_mzml_to_ms1_dataframe(mzml_file, progress=progress)
 
 
-def validation_block(limit=None, uv_regex='230|260|280', 
+def validation_block(limit=None, uv_regex='215|230|260|280', 
         peak_volume_gate='8 < volume < 21'):
     """Export validation SEC data and plots for entries in MS barcoding shared/
     """
