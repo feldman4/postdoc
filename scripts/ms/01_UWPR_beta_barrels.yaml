@@ -68,7 +68,7 @@ sec:
     volume_windows:
       aggregate: [10, 12]
       oligomer: [11, 13]
-      monomer: [14, 18]
+      monomer: [13, 18]
   rank_plots:
     - prefix: 
       gate: '3 <= num_barcodes <= 5 & 12 < peak_center < 18 & 0.27 < median_l2 & mean_deviation_count < 4'
