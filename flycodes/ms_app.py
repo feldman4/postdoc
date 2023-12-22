@@ -1023,8 +1023,9 @@ def get_consensus_metrics(df_consensus, df_traces):
     )
     barcode_stats = [
         gb.mean().rename('barcode_peak_mean'), 
+        gb.median().rename('barcode_peak_median'),
         gb.std().rename('barcode_peak_std'), 
-        gb.sem().rename('barcode_peak_sem')
+        gb.sem().rename('barcode_peak_sem'),
     ]
     
     # how many fractions deviate from consensus by more than a threshold?
