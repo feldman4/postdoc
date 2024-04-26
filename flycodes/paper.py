@@ -103,8 +103,23 @@ def load_dataset(dataset_name):
     for table in tables:
         dataset[table] = pd.read_csv(f'datasets/01_UWPR_beta_barrels/{table}.csv')
     
+    # AF2 predictions
+    name_info = dataset['designs'][['design_name', 'pdb_file']].drop_duplicates()
+    dataset['prediction'] = (pd.read_csv('design/predict.csv')
+    .drop_duplicates('sequence')
+    .merge(name_info, how='inner')
+    [['design_name', 'pae', 'plddt', 'rmsd']]
+    )
+
     # load validation
     if dataset_name == '01_UWPR_beta_barrels':
+        # fold type
+        pat = '(sm|barrel6|barrel5|tudor)_'
+        dataset['designs'] = (dataset['designs']
+        .assign(fold=lambda x: 
+            x['pdb_file'].str.extract(pat)[0].fillna('other'))
+        )
+
         dataset['validation_summary'] = pd.read_csv('validation/20220821/validation_summary.csv')
         dataset['validation_uv'] = (pd.read_csv('validation/20220821/DK_validation_chip137/uv_data.csv')
          .pipe(clean_uv_table)
@@ -139,6 +154,8 @@ def load_dataset(dataset_name):
 
         f = 'datasets/01_UWPR_beta_barrels/sec/chromatograms.csv_uv_data.csv.gz'
         dataset['library_uv_data'] = pd.read_csv(f)
+
+
 
     return dataset
 
@@ -402,18 +419,63 @@ def load_scaffold_predictions(app):
     with set_cwd('design/predict_pipeline/'):
         db_url = app.get_db_url()
         dock_ids = app.load_ids_directly('STORE_ms_scaffolds')
-    #     scaffold_ids = app.read_sql('select ')
+    #     scaffold_ids = app.read_sql('elect ')
         q = """
-        select ss.*, dh.source
+        select ss.*, dh.source, s.sequence
         from structure_score ss
         join dock d on d.scaffold=ss.structure
         join dock_history dh on dh.dock=d.id
+        join structure s on d.scaffold=s.id
         where d.id in :ids
         """
         df_scores = (app.read_sql(q, db_url, ids=dock_ids)
-        .assign(pdb_name=lambda x: x['source'].str.split(':').str[-1].apply(os.path.basename))     
-        .pivot_table(index=['pdb_name', 'step'], columns='name', values='value')
+        .assign(pdb_file=lambda x: x['source'].str.split(':').str[-1].apply(os.path.basename))     
+        .pivot_table(index=['pdb_file', 'sequence', 'step'], 
+                     columns='name', values='value')
         .reset_index()
         )
 
-    df_scores.to_csv('design/predict.csv', index=None)
+    f = 'design/predict.csv'
+    df_scores.to_csv(f, index=None)
+    print(f'Wrote scores for {len(df_scores)} scaffolds to {f}')
+
+
+def plot_aucs(df, independent, dependent):
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from sklearn.metrics import auc, roc_curve
+    dep = dependent
+    n = len(independent)
+    gs = GridSpec(n + 1, 1, height_ratios=[4] + [1] * n)
+    fig = plt.figure(figsize=(4, 2 + n))
+    ax = fig.add_subplot(gs[0])
+    arr = []
+    for ind in independent:
+        fpr, tpr, thresholds = roc_curve(df[dep], df[ind], drop_intermediate=False)
+        roc_auc = auc(fpr, tpr)
+        if roc_auc < 0.5:
+            fpr, tpr, _ = roc_curve(df[dep], -df[ind], drop_intermediate=False)
+            roc_auc = auc(fpr, tpr)
+        ax.plot(fpr, tpr, label=f'{ind}: {roc_auc:.2f}')
+        arr += [(fpr, thresholds)]
+    legend = ax.legend(loc='upper right')
+    colors = [x.get_c() for x in legend.get_lines()]
+    it = enumerate(zip(independent, colors, arr))
+    for i, (ind, color, (fpr, thresholds)) in it:
+        ax_ = fig.add_subplot(gs[i + 1], sharex=ax)
+        ax_.plot(fpr, thresholds, label=f'{ind}', color=color)
+        ax_.legend(loc='upper right')
+        if i < n - 1:
+            ax_.xaxis.set_visible(False)
+        ax_.set_ylim(np.percentile(thresholds[~np.isinf(thresholds)], [1, 99]))
+
+    ax.plot([0, 1], [0, 1], color='gray')
+    ax.set_xlim([0, 1])
+    ax.set_ylim([0, 1])
+    ax.legend(loc='lower right')
+    ax.set_title(f'{dep}')
+    ax_.set_xlabel('false positive rate')
+    ax.set_ylabel('true positive rate')
+    ax.xaxis.set_visible(False)
+    fig.subplots_adjust(hspace=0.05)
+    return fig

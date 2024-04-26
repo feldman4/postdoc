@@ -93,6 +93,11 @@ def hide_water():
 def chainbow(selection='all'):
     util.chainbow(selection)
 
+def view_mm():
+    cmd.do('dss')
+    color_by_chain()
+    cmd.do('set grid_mode, 1')
+
 def find_polar(selection='all', mode='nobb', name=None):
 
     split = selection.split(' to ')
@@ -188,27 +193,7 @@ def parse_fasta(txt):
             entries += [(name, seq)]
     return entries
 
-def color_yang(selection='all'):
-    """Rosetta colors from Yang Hsia
-    """
-    colors = (
-        ('teal', 'ASP+GLU'),
-        ('teal', 'LYS+ARG'),
-        ('teal', 'ASN+GLN'),
-        ('teal', 'HIS'),
-        ('marine', 'SER+THR'),
-        ('grey90', 'ALA'),
-        ('grey60', 'LEU+VAL+ILE+PHE'),
-        ('grey60', 'MET'),
-        ('yellow', 'CYS'),
-        ('palegreen', 'TYR'),
-        ('palegreen', 'TRP'),
-        ('pink', 'GLY'),
-        ('orange', 'PRO'),
-        )
 
-    for color, resn in colors:
-        cmd.do(f'color {color}, {selection} and resn {resn}')
 
 def run_script(name=None):
     if name == 'last' and hasattr(stored, 'last_script'):
@@ -356,7 +341,8 @@ def load_pdb_grid(search, max_to_grid=20, max_to_load=None):
 def color_by_residue_type(selection='bb.'):
     acid = 'deepsalmon'
     basic = 'tantalum'
-    nonpolar = 'vanadium'
+    nonpolar = 'titanium'
+    bulky_nonpolar = 'tin'
     polar = 'thulium'
     cysteine = 'paleyellow'
     glycine = 'palecyan'
@@ -368,9 +354,9 @@ def color_by_residue_type(selection='bb.'):
         'lys': basic,
         'his': basic,
         'met': nonpolar,
-        'phe': nonpolar,
+        'phe': bulky_nonpolar,
         'pro': nonpolar,
-        'trp': nonpolar,
+        'trp': bulky_nonpolar,
         'val': nonpolar,
         'leu': nonpolar,
         'ile': nonpolar,
@@ -379,13 +365,37 @@ def color_by_residue_type(selection='bb.'):
         'thr': polar,
         'asn': polar,
         'gln': polar,
-        'tyr': polar,
+        'tyr': bulky_nonpolar,
         'cys': cysteine,
         'gly': glycine,
     }
 
     for res, color in colormap.items():
         cmd.do(f'color {color}, {selection} and resn {res}')
+
+
+def color_yang(selection='all'):
+    """Rosetta colors from Yang Hsia
+    """
+    colors = (
+        ('teal', 'ASP+GLU'),
+        ('teal', 'LYS+ARG'),
+        ('teal', 'ASN+GLN'),
+        ('teal', 'HIS'),
+        ('marine', 'SER+THR'),
+        ('grey90', 'ALA'),
+        ('grey60', 'LEU+VAL+ILE+PHE'),
+        ('grey60', 'MET'),
+        ('yellow', 'CYS'),
+        ('palegreen', 'TYR'),
+        ('palegreen', 'TRP'),
+        ('pink', 'GLY'),
+        ('orange', 'PRO'),
+        )
+
+    for color, resn in colors:
+        cmd.do(f'color {color}, {selection} and resn {resn}')
+
 
 def glycine_ca_spheres(selection='all'):
     selector = f'name CA and {selection} and resn gly'
@@ -520,7 +530,7 @@ def view_three(selection='all'):
     color_not_carbon(ligands)
 
 
-def align_all(object_selection='all', align_selection='all', aligner='align'):
+def align_all(aligner='align', object_selection='all', align_selection='all'):
     objects = cmd.get_object_list(object_selection)
     if len(objects) < 2:
         print(f'Skipping alignment, selected only: {objects}')
@@ -528,6 +538,15 @@ def align_all(object_selection='all', align_selection='all', aligner='align'):
     rest = objects[1:]
     for mobile in rest:
         cmd.do(f'{aligner} {mobile}, {target} and {align_selection}')
+
+def load_foldseek():
+    cmd.do('split_chains')
+    objects = cmd.get_object_list('all')
+    cmd.delete(objects[0])
+    align_all(aligner='tmalign')
+    cmd.do('spectrum q')
+    cmd.do('set grid_mode, 0')
+
 
 def load_af2_alignments(design):
     home = f'{os.environ["HOME"]}/flycodes/af2/{design}'
@@ -544,6 +563,12 @@ def load_af2_alignments(design):
             cmd.do(f'remove {name} and chain B')
         cmd.do(f'group {design}_{term}, {" ".join(names)}')
     
+
+def dostuff():
+    cmd.do('dssp')
+    cmd.do('spectrum q')
+    cmd.do('set grid_mode, 1')
+
 
 commands = [
 # load_commands reloads this file (defined in pymolrc.pml)
@@ -581,12 +606,15 @@ commands = [
 ('pdbload', load_local_pdb),
 ('globload', load_pdb_grid),
 ('af2load', load_af2_alignments),
+('foldseekload', load_foldseek),
 # script management
 ('pmlrun', run_script),
 ('cml', list_commands),
 ('initialize_settings', initialize_settings),
 ('skeleton', skeleton),
 ('labelorigin', axes_at_origin),
+('ds', dostuff),
+('vmm', view_mm),
 ]
 
 for name, func in commands:
