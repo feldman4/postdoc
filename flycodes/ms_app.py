@@ -5,6 +5,7 @@ from glob import glob
 import os
 import shutil
 import sys
+import warnings
 
 # non-standard library imports delayed so fire app executes quickly (e.g., for help)
 
@@ -122,6 +123,8 @@ def setup():
         print(f'  /home/dfeldman/s/app.sh submit {command_list_plot_designs} '
             '--cpus=1 --memory=4g')
 
+    if 'apptainer' in config:
+        print('Step process_mzml uses apptainer:', config['apptainer'])
 
 
 def load_config():
@@ -152,7 +155,8 @@ def setup_process_mzml():
     import pandas as pd
     from postdoc.utils import force_symlink
     df_samples = pd.read_csv(sample_table)
-    config = load_config()['process_mzml']
+    config_all = load_config()
+    config = config_all['process_mzml']
     os.makedirs('process_mzml', exist_ok=True)
     source = 'centroid'
 
@@ -167,10 +171,12 @@ def setup_process_mzml():
     ]
     [force_symlink(src, dst) for src, dst in links]
     
-    # copy the snakefile for apptainer compatibility
-    shutil.copy(config['snakefile'], 'process_mzml/snakefile')
-
-    cmd = 'cd process_mzml && snakemake --cores'
+    prefix = ' '
+    if 'apptainer' in config_all:
+        prefix = f'apptainer run {config_all["apptainer"]}'
+        # apptainer dislikes symlink
+        shutil.copy(config['snakefile'], 'process_mzml/snakefile')
+    cmd = f'cd process_mzml &&{prefix}snakemake --cores'
     with open(command_list_process_mzml, 'w') as fh:
         fh.write(cmd)
 
@@ -887,19 +893,10 @@ def analyze_sec():
     enough at ranking designs by measurement uncertainty, though NN might be better. L1 or L2
     norm of median trace (highly correlated) is good at ranking traces by peak sharpness.
     """
-    from postdoc.flycodes import classify_sec
     import pandas as pd
-    import numpy as np
 
     df_intensities = pd.read_csv(intensities_table)
-    df_samples = pd.read_csv(sample_table)
-
     config = load_config()['sec']
-    stages = load_config()['plot']['stage_order']
-    
-    fraction_centers = (df_samples
-    .query('stage == "SEC"')['fraction_center'].pipe(sorted)
-    )
     intensity = config['barcode']['intensity_metric']
 
     # pivot to get peak-normalized per-barcode traces
@@ -925,8 +922,7 @@ def analyze_sec():
 
     df_traces_filt = df_traces.query('barcode == @consensus_barcodes')
     df_consensus = df_traces_filt.pipe(get_consensus)
-    df_consensus_metrics = (get_consensus_metrics(
-        df_consensus, df_traces_filt, config['consensus']['method'])
+    df_consensus_metrics = (get_consensus_metrics(df_consensus, df_traces_filt)
         .join(barcode_counts, on='design_name')
     )
     df_consensus.to_csv(sec_consensus_table)
@@ -940,7 +936,7 @@ def analyze_sec():
 def get_trace_metrics(df_traces, df_intensities):
     import pandas as pd
     from itertools import groupby
-    from postdoc.flycodes.classify_sec import find_crap
+    from postdoc.flycodes.classify_sec import find_crap, find_smoothed_peaks
     from postdoc.flycodes.design import add_barcode_metrics
 
     def longest_true_run(xs):
@@ -980,14 +976,16 @@ def get_trace_metrics(df_traces, df_intensities):
      .assign(num_consensus_barcodes=lambda x: 
         x.groupby('design_name')['consensus_gate'].transform('sum'))
      .join(stage_means, on='barcode')
-     .join(barcode_metrics, on='barcode'))
+     .join(barcode_metrics, on='barcode')
+     .assign(peak_center=find_smoothed_peaks(df_traces))
+     )
 
 
 def get_consensus(df_traces):
-    import warnings
     config = load_config()['sec']
     method = config['consensus']['method']
-    # consensus traces: L1-norm, then take median
+    # consensus traces: normalize sum to 1, median, normalize sum
+    # to 1 again
     if method == 'median':
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', category=RuntimeWarning)
@@ -996,19 +994,19 @@ def get_consensus(df_traces):
              .groupby('design_name')
              .apply(lambda x: x.median())
              .dropna(how='all')
+             .pipe(lambda x: x.div(x.sum(axis=1), axis=0))
             )
     else:
         raise NotImplementedError(method)
 
 
-def get_consensus_metrics(df_consensus, df_traces, consensus):
+def get_consensus_metrics(df_consensus, df_traces):
     import pandas as pd
     from postdoc.flycodes import classify_sec
 
     config = load_config()['sec']
 
-    l1 = df_consensus.sum(axis=1).rename(f'{consensus}_l1')
-    l2 = ((df_consensus**2).sum(axis=1)**0.5).rename(f'{consensus}_l2')
+    l2 = ((df_consensus**2).sum(axis=1)**0.5).rename('l2_norm')
 
     # calculate earthmover distance with missing data...
     wass_distance = classify_sec.calculate_wasserstein_distance(df_consensus, df_traces)
@@ -1017,7 +1015,20 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
     df_traces_l1 = df_traces.div(df_traces.sum(axis=1), axis=0)
     abs_distance = (df_consensus - df_traces_l1).abs().sum(axis=1).rename('abs_distance')
     mean_abs_distance = abs_distance.groupby('design_name').mean().rename('mean_abs_distance')
+
+    # barcode elution peak distribution stats
+    gb = (df_traces
+    .assign(peak_center=classify_sec.find_smoothed_peaks)
+    .groupby('design_name')['peak_center']
+    )
+    barcode_stats = [
+        gb.mean().rename('barcode_peak_mean'), 
+        gb.median().rename('barcode_peak_median'),
+        gb.std().rename('barcode_peak_std'), 
+        gb.sem().rename('barcode_peak_sem'),
+    ]
     
+    # how many fractions deviate from consensus by more than a threshold?
     deviation_count = (df_traces_l1
     .pipe(lambda x: (x - df_consensus).abs() > config['consensus']['deviation_threshold'])
     .sum(axis=1).rename('deviation_count')
@@ -1025,10 +1036,11 @@ def get_consensus_metrics(df_consensus, df_traces, consensus):
     mean_deviation_count = (deviation_count.reset_index()
      .groupby('design_name')['deviation_count'].mean()
      .rename('mean_deviation_count'))
-    
-    df_consensus_metrics = (pd.concat([l1, l2, 
-        mean_wass_distance, mean_abs_distance, mean_deviation_count, integrate_fractions(df_consensus)
-        ], axis=1)
+
+    df_consensus_metrics = (pd.concat([
+        l2, mean_wass_distance, mean_abs_distance, mean_deviation_count, 
+        integrate_fractions(df_consensus),
+        ] + barcode_stats, axis=1)
      .assign(peak_center=classify_sec.find_smoothed_peaks(df_consensus))
      .reset_index()
     )
@@ -1281,7 +1293,7 @@ def export_validation_sec(limit=None):
             akta_db.plot('uv_data.csv', output='normalized_', fractions=False, description_as_name=True)    
 
 
-def overlay_validation_sec(uv_regex='230|260|280', 
+def overlay_validation_sec(uv_regex='215|230|260|280',
         peak_volume_gate='8 < volume < 20'):
     """Combine validation SEC with pooled SEC.
     """
@@ -1294,7 +1306,7 @@ def overlay_validation_sec(uv_regex='230|260|280',
     df_sec = drive('MS barcoding shared/validation SEC', skiprows=1, dtype=str)
     # grab UV data saved by export_validation_sec
     df_uv_data = csv_frame('*/uv_data.csv')
-    df_uv_data = df_uv_data[df_uv_data['channel'].str.match(f'.*{uv_regex}.*')]
+    df_uv_data = df_uv_data[df_uv_data['channel'].str.match(f'.*({uv_regex}).*')]
 
     # load barcode SEC from these runs
     analysis_directories = {
@@ -1309,14 +1321,16 @@ def overlay_validation_sec(uv_regex='230|260|280',
     traces = {}
     arr0, arr1, arr2 = [], [], []
     for dataset, directory in analysis_directories.items():
-        with set_cwd(directory):
-            pd.read_csv('designs.csv').assign(dataset=dataset).pipe(arr0.append)
-            pd.read_csv('sec_barcode_metrics.csv').assign(dataset=dataset).pipe(arr1.append)
-            pd.read_csv('sec_consensus_metrics.csv').assign(dataset=dataset).pipe(arr2.append)
-            traces[(dataset, 'barcodes')] = (pd.read_csv('sec_barcodes.csv')
-                .set_index(['design_name', 'barcode']).rename(columns=float))
-            traces[(dataset, 'consensus')] = (pd.read_csv('sec_consensus.csv')
-                .set_index('design_name').rename(columns=float))
+            read = lambda x: (pd.read_csv(x, low_memory=False)
+                .assign(dataset=dataset))
+            with set_cwd(directory):
+                read('designs.csv').pipe(arr0.append)
+                read('sec_barcode_metrics.csv').pipe(arr1.append)
+                read('sec_consensus_metrics.csv').pipe(arr2.append)
+                traces[(dataset, 'barcodes')] = (pd.read_csv('sec_barcodes.csv')
+                    .set_index(['design_name', 'barcode']).rename(columns=float))
+                traces[(dataset, 'consensus')] = (pd.read_csv('sec_consensus.csv')
+                    .set_index('design_name').rename(columns=float))
     df_designs = pd.concat(arr0)
     df_barcode_metrics = (pd.concat(arr1)
      [['design_name', 'num_ms_barcodes']].drop_duplicates()
@@ -1335,7 +1349,7 @@ def overlay_validation_sec(uv_regex='230|260|280',
     .query(peak_volume_gate)
     .sort_values('amplitude', ascending=False)
     .drop_duplicates('design_name')
-    [['design_name', 'volume']]
+    [['design_name', 'volume', 'ChromatogramID']]
     .rename(columns={'volume': 'individual_sec_peak'})
     )
 
@@ -1349,6 +1363,8 @@ def overlay_validation_sec(uv_regex='230|260|280',
      .merge(dataset_info, how='left')
      .rename(columns={'note': 'validation_note'})
     )
+    n = df_uv_data.drop_duplicates(['description', 'export_name']).shape[0]
+    print(f'Found validation SEC for {len(df_summary)}/{n} entries with UV data')
     
     f = 'validation_summary.csv'
     print(f'Wrote summary of individual and pooled data to {f}')
@@ -1375,7 +1391,7 @@ def export_ms1(mzml_file, progress=lambda x: x):
     return load_mzml_to_ms1_dataframe(mzml_file, progress=progress)
 
 
-def validation_block(limit=None, uv_regex='230|260|280', 
+def validation_block(limit=None, uv_regex='215|230|260|280', 
         peak_volume_gate='8 < volume < 21'):
     """Export validation SEC data and plots for entries in MS barcoding shared/
     """

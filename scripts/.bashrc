@@ -47,7 +47,7 @@ alias sqh='sjob | less'
 alias fname='readlink -f'
 
 if [ "$(hostname)" == "jojo" ]; then
-    ulimit -u 4096
+    ulimit -u 10000
 fi
 
 source ~/bii/cloud/nextflow.sh

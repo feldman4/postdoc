@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.lines import Line2D
+from scipy.stats import binom
+
 from ..utils import csv_frame, set_cwd
 
 rc_params = {
@@ -26,7 +28,7 @@ class colors:
 
 
 @contextmanager
-def paper_context():
+def plot_context():
     with sns.plotting_context('paper', font_scale=1.5), plt.rc_context(rc_params):
         yield
 
@@ -65,6 +67,28 @@ def add_chip137_bb_types(df_137_dk):
     return df_137_dk.join(bb_types, on='pdb_file')
 
 
+def compare_to_binomial(barcode_counts, max_barcodes, total_designs, cumulative=False):
+    """
+    :param barcode_counts: a list of non-zero barcode counts
+    :param max_barcodes: the maximum number of barcodes possible per design
+    :param total_designs: the number of designs in the library, used to zero-pad barcode_counts
+    """
+    bin_centers = np.arange(max_barcodes + 1)
+    bins = bin_centers - 0.5
+    barcode_counts = list(barcode_counts) + [0] * (total_designs - len(barcode_counts))
+    ax = sns.histplot(barcode_counts, bins=bins, stat='probability', cumulative=cumulative)
+    
+    p = np.mean(barcode_counts)/max_barcodes
+    rv = binom(n=max_barcodes, p=p)
+    
+    y =  rv.cdf(bin_centers) if cumulative else rv.pmf(bin_centers)
+    ax.plot(bin_centers, y, label='Binomial fit')
+    if cumulative:
+        ax.set_ylabel('Cumulative probability')
+    ax.set_xlabel('Number of barcodes per design')
+    return ax
+
+    
 def make_sec_overlay_legend():
     """A simple legend for SEC overlay in Fig 2
     """
@@ -388,11 +412,12 @@ def transparent_screenshot(save_as, background_only=False):
     If background_only is True, only the largest white area will be
     rendered transparent.
     """
-    from imageio.v3 import imread, imwrite
-    from scipy.stats import mode
-    from natsort import natsorted
-    from skimage.measure import label
     from glob import glob
+
+    from imageio.v3 import imread, imwrite
+    from natsort import natsorted
+    from scipy.stats import mode
+    from skimage.measure import label
 
     files = natsorted(glob(os.path.expanduser('~/Desktop/Screen*')))
     f = files[0]
